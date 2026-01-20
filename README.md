@@ -25,17 +25,15 @@
     ```
 3. Adjust VScode settings by making `settings.json` file in reference to `settings_sample.json` file.
 
-    ```bash
-    {
+  ```json
+  {
     "python.analysis.extraPaths": [
-      "<your>/<filename>/<saved IsaacLab>/source/isaaclab",         
+      "<your>/<filename>/<saved IsaacLab>/source/isaaclab",
       "<your>/<filename>/<saved IsaacLab>/source/isaaclab_tasks",
       "<your>/<filename>/<saved IsaacLab>/source/isaaclab_rl",
       "<your>/<filename>/<saved IsaacLab>/source/isaaclab_mimic",
       "<your>/<filename>/<saved IsaacLab>/source/isaaclab_assets"
     ],
-    
-  
-    "python.defaultInterpreterPath": "<your>/<filename>/<saved>/<virtual env>/<"env_isaaclab">/python.exe"
+    "python.defaultInterpreterPath": "<your>/<filename>/<saved>/<virtual env>/<env name>/python.exe"
   }
-    ```
+  
