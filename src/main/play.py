@@ -92,10 +92,8 @@ def main():
     env = IsaacLabWrapper(env)  
 
     # configure and instantiate the skrl runner
-    experiment_cfg["trainer"]["close_environment_at_exit"] = False
     experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
     experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
-    experiment_cfg["models"]
     # runner = Runner(env, experiment_cfg)
 
     # if resume_path is not None:
