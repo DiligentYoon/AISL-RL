@@ -118,6 +118,8 @@ class PPO(Agent):
         """
         Record an environment transition in buffer
         
+        TODO: Buffer revision after PR
+
         Args:
             states: Observations/states of the environment used to make the decision
             actions: Actions taken by the agent
