@@ -5,15 +5,15 @@ from torch.distributions import Normal
 from lib.utils.Running_mean_std import RunningMeanStd
 
 class Actor(nn.Module):
-    def __init__(self, observation_space_size, action_space_size, device):
+    def __init__(self, num_observations, num_actions, device):
         super().__init__()
 
         self.log_std_min = -20.0
         self.log_std_max = 2.0
         # Define instances 
         self.device = device
-        self.num_observations = observation_space_size
-        self.num_actions = action_space_size
+        self.num_observations = num_observations
+        self.num_actions = num_actions
 
         # Running mean, standard deviation standardizer
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
@@ -26,7 +26,7 @@ class Actor(nn.Module):
                                  nn.Linear(128, self.num_actions),
                                  nn.Tanh())
 
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))            # State independent log std
+        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
 
         self.init_weights()
         self.init_biases(val=0)
@@ -115,12 +115,12 @@ class Actor(nn.Module):
         self.load_state_dict(state_dict)
 
 class Critic(nn.Module):
-    def __init__(self, state_space_size, device):
+    def __init__(self, num_states, device):
         super().__init__()
 
         # Define instances 
         self.device = device
-        self.num_states = state_space_size
+        self.num_states = num_states
 
         # Running mean, standard deviation standardizer
         self.critic_standardizer = RunningMeanStd(shape=self.num_states, device=device)
