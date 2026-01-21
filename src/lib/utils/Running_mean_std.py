@@ -55,13 +55,16 @@ class RunningMeanStd(nn.Module):
         self.var = new_var
         self.count = new_count
 
-    def standardization(self, x: torch.Tensor) -> None:
+    def standardization(self, x: torch.Tensor, update: bool = True) -> None:
         """
         Update the statistics with a new batch of data.
 
         :param x: Input tensor (batch_size, dims)
-        :param subtract_mean: Subtract mean True for value, False for reward
+        :type x: torch.Tensor
+        :param update: Boolean for update distribution
+        :type update: bool
         """
+        
         # Convert into tensor if it's not
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
@@ -72,15 +75,16 @@ class RunningMeanStd(nn.Module):
         batch_var = torch.var(x, dim=0, unbiased=False)
         batch_count = torch.tensor(x.shape[0], dtype=torch.float32, device=self.device)
 
-        self._update_distrubution(batch_mean, batch_var, batch_count)
+        if update:
+            self._update_distrubution(batch_mean, batch_var, batch_count)
 
         return (x - self.mean) / torch.sqrt(self.var + self.epsilon)
         
     def destandardization(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Restore the normalized data to pure data
+        Restore the standardized data to pure data
         
-        x: Normalized input
+        x: Standardized input
         return: Real scale value (x * std + mean)
         """
         if not isinstance(x, torch.Tensor):
