@@ -9,9 +9,9 @@ from lib.utils.wrapper_utils import tensorize_space, flatten_tensorized_space, u
 class IsaacLabWrapper(Wrapper):
     def __init__(self, env: Any) -> None:
         """Isaac Lab environment wrapper
-
-        :param env: The environment to wrap
-        :type env: Any supported Isaac Lab environment
+        Args:
+            param env: The environment to wrap
+            type env: Any supported Isaac Lab environment
         """
         super().__init__(env)
 
@@ -49,12 +49,13 @@ class IsaacLabWrapper(Wrapper):
 
     def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Any]:
         """Perform a step in the environment
+        Args:
+            param actions: The actions to perform
+            type actions: torch.Tensor
 
-        :param actions: The actions to perform
-        :type actions: torch.Tensor
-
-        :return: Observation, reward, terminated, truncated, info
-        :rtype: tuple of torch.Tensor and any other info
+        Returns:
+            return: Observation, reward, terminated, truncated, info
+            rtype: tuple of torch.Tensor and any other info
         """
         actions = unflatten_tensorized_space(self.action_space, actions)
         observations, reward, terminated, truncated, self._info = self._env.step(actions)
@@ -63,9 +64,11 @@ class IsaacLabWrapper(Wrapper):
 
     def reset(self) -> Tuple[torch.Tensor, Any]:
         """Reset the environment
+        Args:
 
-        :return: Observation, info
-        :rtype: torch.Tensor and any other info
+        Returns:
+            return: Observation, info
+            rtype: torch.Tensor and any other info
         """
         if self._reset_once:
             observations, self._info = self._env.reset()

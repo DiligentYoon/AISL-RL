@@ -7,9 +7,9 @@ from typing import Any, Mapping, Sequence, Tuple, Union
 class Wrapper(object):
     def __init__(self, env: Any) -> None:
         """Base wrapper class for RL environments
-
-        :param env: The environment to wrap
-        :type env: Any supported RL environment
+        Args:
+            param env: The environment to wrap
+            type env: Any supported RL environment
         """
         self._env = env
         try:
@@ -25,14 +25,13 @@ class Wrapper(object):
 
     def __getattr__(self, key: str) -> Any:
         """Get an attribute from the wrapped environment
+        Args:
+            param key: The attribute name
+            type key: str
 
-        :param key: The attribute name
-        :type key: str
-
-        :raises AttributeError: If the attribute does not exist
-
-        :return: The attribute value
-        :rtype: Any
+        Returns:
+            return: The attribute value
+            rtype: Any
         """
         if hasattr(self._env, key):
             return getattr(self._env, key)
@@ -44,52 +43,48 @@ class Wrapper(object):
 
     def reset(self) -> Tuple[torch.Tensor, Any]:
         """Reset the environment
+        Args:
 
-        :raises NotImplementedError: Not implemented
-
-        :return: Observation, info
-        :rtype: torch.Tensor and any other info
+        Returns:
+            return: Observation, info
+            rtype: torch.Tensor and any other info
         """
         raise NotImplementedError
 
     def step(self, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Any]:
         """Perform a step in the environment
+        Args:
+            param actions: The actions to perform
+            type actions: torch.Tensor
 
-        :param actions: The actions to perform
-        :type actions: torch.Tensor
-
-        :raises NotImplementedError: Not implemented
-
-        :return: Observation, reward, terminated, truncated, info
-        :rtype: tuple of torch.Tensor and any other info
+        Returns:
+            return: Observation, reward, terminated, truncated, info
+            rtype: tuple of torch.Tensor and any other info
         """
         raise NotImplementedError
 
     def state(self) -> torch.Tensor:
         """Get the environment state
+        Args:
 
-        :raises NotImplementedError: Not implemented
-
-        :return: State
-        :rtype: torch.Tensor
+        Returns:
+            return: State
+            rtype: torch.Tensor
         """
         raise NotImplementedError
 
     def render(self, *args, **kwargs) -> Any:
         """Render the environment
-
-        :raises NotImplementedError: Not implemented
-
-        :return: Any value from the wrapped environment
-        :rtype: any
+        Args:
+        
+        Returns:
+            return: Any value from the wrapped environment
+            rtype: any
         """
         raise NotImplementedError
 
     def close(self) -> None:
-        """Close the environment
-
-        :raises NotImplementedError: Not implemented
-        """
+        """Close the environment"""
         raise NotImplementedError
 
     @property
