@@ -28,14 +28,19 @@ class Actor(nn.Module):
 
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))            # State independent log std
 
-    def forward(self, inputs):
+        self.init_weights()
+        self.init_biases(val=0)
+
+    def forward(self, inputs: torch.Tensor, eval: bool = False):
         '''
         Forward propagation of actor NN
         
         :param inputs: Observation vector
         :type inputs: torch.Tensor
+        :param eval: Is actor evaluation mode
+        :type eval: bool 
         '''
-        standardized_input = self.actor_standardizer.standardization(inputs)
+        standardized_input = self.actor_standardizer.standardization(inputs, update=not eval)
 
         mean_actions = self.net(standardized_input)
         log_std = self.log_std_parameter
@@ -64,15 +69,11 @@ class Actor(nn.Module):
         The following layers will be initialized:
         - torch.nn.Linear
         """
+        def _orthogonal_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.orthogonal_(module.weight)
 
-        def _update_weights(module):                                            # Recursive method
-            for layer in module:
-                if isinstance(layer, torch.nn.Sequential):
-                    _update_weights(layer)
-                elif isinstance(layer, torch.nn.Linear):
-                    torch.nn.init.orthogonal_(layer.weight)                     # Initialize weight
-
-        _update_weights(self.children())
+        self.apply(_orthogonal_init)
 
     def init_biases(self, val: int = 0) -> None:
         """
@@ -84,15 +85,11 @@ class Actor(nn.Module):
         :param val: constant value to initialize biases
         :type val: int
         """
+        def _constant_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.constant_(module.bias, val=val)
 
-        def _update_biases(module):                                             # Recursive method
-            for layer in module:
-                if isinstance(layer, torch.nn.Sequential):
-                    _update_biases(layer)
-                elif isinstance(layer, torch.nn.Linear):
-                    torch.nn.init.constant_(layer.bias, val=val)                # Initialize bias
-
-        _update_biases(self.children())
+        self.apply(_constant_init)
     
     def save(self, path: str) -> None:
         """
@@ -136,14 +133,19 @@ class Critic(nn.Module):
                                  nn.Linear(128, 1)
                                  )
 
-    def forward(self, inputs: torch.Tensor):
+        self.init_weights()
+        self.init_biases(val=0)
+
+    def forward(self, inputs: torch.Tensor, eval: bool = False):
         '''
         Forward propagation of critic NN
         
         :param inputs: State vector
         :type inputs: torch.Tensor
+        :param eval: Is critic evaluation mode
+        :type eval: bool 
         '''
-        standardized_input = self.critic_standardizer.standardization(inputs)
+        standardized_input = self.critic_standardizer.standardization(inputs, update=not eval)
         expected_return = self.net(standardized_input)
 
         return expected_return, None
@@ -157,15 +159,11 @@ class Critic(nn.Module):
         The following layers will be initialized:
         - torch.nn.Linear
         """
+        def _orthogonal_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.orthogonal_(module.weight)
 
-        def _update_weights(module):                                            # Recursive method
-            for layer in module:
-                if isinstance(layer, torch.nn.Sequential):
-                    _update_weights(layer)
-                elif isinstance(layer, torch.nn.Linear):
-                    torch.nn.init.orthogonal_(layer.weight)                     # Initialize weight
-
-        _update_weights(self.children())
+        self.apply(_orthogonal_init)
 
     def init_biases(self, val: int = 0) -> None:
         """
@@ -177,15 +175,11 @@ class Critic(nn.Module):
         :param val: constant value to initialize biases
         :type val: int
         """
+        def _constant_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.constant_(module.bias, val=val)
 
-        def _update_biases(module):                                             # Recursive method
-            for layer in module:
-                if isinstance(layer, torch.nn.Sequential):
-                    _update_biases(layer)
-                elif isinstance(layer, torch.nn.Linear):
-                    torch.nn.init.constant_(layer.bias, val=val)                # Initialize bias
-
-        _update_biases(self.children())
+        self.apply(_constant_init)
     
     def save(self, path: str) -> None:
         """
