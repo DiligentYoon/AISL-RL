@@ -55,7 +55,7 @@ class RunningMeanStd(nn.Module):
         self.var = new_var
         self.count = new_count
 
-    def normalize(self, x: torch.Tensor) -> None:
+    def standardization(self, x: torch.Tensor) -> None:
         """
         Update the statistics with a new batch of data.
 
@@ -76,7 +76,7 @@ class RunningMeanStd(nn.Module):
 
         return (x - self.mean) / torch.sqrt(self.var + self.epsilon)
         
-    def denormalize(self, x: torch.Tensor) -> torch.Tensor:
+    def destandardization(self, x: torch.Tensor) -> torch.Tensor:
         """
         Restore the normalized data to pure data
         
