@@ -3,14 +3,55 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import json
-from typing import Any
 
+import json
 import gymnasium as gym
 import numpy as np
 import torch
 
+
+from gymnasium import spaces
+from typing import Any, Union, Sequence, Optional
+
 from isaaclab.envs.common import SpaceType
+
+
+def compute_space_size(space: Optional[Union[spaces.Space, Sequence[int], int]], *, occupied_size: bool = False) -> int:
+    """Get the size (number of elements) of a space.
+
+    Args:
+        space: Gymnasium space.
+        occupied_size: Whether the number of elements occupied by the space is returned.
+            It only affects :py:class:`~gymnasium.spaces.Discrete` (occupied space is 1),
+            and :py:class:`~gymnasium.spaces.MultiDiscrete` (occupied space is the number of discrete spaces).
+
+    Returns:
+        Size of the space (number of elements), or ``0`` if the given space is ``None``.
+    """
+    if space is None:
+        return 0
+    if occupied_size:
+        # fundamental spaces
+        # - Discrete
+        if isinstance(space, spaces.Discrete):
+            return 1
+        # - MultiDiscrete
+        elif isinstance(space, spaces.MultiDiscrete):
+            return space.nvec.shape[0]
+        # composite spaces
+        # - Tuple
+        elif isinstance(space, spaces.Tuple):
+            return sum([compute_space_size(s, occupied_size=occupied_size) for s in space])
+        # - Dict
+        elif isinstance(space, spaces.Dict):
+            return sum([compute_space_size(s, occupied_size=occupied_size) for s in space.values()])
+    # non-gymnasium spaces
+    if type(space) in [int, float]:
+        return space
+    elif type(space) in [tuple, list]:
+        return int(np.prod(space))
+    # gymnasium computation
+    return gym.spaces.flatdim(space)
 
 
 def spec_to_gym_space(spec: SpaceType) -> gym.spaces.Space:

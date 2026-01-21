@@ -10,8 +10,7 @@ models:
     clip_actions: False
 
 buffer:
-  class: RolloutBuffer
-  memory_size: -1
+  buffer_size: -1
 
 agent:
   class: PPO
