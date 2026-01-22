@@ -1,8 +1,3 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
 """
 Script to play a checkpoint of an RL agent.
 """
@@ -18,7 +13,7 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=True, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="My-Ant-Test", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
@@ -57,6 +52,10 @@ from wrapper.isaaclab_wrapper import IsaacLabWrapper
 algorithm = args_cli.algorithm.lower()
 
 def main():
+
+    # ================================================================================================================
+    # =========================================== Parsing Test =======================================================
+    # ================================================================================================================
     # parse configuration
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric)
@@ -79,6 +78,10 @@ def main():
         print("[INFO] Unfortunately a pre-trained checkpoint is not found for this task.")
         resume_path = None
 
+    # ============================================================================================================================
+    # =========================================== Env Spawn & Wrapper Test =======================================================
+    # ============================================================================================================================
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -92,8 +95,42 @@ def main():
     env = IsaacLabWrapper(env)  
 
     # configure and instantiate the skrl runner
-    experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
-    experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
+    experiment_cfg["agent"]["experiment"]["write_interval"] = 0  
+    experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
+
+    # ==================================================================================================================
+    # ======================================== Buffer Spawn Test =======================================================
+    # ==================================================================================================================
+    from lib.buffer.rolloutbuffer import RolloutBuffer
+
+    # 1. initialization
+    if experiment_cfg["buffer"]["buffer_size"] == -1:
+        experiment_cfg["buffer"]["buffer_size"] = experiment_cfg["agent"]["rollouts"]
+    buffer = RolloutBuffer(experiment_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+    
+    observation_space = env.observation_space
+    action_space = env.action_space
+    buffer.init_buffer(observation_space, action_space)
+    for _ in range(3):
+        # 2. Storing
+        for i in range(experiment_cfg["agent"]["rollouts"]):
+            obs_size = buffer.tensors["states"].shape[-1]
+            act_size = buffer.tensors["actions"].shape[-1]
+            buffer.add_samples(
+                states=torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
+                actions=torch.randn((env.num_envs, act_size), dtype=torch.float32, device=env.device),
+                rewards=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
+                dones=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
+                value_preds=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device))
+        # 3. Sampling
+        sampled_data = buffer.sample(('states', 'actions', 'rewards'), experiment_cfg["agent"]["rollouts"], experiment_cfg["agent"]["mini_batches"])
+        sampled_states = buffer.get_tensor_by_name("states", keepdim=True)
+        sampled_states_2d = buffer.get_tensor_by_name("states", keepdim=False)
+        # 4. GAE calculation
+        buffer.compute_gae(torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device), gamma=0.99, lamb=0.95)
+
+
+
     # runner = Runner(env, experiment_cfg)
 
     # if resume_path is not None:
