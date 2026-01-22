@@ -31,16 +31,16 @@ class Actor(nn.Module):
         self.init_weights()
         self.init_biases(val=0)
 
-    def forward(self, inputs: torch.Tensor, eval: bool = False):
+    def forward(self, inputs: torch.Tensor, deterministic: bool = False):
         '''
         Forward propagation of actor NN
         
         :param inputs: Observation vector
         :type inputs: torch.Tensor
-        :param eval: Is actor evaluation mode
-        :type eval: bool 
+        :param deterministic: Is actor evaluation mode
+        :type deterministic: bool 
         '''
-        standardized_input = self.actor_standardizer.standardization(inputs, update=not eval)
+        standardized_input = self.actor_standardizer.standardization(inputs, update=not deterministic)
 
         mean_actions = self.net(standardized_input)
         log_std = self.log_std_parameter
@@ -51,14 +51,20 @@ class Actor(nn.Module):
         # Action distribution
         self.action_distribution = Normal(mean_actions, log_std.exp())
 
-        # Sample using the reparameterization trick
-        actions = self.action_distribution.rsample()
+        if deterministic:
+            actions = mean_actions
+        else:
+            # Sample using the reparameterization trick
+            actions = self.action_distribution.rsample()
 
         # Log of the probability density function
         log_prob = self.action_distribution.log_prob(actions)
         log_prob = log_prob.sum(dim=-1)
 
-        return actions, log_prob
+        # Entropy : mean of (Batch, Action) dimension
+        entropy = self.action_distribution.entropy().mean()
+
+        return actions, log_prob, entropy
     
     ## =============== Auxilary functions =============== ##
 
@@ -136,16 +142,16 @@ class Critic(nn.Module):
         self.init_weights()
         self.init_biases(val=0)
 
-    def forward(self, inputs: torch.Tensor, eval: bool = False):
+    def forward(self, inputs: torch.Tensor, deterministic: bool = False):
         '''
         Forward propagation of critic NN
         
         :param inputs: State vector
         :type inputs: torch.Tensor
-        :param eval: Is critic evaluation mode
-        :type eval: bool 
+        :param deterministic: Is critic evaluation mode
+        :type deterministic: bool 
         '''
-        standardized_input = self.critic_standardizer.standardization(inputs, update=not eval)
+        standardized_input = self.critic_standardizer.standardization(inputs, update=not deterministic)
         expected_return = self.net(standardized_input)
 
         return expected_return, None

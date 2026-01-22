@@ -120,6 +120,7 @@ def main():
                 states=torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
                 next_states = torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
                 actions=torch.randn((env.num_envs, act_size), dtype=torch.float32, device=env.device),
+                action_log_probs = torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
                 rewards=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
                 truncated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
                 terminated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
@@ -128,9 +129,36 @@ def main():
         sampled_data = buffer.sample(('states', 'actions', 'rewards'), experiment_cfg["agent"]["rollouts"], experiment_cfg["agent"]["mini_batches"])
         sampled_states = buffer.get_tensor_by_name("states", keepdim=True)
         sampled_states_2d = buffer.get_tensor_by_name("states", keepdim=False)
-        # 4. GAE calculation
-        buffer.compute_gae(torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device), gamma=0.99, lamb=0.95)
+        # 4. GAE calculation (omit for parameter update test of agent class)
+        # buffer.compute_gae(torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device), gamma=0.99, lamb=0.95)
 
+
+    # ==========================================================================================================================
+    # ======================================== Model & Agent Spawn Test ========================================================
+    # ==========================================================================================================================
+    from lib.model.MLP import Actor, Critic
+    from lib.agent.ppo import PPO
+    
+    # 1. Initialization
+    actor = Actor(num_observations=obs_size,
+                  num_actions=act_size,
+                  device=env.device)
+    
+    critic = Critic(num_states=obs_size,
+                    device=env.device)
+
+    model = {"actor": actor, "critic": critic}
+    agent = PPO(model=model,
+                buffer=buffer, 
+                device=env.device,
+                cfg=experiment_cfg["agent"])
+    
+    # 2. Forward propagation (Actor, Critic)
+    actions, log_probs, entropy = agent.act(sampled_states, timestep=1, deterministic=True)
+    values, _ = agent.critic(sampled_states, deterministic=True)
+    
+    # 3. Parameter Update
+    policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
 
 
     # runner = Runner(env, experiment_cfg)

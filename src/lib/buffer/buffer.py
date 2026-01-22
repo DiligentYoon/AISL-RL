@@ -228,7 +228,8 @@ class Buffer:
         self.create_tensor("action_log_probs", 1, dtype=torch.float32)
         self.create_tensor("value_preds", 1, dtype=torch.float32)
         self.create_tensor("rewards", 1, dtype=torch.float32)
-        self.create_tensor("done", 1, dtype=torch.bool)
+        self.create_tensor("terminated", 1, dtype=torch.bool)
+        self.create_tensor("truncated", 1, dtype=torch.bool)
 
     
     def sample(
