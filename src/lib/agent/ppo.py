@@ -35,8 +35,8 @@ class PPO(Agent):
         super().__init__(cfg, model, device)
 
         # models
-        self.actor = self.model.get("actor", None)
-        self.critic = self.model.get("critic", None)
+        self.actor = self.model.get("actor", None).to(self.device)
+        self.critic = self.model.get("critic", None).to(self.device)
         
         # buffer
         self.buffer = buffer
@@ -99,11 +99,11 @@ class PPO(Agent):
         """
         if timestep < self.random_timesteps:
             # TODO: random action logic should be implemented manually
-            actions, log_prob = self.actor.random_act(states)
+            actions, log_prob, entropy = self.actor.random_act(states)
         else:
-            actions, log_prob = self.actor(states, deterministic)
+            actions, log_prob, entropy = self.actor(states, deterministic)
         
-        return actions, log_prob
+        return actions, log_prob, entropy
     
 
     def insert_data(self,
@@ -144,33 +144,32 @@ class PPO(Agent):
                                 value_preds = value_preds)
     
     
-    def update(self) -> None:
-        """Algorithm's main update step
-
-        :param timestep: Current timestep
-        :type timestep: int
-        :param timesteps: Number of timesteps
-        :type timesteps: int
+    def update(self) -> float:
+        """
+        Algorithm's main update step
         """
         with torch.no_grad():
             last_values, _ = self.critic(self.buffer.get_tensor_by_name("next_states")[-1])
         
+        # GAE Calculation
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
         
         cumulative_policy_loss = 0
         cumulative_entropy_loss = 0
         cumulative_value_loss = 0
 
+        # Parameter Update
         self.set_running_mode("train")
         for _ in range(self.learning_epochs):
             kl_divergences = []
-            # sample mini batch for SGD at each epoch
+            # Sample mini batch for SGD at each epoch
             mini_batches = self.buffer.sample(
                 names=self.tensors_name_for_update,
                 batch_size=self.rollouts,
                 mini_batch=self.mini_batches)
             
             for mb in mini_batches:
+                # (mini batch size, Data-specific)
                 (sampled_states, 
                  sampled_actions,
                  sampled_action_log_probs,
@@ -178,28 +177,32 @@ class PPO(Agent):
                  sampled_returns,
                  sampled_advantages) = mb
                 
-                _, next_log_probs, dist_entropy = self.actor(sampled_states)
+                _, new_log_probs, dist_entropy = self.actor(sampled_states)
 
-                # compute approximate KL divergence
+                # Shape syncronization
+                if len(new_log_probs.shape) != len(sampled_action_log_probs.shape):
+                    new_log_probs = new_log_probs.reshape(sampled_action_log_probs.shape)
+
+                # Compute approximate KL divergence
                 with torch.no_grad():
-                    ratio = next_log_probs - sampled_action_log_probs
+                    ratio = new_log_probs - sampled_action_log_probs
                     kl_divergence = ((torch.exp(ratio) - 1) - ratio).mean()
                     kl_divergences.append(kl_divergence)
                 
-                # compute entropy loss
+                # Compute entropy loss
                 if self.entropy_loss_scale:
                     entropy_loss = -self.entropy_loss_scale * dist_entropy
                 else:
                     entropy_loss = 0
 
-                # compute policy loss
-                ratio = torch.exp(next_log_probs - sampled_action_log_probs)
+                # Compute policy loss
+                ratio = torch.exp(new_log_probs - sampled_action_log_probs)
                 surrogate = sampled_advantages * ratio
                 surrogate_clipped = sampled_advantages * torch.clip(
                     ratio, 1.0 - self.ratio_clip, 1.0 + self.ratio_clip)
                 policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
 
-                # compute value loss
+                # Compute value loss
                 predicted_values, _ = self.critic(sampled_states)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
@@ -208,26 +211,28 @@ class PPO(Agent):
                 value_loss = self.value_loss_scale * F.mse_loss(sampled_returns, predicted_values)
                 
 
-                # optimization step
+                # Optimization step
                 self.optimizer.zero_grad()
                 (policy_loss + self.entropy_loss_scale * entropy_loss + self.value_loss_scale * value_loss).backward()
 
                 if self.grad_norm_clip > 0:
-                    nn.utils.clip_grad_norm_(self.actor.parameters(), self.critic.parameters(), self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(), self.critic.parameters()), self.grad_norm_clip)
                 
                 self.optimizer.step()
 
-                # update cumulative losses
+                # Update cumulative losses
                 cumulative_policy_loss += policy_loss.item()
                 cumulative_value_loss += value_loss.item()
                 if self.entropy_loss_scale:
                     cumulative_entropy_loss += entropy_loss.item()
                 
-        
+        self.set_running_mode("eval")
+
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches)
         mean_value_loss = cumulative_value_loss / (self.learning_epochs * self.mini_batches)
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches)
         mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches)
+
 
         return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence
             
