@@ -234,7 +234,7 @@ def main():
         
         # state update
         obs = next_obs
-        state = next_states
+        states = next_states
 
 
     # close the simulator
