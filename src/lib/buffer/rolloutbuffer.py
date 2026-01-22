@@ -76,7 +76,7 @@ class RolloutBuffer(Buffer):
 
         reward = self.tensors["rewards"] # [T, E, 1]
         value_preds = self.tensors["value_preds"] # [T, E, 1]
-        mask = torch.logical_not(self.tensors["done"]).float() # [T, E, 1]
+        mask = torch.logical_not(torch.logical_or(self.tensors["terminated"], self.tensors["truncated"])).float() # [T, E, 1]
 
         gae = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
         for step in reversed(range(rollout)):

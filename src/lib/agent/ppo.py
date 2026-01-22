@@ -46,26 +46,26 @@ class PPO(Agent):
         self.checkpoint_modules["critic"] = self.critic
 
         # configuration
+        self.rollouts = self.cfg["rollouts"]
         self.learning_epochs = self.cfg["learning_epochs"]
         self.mini_batches = self.cfg["mini_batches"]
-        self.rollouts = self.cfg["rollouts"]
+
+        self.learning_rate = self.cfg["learning_rate"]
+        self.discount_factor = self.cfg["discount_factor"]
+        self.gae_lambda = self.cfg["lambda"]
+
+        self.random_timesteps = self.cfg["random_timesteps"]
+        self.learning_starts = self.cfg["learning_starts"]
 
         self.grad_norm_clip = self.cfg["grad_norm_clip"]
         self.ratio_clip = self.cfg["ratio_clip"]
         self.value_clip = self.cfg["value_clip"]
 
-        self.value_loss_scale = self.cfg["value_loss_scale"]
         self.entropy_loss_scale = self.cfg["entropy_loss_scale"]
+        self.value_loss_scale = self.cfg["value_loss_scale"]
 
-        self.learning_rate = self.cfg["learning_rate"]
-
-        self.discount_factor = self.cfg["discount_factor"]
-        self.gae_lambda = self.cfg["lambda"]
         self.time_limit_bootstrap = self.cfg["time_limit_bootstrap"]
-
-        self.random_timesteps = self.cfg["random_timesteps"]
-        self.learning_starts = self.cfg["learning_starts"]
-
+        self.clip_predicted_values = self.cfg["clip_predicted_values"]
         # set up optimizer and learning rate scheduler
         if self.actor is not None and self.critic is not None:
             self.optimizer = torch.optim.Adam(
@@ -98,9 +98,10 @@ class PPO(Agent):
             values : Value preidctions
         """
         if timestep < self.random_timesteps:
+            # TODO: random action logic should be implemented manually
             actions, log_prob = self.actor.random_act(states)
         else:
-            actions, log_prob = self.actor.act(states, deterministic)
+            actions, log_prob = self.actor(states, deterministic)
         
         return actions, log_prob
     
@@ -117,8 +118,6 @@ class PPO(Agent):
         
         """
         Record an environment transition in buffer
-        
-        TODO: Buffer revision after PR
 
         Args:
             states: Observations/states of the environment used to make the decision
@@ -129,13 +128,13 @@ class PPO(Agent):
             infos: Additional information about the environment
         """
         with torch.no_grad():
-            value_preds = self.critic.act(states)
+            value_preds, _ = self.critic(states)
         
         # time-limit (truncation) bootstrapping
         if self.time_limit_bootstrap:
             rewards += self.discount_factor * value_preds * truncated
 
-        self.buffer.add_sampels(states=states,
+        self.buffer.add_samples(states=states,
                                 actions=actions,
                                 rewards=rewards,
                                 next_states=next_states,
@@ -154,7 +153,7 @@ class PPO(Agent):
         :type timesteps: int
         """
         with torch.no_grad():
-            last_values = self.critic.act(self.buffer.get_tensor_by_name("next_states")[-1])
+            last_values, _ = self.critic(self.buffer.get_tensor_by_name("next_states")[-1])
         
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
         
@@ -163,7 +162,7 @@ class PPO(Agent):
         cumulative_value_loss = 0
 
         self.set_running_mode("train")
-        for epoch in range(self.learning_epochs):
+        for _ in range(self.learning_epochs):
             kl_divergences = []
             # sample mini batch for SGD at each epoch
             mini_batches = self.buffer.sample(
@@ -179,7 +178,7 @@ class PPO(Agent):
                  sampled_returns,
                  sampled_advantages) = mb
                 
-                _, next_log_probs = self.actor.act(sampled_states)
+                _, next_log_probs, dist_entropy = self.actor(sampled_states)
 
                 # compute approximate KL divergence
                 with torch.no_grad():
@@ -188,8 +187,8 @@ class PPO(Agent):
                     kl_divergences.append(kl_divergence)
                 
                 # compute entropy loss
-                if self._entropy_loss_scale:
-                    entropy_loss = -self._entropy_loss_scale * self.policy.get_entropy(role="policy").mean()
+                if self.entropy_loss_scale:
+                    entropy_loss = -self.entropy_loss_scale * dist_entropy
                 else:
                     entropy_loss = 0
 
@@ -201,8 +200,8 @@ class PPO(Agent):
                 policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
 
                 # compute value loss
-                predicted_values = self.critic.act(sampled_states)
-                if self._clip_predicted_values:
+                predicted_values, _ = self.critic(sampled_states)
+                if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip
                     )

@@ -28,6 +28,8 @@ agent:
   entropy_loss_scale: 0.0
   value_loss_scale: 1.0
   kl_threshold: 0.0
+  time_limit_bootstrap: True
+  clip_predicted_values: False
   # logging and checkpoint
   experiment:
     directory: "ant"

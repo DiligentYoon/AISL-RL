@@ -120,7 +120,8 @@ def main():
                 states=torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
                 actions=torch.randn((env.num_envs, act_size), dtype=torch.float32, device=env.device),
                 rewards=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
-                dones=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
+                truncated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
+                terminated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
                 value_preds=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device))
         # 3. Sampling
         sampled_data = buffer.sample(('states', 'actions', 'rewards'), experiment_cfg["agent"]["rollouts"], experiment_cfg["agent"]["mini_batches"])
