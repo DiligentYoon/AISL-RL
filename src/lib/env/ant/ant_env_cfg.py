@@ -24,7 +24,7 @@ class AntEnvCfg(EnvCfg):
     action_scale = 0.5
     action_space = 8
     observation_space = 36
-    state_space = 0
+    state_space = 36
 
     # simulation
     sim: SimulationCfg = SimulationCfg(dt=1 / 120, render_interval=decimation)

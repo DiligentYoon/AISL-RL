@@ -101,7 +101,7 @@ class AntEnv(Env):
             self.cfg.sim.dt,
         )
 
-    def _get_observations(self) -> dict:
+    def _get_observations(self) -> torch.Tensor:
         obs = torch.cat(
             (
                 self.torso_position[:, 2].view(-1, 1),
@@ -118,8 +118,10 @@ class AntEnv(Env):
             ),
             dim=-1,
         )
-        observations = {"policy": obs}
-        return observations
+        return obs
+    
+    def _get_states(self) -> torch.Tensor:
+        return self._get_observations()
 
     def _get_rewards(self) -> torch.Tensor:
         total_reward = compute_rewards(

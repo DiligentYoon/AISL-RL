@@ -17,6 +17,7 @@ class IsaacLabWrapper(Wrapper):
 
         self._reset_once = True
         self._observations = None
+        self._states = None
         self._info = {}
 
     @property
@@ -58,9 +59,11 @@ class IsaacLabWrapper(Wrapper):
             rtype: tuple of torch.Tensor and any other info
         """
         actions = unflatten_tensorized_space(self.action_space, actions)
-        observations, reward, terminated, truncated, self._info = self._env.step(actions)
-        self._observations = flatten_tensorized_space(tensorize_space(self.observation_space, observations["policy"]))
-        return self._observations, reward.view(-1, 1), terminated.view(-1, 1), truncated.view(-1, 1), self._info
+        observations, states, reward, terminated, truncated, self._info = self._env.step(actions)
+        self._observations = flatten_tensorized_space(tensorize_space(self.observation_space, observations))
+        if states is not None:
+            self._states = flatten_tensorized_space(tensorize_space(self.state_space, states))
+        return self._observations, self._states, reward.view(-1, 1), terminated.view(-1, 1), truncated.view(-1, 1), self._info
 
     def reset(self) -> Tuple[torch.Tensor, Any]:
         """Reset the environment
@@ -71,12 +74,13 @@ class IsaacLabWrapper(Wrapper):
             rtype: torch.Tensor and any other info
         """
         if self._reset_once:
-            observations, self._info = self._env.reset()
+            observations, states, self._info = self._env.reset()
             self._observations = flatten_tensorized_space(
-                tensorize_space(self.observation_space, observations["policy"])
-            )
+                tensorize_space(self.observation_space, observations))
+            if states is not None:
+                self._states = flatten_tensorized_space(tensorize_space(self.state_space, states))
             self._reset_once = False
-        return self._observations, self._info
+        return self._observations, self._states, self._info
 
     def render(self, *args, **kwargs) -> None:
         """Render the environment"""

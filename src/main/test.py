@@ -109,8 +109,15 @@ def main():
     
     observation_space = env.observation_space
     action_space = env.action_space
-    buffer.init_buffer(observation_space, action_space)
-    obs_size = buffer.tensors["states"].shape[-1]
+    if env.state_space:
+        state_space = env.state_space
+        experiment_cfg["agent"]["async_actor_critic"] = True
+    else:
+        state_space = None
+        experiment_cfg["agent"]["async_actor_critic"] = False
+    buffer.init_buffer(observation_space, state_space, action_space)
+    obs_size = buffer.tensors["observations"].shape[-1]
+    state_size = buffer.tensors["states"].shape[-1] if env.state_space else obs_size
     act_size = buffer.tensors["actions"].shape[-1]
     # for _ in range(3):
     #     # 2. Storing
@@ -144,8 +151,8 @@ def main():
     actor = Actor(num_observations=obs_size,
                   num_actions=act_size,
                   device=env.device)
-    
-    critic = Critic(num_states=obs_size,
+
+    critic = Critic(num_states=state_size,
                     device=env.device)
 
     model = {"actor": actor, "critic": critic}
@@ -177,7 +184,7 @@ def main():
     # ======================================================================================================================
 
     # reset environment
-    obs, _ = env.reset()
+    obs, states, _ = env.reset()
     rollout = 0
     timestep = 0
     test_checkpoint_step = 100
@@ -190,19 +197,21 @@ def main():
             # agent stepping
             actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
             # env stepping
-            next_obs, rewards, terminated, truncated, infos = env.step(actions)
+            next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number
             rollout += 1
         
             # Insert data to the buffer
-            agent.insert_data(states=obs,
-                            actions=actions,
-                            action_log_probs=action_log_probs.reshape(-1, 1),
-                            rewards=rewards,
-                            next_states=next_obs,
-                            truncated=truncated,
-                            terminated=terminated,
-                            infos=infos)
+            agent.insert_data(observations=obs,
+                              states=states,
+                              actions=actions,
+                              action_log_probs=action_log_probs.reshape(-1, 1),
+                              rewards=rewards,
+                              next_observations=next_obs,
+                              next_states=next_states,
+                              truncated=truncated,
+                              terminated=terminated,
+                              infos=infos)
         
         # Parameter update
         if rollout % buffer.buffer_size == 0:
@@ -225,6 +234,7 @@ def main():
         
         # state update
         obs = next_obs
+        state = next_states
 
 
     # close the simulator

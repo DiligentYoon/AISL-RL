@@ -30,6 +30,7 @@ agent:
   kl_threshold: 0.0
   time_limit_bootstrap: True
   clip_predicted_values: False
+  async_actor_critic: False
   # logging and checkpoint
   experiment:
     directory: "ant"
