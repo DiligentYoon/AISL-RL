@@ -66,25 +66,51 @@ class PPO(Agent):
 
         self.time_limit_bootstrap = self.cfg["time_limit_bootstrap"]
         self.clip_predicted_values = self.cfg["clip_predicted_values"]
-        # set up optimizer and learning rate scheduler
+
+        self.async_actor_critic = self.cfg.get("async_actor_critic", False)
+
+        # set up optimizer and (Future) learning rate scheduler 
         if self.actor is not None and self.critic is not None:
             self.optimizer = torch.optim.Adam(
                     itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
             self.checkpoint_modules["optimizer"] = self.optimizer
 
 
-        self.tensors_names = ["states", "next_states", "actions", "action_log_probs", 
+        self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
                               "value_preds", "rewards", "truncated", "terminated"
                               "returns", "advantages"]
         
-        self.tensors_name_for_update = ["states", "actions", "action_log_probs",
+        self.tensors_name_for_update = ["observations", "actions", "action_log_probs",
                                         "value_preds", "returns", "advantages"]
 
-        # Default Mode : Evaluation for disconecting gradient flow
+        # Default Mode : Evaluation for disconnecting gradient flow
         self.set_running_mode("eval")
+
+        # State Space for previled learning & Asyncronous Actor Critic
+        if self.async_actor_critic:
+            self.tensors_names = ["observations", "next_observations",
+                                  "states", "next_states",
+                                  "actions", "action_log_probs", 
+                                  "value_preds", "rewards", 
+                                  "truncated", "terminated"
+                                  "returns", "advantages"]
+            
+            self.tensors_name_for_update = ["observations", "states",
+                                            "actions", "action_log_probs",
+                                            "value_preds", "returns", "advantages"]
+        else:
+            self.tensors_names = ["observations", "next_observations",
+                                  "actions", "action_log_probs", 
+                                  "value_preds", "rewards", 
+                                  "truncated", "terminated"
+                                  "returns", "advantages"]
+
+            self.tensors_name_for_update = ["observations", 
+                                            "actions", "action_log_probs",
+                                            "value_preds", "returns", "advantages"]
         
     
-    def act(self, states: torch.Tensor, timestep: int, deterministic: bool = False) -> torch.Tensor:
+    def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False) -> torch.Tensor:
         """
         Process the environment's states to make a decision (actions) using the main policy
 
@@ -99,19 +125,21 @@ class PPO(Agent):
         """
         if timestep < self.random_timesteps:
             # TODO: random action logic should be implemented manually
-            actions, log_prob, entropy = self.actor.random_act(states)
+            actions, log_prob, entropy = self.actor.random_act(observations)
         else:
-            actions, log_prob, entropy = self.actor(states, deterministic)
+            actions, log_prob, entropy = self.actor(observations, deterministic)
         
         return actions, log_prob, entropy
     
 
     def insert_data(self,
-                    states: torch.Tensor,
+                    observations: torch.Tensor,
+                    states: Union[torch.Tensor | None],
                     actions: torch.Tensor,
                     action_log_probs: torch.Tensor,
                     rewards: torch.Tensor,
-                    next_states: torch.Tensor,
+                    next_observations: torch.Tensor,
+                    next_states: Union[torch.Tensor | None],
                     truncated: torch.Tensor,
                     terminated: torch.Tensor,
                     infos: Any) -> None:
@@ -120,36 +148,53 @@ class PPO(Agent):
         Record an environment transition in buffer
 
         Args:
-            states: Observations/states of the environment used to make the decision
+            observations: observations
+            states: states of the environment used to make the decision
             actions: Actions taken by the agent
             rewards: Instant rewards achieved by the current actions
-            next_states: Next observations/states of the environment
+            next_observations: Next observations of the environment
+            next_states: Next states of the environment
             done: Signals to indicate that episodes have done
             infos: Additional information about the environment
         """
+        critic_inputs = states if states is not None else observations
+
         with torch.no_grad():
-            value_preds, _ = self.critic(states)
-        
+            value_preds, _ = self.critic(critic_inputs)
+            
         # time-limit (truncation) bootstrapping
         if self.time_limit_bootstrap:
             rewards += self.discount_factor * value_preds * truncated
 
-        self.buffer.add_samples(states=states,
-                                actions=actions,
-                                rewards=rewards,
-                                next_states=next_states,
-                                truncated=truncated,
-                                terminated=terminated,
-                                action_log_probs=action_log_probs,
-                                value_preds = value_preds)
-    
+        if self.async_actor_critic:
+            self.buffer.add_samples(observations=observations,
+                                    states=states,
+                                    actions=actions,
+                                    rewards=rewards,
+                                    next_observations=next_observations,
+                                    next_states=next_states,
+                                    truncated=truncated,
+                                    terminated=terminated,
+                                    action_log_probs=action_log_probs,
+                                    value_preds = value_preds)
+        else:
+            self.buffer.add_samples(observations=observations,
+                                    actions=actions,
+                                    rewards=rewards,
+                                    next_observations=next_observations,
+                                    truncated=truncated,
+                                    terminated=terminated,
+                                    action_log_probs=action_log_probs,
+                                    value_preds = value_preds)
+
     
     def update(self) -> float:
         """
         Algorithm's main update step
         """
         with torch.no_grad():
-            last_values, _ = self.critic(self.buffer.get_tensor_by_name("next_states")[-1])
+            critic_input = self.buffer.get_tensor_by_name("next_states")[-1] if self.async_actor_critic else self.buffer.get_tensor_by_name("next_observations")[-1]
+            last_values, _ = self.critic(critic_input)
         
         # GAE Calculation
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
@@ -170,14 +215,29 @@ class PPO(Agent):
             
             for mb in mini_batches:
                 # (mini batch size, Data-specific)
-                (sampled_states, 
-                 sampled_actions,
-                 sampled_action_log_probs,
-                 sampled_value_preds,
-                 sampled_returns,
-                 sampled_advantages) = mb
+                if self.async_actor_critic:
+                    (sampled_observations,
+                     sampled_states,
+                     sampled_actions,
+                     sampled_action_log_probs,
+                     sampled_value_preds,
+                     sampled_returns,
+                     sampled_advantages) = mb
+
+                    actor_input = sampled_observations
+                    critic_input = sampled_states                
+                else:
+                    (sampled_observations,
+                     sampled_actions,
+                     sampled_action_log_probs,
+                     sampled_value_preds,
+                     sampled_returns,
+                     sampled_advantages) = mb
+                    
+                    actor_input = sampled_observations
+                    critic_input = sampled_observations
                 
-                _, new_log_probs, dist_entropy = self.actor(sampled_states)
+                _, new_log_probs, dist_entropy = self.actor(actor_input)
 
                 # Shape syncronization
                 if len(new_log_probs.shape) != len(sampled_action_log_probs.shape):
@@ -203,7 +263,7 @@ class PPO(Agent):
                 policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
 
                 # Compute value loss
-                predicted_values, _ = self.critic(sampled_states)
+                predicted_values, _ = self.critic(critic_input)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip

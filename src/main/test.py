@@ -43,6 +43,8 @@ import torch
 import copy
 import numpy as np
 
+from datetime import datetime
+
 import lib
 
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
@@ -68,15 +70,12 @@ def main():
     # specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", experiment_cfg["agent"]["experiment"]["directory"])
     log_root_path = os.path.abspath(log_root_path)
+    log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
-
-    # get checkpoint path
-    if args_cli.checkpoint is not None:
-        resume_path = os.path.abspath(args_cli.checkpoint)
-        log_dir = os.path.dirname(os.path.dirname(resume_path))
-    else:
-        print("[INFO] Unfortunately a pre-trained checkpoint is not found for this task.")
-        resume_path = None
+    print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
+    if experiment_cfg["agent"]["experiment"]["experiment_name"]:
+        log_dir += f"_{experiment_cfg['agent']['experiment']['experiment_name']}"
+    log_dir = os.path.join(log_root_path, log_dir)
 
     # ============================================================================================================================
     # =========================================== Env Spawn & Wrapper Test =======================================================
@@ -110,25 +109,34 @@ def main():
     
     observation_space = env.observation_space
     action_space = env.action_space
-    buffer.init_buffer(observation_space, action_space)
-    for _ in range(3):
-        # 2. Storing
-        for i in range(experiment_cfg["agent"]["rollouts"]):
-            obs_size = buffer.tensors["states"].shape[-1]
-            act_size = buffer.tensors["actions"].shape[-1]
-            buffer.add_samples(
-                states=torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
-                next_states = torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
-                actions=torch.randn((env.num_envs, act_size), dtype=torch.float32, device=env.device),
-                action_log_probs = torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
-                rewards=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
-                truncated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
-                terminated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
-                value_preds=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device))
-        # 3. Sampling
-        sampled_data = buffer.sample(('states', 'actions', 'rewards'), experiment_cfg["agent"]["rollouts"], experiment_cfg["agent"]["mini_batches"])
-        sampled_states = buffer.get_tensor_by_name("states", keepdim=True)
-        sampled_states_2d = buffer.get_tensor_by_name("states", keepdim=False)
+    if env.state_space:
+        state_space = env.state_space
+        experiment_cfg["agent"]["async_actor_critic"] = True
+    else:
+        state_space = None
+        experiment_cfg["agent"]["async_actor_critic"] = False
+    buffer.init_buffer(observation_space, state_space, action_space)
+    obs_size = buffer.tensors["observations"].shape[-1]
+    state_size = buffer.tensors["states"].shape[-1] if env.state_space else obs_size
+    act_size = buffer.tensors["actions"].shape[-1]
+    # for _ in range(3):
+    #     # 2. Storing
+    #     for i in range(experiment_cfg["agent"]["rollouts"]):
+            # obs_size = buffer.tensors["states"].shape[-1]
+            # act_size = buffer.tensors["actions"].shape[-1]
+    #         buffer.add_samples(
+    #             states=torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
+    #             next_states = torch.randn((env.num_envs, obs_size), dtype=torch.float32, device=env.device),
+    #             actions=torch.randn((env.num_envs, act_size), dtype=torch.float32, device=env.device),
+    #             action_log_probs = torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
+    #             rewards=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device),
+    #             truncated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
+    #             terminated=torch.zeros((env.num_envs, 1), dtype=torch.bool, device=env.device),
+    #             value_preds=torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device))
+    #     # 3. Sampling
+    #     sampled_data = buffer.sample(('states', 'actions', 'rewards'), experiment_cfg["agent"]["rollouts"], experiment_cfg["agent"]["mini_batches"])
+    #     sampled_states = buffer.get_tensor_by_name("states", keepdim=True)
+    #     sampled_states_2d = buffer.get_tensor_by_name("states", keepdim=False)
         # 4. GAE calculation (omit for parameter update test of agent class)
         # buffer.compute_gae(torch.randn((env.num_envs, 1), dtype=torch.float32, device=env.device), gamma=0.99, lamb=0.95)
 
@@ -143,8 +151,8 @@ def main():
     actor = Actor(num_observations=obs_size,
                   num_actions=act_size,
                   device=env.device)
-    
-    critic = Critic(num_states=obs_size,
+
+    critic = Critic(num_states=state_size,
                     device=env.device)
 
     model = {"actor": actor, "critic": critic}
@@ -153,24 +161,33 @@ def main():
                 device=env.device,
                 cfg=experiment_cfg["agent"])
     
-    # 2. Forward propagation (Actor, Critic)
-    actions, log_probs, entropy = agent.act(sampled_states, timestep=1, deterministic=True)
-    values, _ = agent.critic(sampled_states, deterministic=True)
+
+    # 2. Checkpoint
+    if args_cli.checkpoint is not None:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+        agent.load(resume_path)
+        print(f"[INFO] Get checkpoint from {resume_path}")
+    else:
+        print("[INFO] Unfortunately a pre-trained checkpoint is not found for this task.")
+        resume_path = None
     
-    # 3. Parameter Update
-    policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+    # # 2. Forward propagation (Actor, Critic)
+    # actions, log_probs, entropy = agent.act(sampled_states, timestep=1, deterministic=True)
+    # values, _ = agent.critic(sampled_states, deterministic=True)
+    
+    # # 3. Parameter Update
+    # policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
 
 
-    # runner = Runner(env, experiment_cfg)
-
-    # if resume_path is not None:
-    #     print(f"[INFO] Loading model checkpoint from: {resume_path}")
-    #     runner.agent.load(resume_path)
-    # runner.agent.set_running_mode("eval")
+    # ======================================================================================================================
+    # ======================================== Env Interaction Test ========================================================
+    # ======================================================================================================================
 
     # reset environment
-    obs, _ = env.reset()
+    obs, states, _ = env.reset()
+    rollout = 0
     timestep = 0
+    test_checkpoint_step = 100
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -178,17 +195,47 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            # outputs = runner.agent.act(obs, timestep=0, timesteps=0)
-            # values, _, _ = runner.agent.value.act({"states": runner.agent._state_preprocessor(obs)}, role="value")
-            # actions = outputs[-1].get("mean_actions", outputs[0])
-            actions = torch.zeros((env.num_envs, env._unwrapped.cfg.action_space))
+            actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
             # env stepping
-            obs, _, _, _, info = env.step(actions)
+            next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
+            # update rollout number
+            rollout += 1
+        
+            # Insert data to the buffer
+            agent.insert_data(observations=obs,
+                              states=states,
+                              actions=actions,
+                              action_log_probs=action_log_probs.reshape(-1, 1),
+                              rewards=rewards,
+                              next_observations=next_obs,
+                              next_states=next_states,
+                              truncated=truncated,
+                              terminated=terminated,
+                              infos=infos)
+        
+        # Parameter update
+        if rollout % buffer.buffer_size == 0:
+            if buffer.memory_index == 0:
+                policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+            else:
+                raise RuntimeError("Discrepency appears between Buffer Logic and Rollout Policy.")
+
+        # Checkpoint save
+        if rollout % test_checkpoint_step == 0:
+            checkpoint_path = os.path.join(log_dir, f"agent_{rollout}.pt")
+            agent.save(checkpoint_path)
+
+        # Video update
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
+        
+        # state update
+        obs = next_obs
+        states = next_states
+
 
     # close the simulator
     env.close()

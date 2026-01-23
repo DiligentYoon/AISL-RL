@@ -38,6 +38,7 @@ docker/.container.cfg
 
 
 # Outputs
+**/logs/*
 **/output/*
 **/videos/*
 **/wandb/*

@@ -96,7 +96,7 @@ class Actor(nn.Module):
                 nn.init.constant_(module.bias, val=val)
 
         self.apply(_constant_init)
-    
+
     def save(self, path: str) -> None:
         """
         Save the model to the specific path
@@ -119,6 +119,7 @@ class Actor(nn.Module):
         
         state_dict = torch.load(path, map_location=self.device, weights_only=False)  # prevent torch:FutureWarning
         self.load_state_dict(state_dict)
+
 
 class Critic(nn.Module):
     def __init__(self, num_states, device):
@@ -186,7 +187,7 @@ class Critic(nn.Module):
                 nn.init.constant_(module.bias, val=val)
 
         self.apply(_constant_init)
-    
+
     def save(self, path: str) -> None:
         """
         Save the model to the specific path
