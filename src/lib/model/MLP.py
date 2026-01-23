@@ -97,6 +97,29 @@ class Actor(nn.Module):
 
         self.apply(_constant_init)
 
+    def save(self, path: str) -> None:
+        """
+        Save the model to the specific path
+
+        :param path: Path to save the model to
+        :type path: str
+        """
+
+        torch.save(self.state_dict(), path)
+
+    def load(self, path: str) -> None:
+        """
+        Load the model from the specific path
+
+        The final storage device is determined by the constructor of the model
+
+        :param path: Path to load the model from
+        :type path: str
+        """
+        
+        state_dict = torch.load(path, map_location=self.device, weights_only=False)  # prevent torch:FutureWarning
+        self.load_state_dict(state_dict)
+
 
 class Critic(nn.Module):
     def __init__(self, num_states, device):
@@ -164,3 +187,26 @@ class Critic(nn.Module):
                 nn.init.constant_(module.bias, val=val)
 
         self.apply(_constant_init)
+
+    def save(self, path: str) -> None:
+        """
+        Save the model to the specific path
+
+        :param path: Path to save the model to
+        :type path: str
+        """
+
+        torch.save(self.state_dict(), path)
+
+    def load(self, path: str) -> None:
+        """
+        Load the model from the specific path
+
+        The final storage device is determined by the constructor of the model
+
+        :param path: Path to load the model from
+        :type path: str
+        """
+        
+        state_dict = torch.load(path, map_location=self.device, weights_only=False)  # prevent torch:FutureWarning
+        self.load_state_dict(state_dict)
