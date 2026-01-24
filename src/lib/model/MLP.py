@@ -19,11 +19,13 @@ class Actor(nn.Module):
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_observations, 128),
+        self.net = nn.Sequential(nn.Linear(self.num_observations, 400),
                                  nn.ReLU(),
-                                 nn.Linear(128, 128),
+                                 nn.Linear(400, 200),
                                  nn.ReLU(),
-                                 nn.Linear(128, self.num_actions),
+                                 nn.Linear(200, 100),
+                                 nn.ReLU(),
+                                 nn.Linear(100, self.num_actions),
                                  nn.Tanh())
 
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
@@ -31,16 +33,18 @@ class Actor(nn.Module):
         self.init_weights()
         self.init_biases(val=0)
 
-    def forward(self, inputs: torch.Tensor, deterministic: bool = False):
+    def forward(self, observations: torch.Tensor, taken_actions: torch.Tensor | None, deterministic: bool = False, update_rms: bool = False):
         '''
         Forward propagation of actor NN
         
-        :param inputs: Observation vector
-        :type inputs: torch.Tensor
+        :param observations: Observation vector
+        :type observations: torch.Tensor
+        :param actions: Action vector
+        :type actions: torch.Tensor
         :param deterministic: Is actor evaluation mode
         :type deterministic: bool 
         '''
-        standardized_input = self.actor_standardizer.standardization(inputs, update=not deterministic)
+        standardized_input = self.actor_standardizer.standardization(observations, update=update_rms)
 
         mean_actions = self.net(standardized_input)
         log_std = self.log_std_parameter
@@ -58,7 +62,11 @@ class Actor(nn.Module):
             actions = self.action_distribution.rsample()
 
         # Log of the probability density function
-        log_prob = self.action_distribution.log_prob(actions)
+        if taken_actions is not None:
+            log_prob = self.action_distribution.log_prob(taken_actions)
+        else:
+            log_prob = self.action_distribution.log_prob(actions)
+
         log_prob = log_prob.sum(dim=-1)
 
         # Entropy : mean of (Batch, Action) dimension
@@ -133,17 +141,18 @@ class Critic(nn.Module):
         self.critic_standardizer = RunningMeanStd(shape=self.num_states, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_states, 128),
+        self.net = nn.Sequential(nn.Linear(self.num_states, 400),
                                  nn.ReLU(),
-                                 nn.Linear(128, 128),
+                                 nn.Linear(400, 200),
                                  nn.ReLU(),
-                                 nn.Linear(128, 1)
-                                 )
+                                 nn.Linear(200, 100),
+                                 nn.ReLU(),
+                                 nn.Linear(100, 1))
 
         self.init_weights()
         self.init_biases(val=0)
 
-    def forward(self, inputs: torch.Tensor, deterministic: bool = False):
+    def forward(self, inputs: torch.Tensor, deterministic: bool = False, update_rms: bool = False):
         '''
         Forward propagation of critic NN
         
@@ -152,7 +161,7 @@ class Critic(nn.Module):
         :param deterministic: Is critic evaluation mode
         :type deterministic: bool 
         '''
-        standardized_input = self.critic_standardizer.standardization(inputs, update=not deterministic)
+        standardized_input = self.critic_standardizer.standardization(inputs, update=update_rms)
         expected_return = self.net(standardized_input)
 
         return expected_return, None

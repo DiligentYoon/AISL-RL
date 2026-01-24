@@ -110,7 +110,7 @@ class PPO(Agent):
                                             "value_preds", "returns", "advantages"]
         
     
-    def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False) -> torch.Tensor:
+    def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
         """
         Process the environment's states to make a decision (actions) using the main policy
 
@@ -127,7 +127,10 @@ class PPO(Agent):
             # TODO: random action logic should be implemented manually
             actions, log_prob, entropy = self.actor.random_act(observations)
         else:
-            actions, log_prob, entropy = self.actor(observations, deterministic)
+            actions, log_prob, entropy = self.actor(observations=observations,
+                                                    taken_actions=None,
+                                                    deterministic=deterministic, 
+                                                    update_rms=update_rms)
         
         return actions, log_prob, entropy
     
@@ -204,15 +207,13 @@ class PPO(Agent):
         cumulative_value_loss = 0
 
         # Parameter Update
+        kl_divergences = []
         self.set_running_mode("train")
-        for _ in range(self.learning_epochs):
-            kl_divergences = []
-            # Sample mini batch for SGD at each epoch
-            mini_batches = self.buffer.sample(
-                names=self.tensors_name_for_update,
-                batch_size=self.rollouts,
-                mini_batch=self.mini_batches)
-            
+        # Sample mini batch
+        mini_batches = self.buffer.sample(
+            names=self.tensors_name_for_update,
+            mini_batch=self.mini_batches)
+        for epoch in range(self.learning_epochs):
             for mb in mini_batches:
                 # (mini batch size, Data-specific)
                 if self.async_actor_critic:
@@ -237,7 +238,10 @@ class PPO(Agent):
                     actor_input = sampled_observations
                     critic_input = sampled_observations
                 
-                _, new_log_probs, dist_entropy = self.actor(actor_input)
+                _, new_log_probs, dist_entropy = self.actor(observations=actor_input, 
+                                                            taken_actions=sampled_actions,
+                                                            deterministic=False,
+                                                            update_rms=not epoch)
 
                 # Shape syncronization
                 if len(new_log_probs.shape) != len(sampled_action_log_probs.shape):
@@ -263,7 +267,7 @@ class PPO(Agent):
                 policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
 
                 # Compute value loss
-                predicted_values, _ = self.critic(critic_input)
+                predicted_values, _ = self.critic(critic_input, update_rms=not epoch)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip
@@ -273,7 +277,7 @@ class PPO(Agent):
 
                 # Optimization step
                 self.optimizer.zero_grad()
-                (policy_loss + self.entropy_loss_scale * entropy_loss + self.value_loss_scale * value_loss).backward()
+                (policy_loss + entropy_loss + value_loss).backward()
 
                 if self.grad_norm_clip > 0:
                     nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(), self.critic.parameters()), self.grad_norm_clip)
