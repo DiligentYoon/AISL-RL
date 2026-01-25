@@ -19,7 +19,7 @@ agent:
   mini_batches: 4
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 5.0e-05
+  learning_rate: 5.0e-04
   random_timesteps: 0
   learning_starts: 0
   grad_norm_clip: 1.0
@@ -29,7 +29,7 @@ agent:
   value_loss_scale: 1.0
   kl_threshold: 0.0
   time_limit_bootstrap: True
-  clip_predicted_values: True
+  clip_predicted_values: False
   async_actor_critic: False
   # logging and checkpoint
   experiment:

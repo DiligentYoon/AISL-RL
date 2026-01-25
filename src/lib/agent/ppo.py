@@ -11,6 +11,8 @@ import torch.nn.functional as F
 
 from lib.agent.agent import Agent
 from lib.buffer.rolloutbuffer import RolloutBuffer
+from lib.utils.Running_mean_std import RunningMeanStd
+
 
 
 class PPO(Agent):
@@ -28,15 +30,13 @@ class PPO(Agent):
             buffer: Memory to storage the transitions.
             device: Device on which a tensor/array is or will be allocated (cuda, cpu).
             cfg: Configuration dictionary
-
-        Raises:
-            KeyError: If the models dictionary is missing a required key
         """
         super().__init__(cfg, model, device)
 
         # models
         self.actor = self.model.get("actor", None).to(self.device)
         self.critic = self.model.get("critic", None).to(self.device)
+        self.value_standardizer = RunningMeanStd(shape=1, device=device)
         
         # buffer
         self.buffer = buffer
@@ -44,6 +44,7 @@ class PPO(Agent):
         # checkpoint models
         self.checkpoint_modules["actor"] = self.actor
         self.checkpoint_modules["critic"] = self.critic
+        self.checkpoint_modules["value_standardizer"] = self.value_standardizer
 
         # configuration
         self.rollouts = self.cfg["rollouts"]
@@ -201,6 +202,12 @@ class PPO(Agent):
         
         # GAE Calculation
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
+
+        # Value Standardization
+        returns = self.value_standardizer.standardization(self.buffer.get_tensor_by_name("returns").reshape(-1, 1), update=True)
+        value_preds = self.value_standardizer.standardization(self.buffer.get_tensor_by_name("value_preds").reshape(-1, 1))
+        self.buffer.set_tensor_by_name("returns", returns.reshape(self.buffer.buffer_size, -1, 1))
+        self.buffer.set_tensor_by_name("value_preds", value_preds.reshape(self.buffer.buffer_size, -1, 1))
         
         cumulative_policy_loss = 0
         cumulative_entropy_loss = 0
@@ -268,6 +275,7 @@ class PPO(Agent):
 
                 # Compute value loss
                 predicted_values, _ = self.critic(critic_input, update_rms=not epoch)
+                predicted_values = self.value_standardizer.standardization(predicted_values)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip
