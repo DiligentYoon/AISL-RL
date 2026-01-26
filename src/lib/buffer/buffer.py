@@ -237,14 +237,12 @@ class Buffer:
 
     
     def sample(
-        self, names: Tuple[str], batch_size: int, mini_batches: int = 1
+        self, names: Tuple[str], mini_batches: int = 1
     ) -> List[List[torch.Tensor]]:
         """Data sampling method to be implemented by the inheriting classes
         Args:
             names: Tensors names from which to obtain the samples
             type names: tuple or list of strings
-            batch_size: Number of element to sample
-            type batch_size: int
             mini_batches: Number of mini-batches to sample (default: ``1``)
             type mini_batches: int, optional
 

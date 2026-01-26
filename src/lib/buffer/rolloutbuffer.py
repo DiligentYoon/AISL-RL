@@ -38,7 +38,7 @@ class RolloutBuffer(Buffer):
         self.create_tensor("advantages", 1, dtype=torch.float32)
 
 
-    def sample(self, names:Tuple[str], batch_size: int, mini_batch: int) -> List[List[torch.Tensor]]:
+    def sample(self, names:Tuple[str], mini_batch: int) -> List[List[torch.Tensor]]:
         """Random sampling from Stochastic Gradient Descent in On-policy Algorithm
         
         Args:
@@ -56,7 +56,7 @@ class RolloutBuffer(Buffer):
 
 
         # generate random samples
-        indexes = torch.randperm(size, dtype=torch.long)[:batch_size]
+        indexes = torch.randperm(size, dtype=torch.long)
 
         self.sampling_indexes = indexes
         return self.sample_by_index(names=names, indexes=indexes, mini_batches=mini_batch)
