@@ -29,8 +29,6 @@ class GOATPDStandEnv(GOATBaseEnv):
         # Curriculum level initialization
         self.env_DR_curriculum_level = torch.zeros((self.num_envs, 1), dtype=torch.int, device=self.device)         # DR level of each parallel environments
         self.DR_curriculum_level = 0
-        self.task_curriculum_level = 0
-        self.total_task_curriculum_level = cfg.total_task_curriculum_level
         self.total_DR_curriculum_level = cfg.total_DR_curriculum_level - 1
         self.rollout = 0
         self.success_rate_buffer = torch.zeros(self.num_envs, cfg.success_rate_buffer_len, dtype=torch.float, device=self.device)
@@ -142,37 +140,36 @@ class GOATPDStandEnv(GOATBaseEnv):
         # Reset previous action observation
         self.actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
 
-        if self.total_task_curriculum_level[self.task_curriculum_level] == "balancing":
-            # Domain randomization (initial pose)
-            # Base link state
-            root_state = self._robot.data.default_root_state[env_ids].clone()
-            root_state[:, 2] += self.robot_collision_min_z
+        # Domain randomization (initial pose)
+        # Base link state
+        root_state = self._robot.data.default_root_state[env_ids].clone()
+        root_state[:, 2] += self.robot_collision_min_z
 
-            # Joint state
-            limits = self.joint_pos_limits[env_ids]
-            joint_pos = torch.zeros_like(limits[:, :, 0]) * (limits[:, :, 1] - limits[:, :, 0])
-            joint_vel = torch.zeros_like(joint_pos)
+        # Joint state
+        limits = self.joint_pos_limits[env_ids]
+        joint_pos = torch.zeros_like(limits[:, :, 0]) * (limits[:, :, 1] - limits[:, :, 0])
+        joint_vel = torch.zeros_like(joint_pos)
 
-        elif self.total_task_curriculum_level[self.task_curriculum_level] == "recovery":
-            # Domain randomization (initial pose)
-            # Extract initial pose data from csv file
-            target_indices = torch.nonzero(self.initial_pose_curriculum_level == self.DR_curriculum_level, as_tuple=True)[0]
+        # elif self.total_task_curriculum_level[self.task_curriculum_level] == "recovery":
+        #     # Domain randomization (initial pose)
+        #     # Extract initial pose data from csv file
+        #     target_indices = torch.nonzero(self.initial_pose_curriculum_level == self.DR_curriculum_level, as_tuple=True)[0]
 
-            if len(target_indices) == 0:
-                target_indices = torch.arange(self.num_init_samples, device=self.device)
+        #     if len(target_indices) == 0:
+        #         target_indices = torch.arange(self.num_init_samples, device=self.device)
 
-            random_idx = torch.randint(0, len(target_indices), (len(env_ids),), device=self.device)
-            random_ids = target_indices[random_idx]
+        #     random_idx = torch.randint(0, len(target_indices), (len(env_ids),), device=self.device)
+        #     random_ids = target_indices[random_idx]
 
-            # Base link state
-            root_pos = self.init_root_pos[random_ids].clone()
-            root_quat = self.init_root_quat[random_ids].clone()
-            root_vel = torch.zeros(len(env_ids), 6, device=self.device)
-            root_state = torch.cat([root_pos, root_quat, root_vel], dim=-1)
+            # # Base link state
+            # root_pos = self.init_root_pos[random_ids].clone()
+            # root_quat = self.init_root_quat[random_ids].clone()
+            # root_vel = torch.zeros(len(env_ids), 6, device=self.device)
+            # root_state = torch.cat([root_pos, root_quat, root_vel], dim=-1)
 
-            # Joint state
-            joint_pos = self.init_joint_pos[random_ids, :].clone()
-            joint_vel = torch.zeros_like(joint_pos)
+            # # Joint state
+            # joint_pos = self.init_joint_pos[random_ids, :].clone()
+            # joint_vel = torch.zeros_like(joint_pos)
 
         # Change to global position
         root_state[:,:3] += self.scene.env_origins[env_ids]
@@ -323,13 +320,8 @@ class GOATPDStandEnv(GOATBaseEnv):
         is_stable = is_stable.view(-1)
         current_task_name = self.total_task_curriculum_level[self.task_curriculum_level]
 
-        # Task-specific success definition
-        if current_task_name == "balancing":
-            # Balancing: must be upright, at height, and stable
-            success_measure = is_upright & is_height_reached & is_stable
-        elif current_task_name == "recovery":
-            # Recovery: Just need to get up (velocity constraint is relaxed)
-            success_measure = is_upright & is_height_reached
+        # Balancing: must be upright, at height, and stable
+        success_measure = is_upright & is_height_reached & is_stable
 
         # Update success rate buffer
         step_success_float = success_measure.float()

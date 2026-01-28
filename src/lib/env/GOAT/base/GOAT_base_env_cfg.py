@@ -96,8 +96,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             velocity_limit=15.0,
             stiffness=0.0,                          # Internal PD controller not used
             damping=0.0,                            # Internal PD controller not used
-            friction=0.0033,                        # Static friction coefficient
-            dynamic_friction=0,                     # Dynamic friction coefficient 
+            friction=0.0033,                        # Static friction torque (due to change into sim 5.1)
+            dynamic_friction=0,                     # Dynamic friction torque 
             viscous_friction=0,                     # Viscous friction coefficient
         ),
 
