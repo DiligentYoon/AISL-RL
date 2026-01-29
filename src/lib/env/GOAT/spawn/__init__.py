@@ -1,13 +1,12 @@
 import gymnasium as gym
-# from .env.GOAT_PD_stand_env_cfg import GOATBaseEnvCfg
 
 gym.register(
-    id="GOAT-stand-v0", 
-    entry_point=f"{__name__}.GOAT_stand_env:GOATStandEnv",
+    id="GOAT-spawn-v0", 
+    entry_point=f"{__name__}.GOAT_spawn_env:GOATSpawnEnv",
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.GOAT_stand_env_cfg:GOATStandEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.GOAT_spawn_env_cfg:GOATSpawnEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
     }
 )
