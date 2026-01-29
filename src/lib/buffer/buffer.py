@@ -184,7 +184,7 @@ class Buffer:
             )
 
         # dimensions and shapes of the tensors (assume all tensors have the dimensions of the first tensor)
-        tmp = tensors.get("states", tensors[next(iter(tensors))]) 
+        tmp = tensors.get("observations", tensors[next(iter(tensors))]) 
         dim, shape = tmp.ndim, tmp.shape
 
         # multi environment
@@ -214,7 +214,7 @@ class Buffer:
             self.memory_index = 0
             self.filled = True
 
-    def init_buffer(self, observation_space: gymnasium.Space, action_space: gymnasium.Space) -> None:
+    def init_buffer(self, observation_space: gymnasium.Space, state_space: Union[gymnasium.Space | None], action_space: gymnasium.Space) -> None:
         """
         Initialization Buffer for default dataset
         
@@ -222,8 +222,8 @@ class Buffer:
             observation_space: observation space of agent
             action_space: action space of agent
         """
-        self.create_tensor("states", observation_space, dtype=torch.float32)
-        self.create_tensor("next_states", observation_space, dtype=torch.float32)
+        self.create_tensor("observations", observation_space, dtype=torch.float32)
+        self.create_tensor("next_observations", observation_space, dtype=torch.float32)
         self.create_tensor("actions", action_space, dtype=torch.float32)
         self.create_tensor("action_log_probs", 1, dtype=torch.float32)
         self.create_tensor("value_preds", 1, dtype=torch.float32)
@@ -231,16 +231,18 @@ class Buffer:
         self.create_tensor("terminated", 1, dtype=torch.bool)
         self.create_tensor("truncated", 1, dtype=torch.bool)
 
+        if state_space is not None:
+            self.create_tensor("states", state_space, dtype=torch.float32)
+            self.create_tensor("next_states", state_space, dtype=torch.float32)
+
     
     def sample(
-        self, names: Tuple[str], batch_size: int, mini_batches: int = 1
+        self, names: Tuple[str], mini_batches: int = 1
     ) -> List[List[torch.Tensor]]:
         """Data sampling method to be implemented by the inheriting classes
         Args:
             names: Tensors names from which to obtain the samples
             type names: tuple or list of strings
-            batch_size: Number of element to sample
-            type batch_size: int
             mini_batches: Number of mini-batches to sample (default: ``1``)
             type mini_batches: int, optional
 

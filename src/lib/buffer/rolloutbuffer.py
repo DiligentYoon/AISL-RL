@@ -23,21 +23,22 @@ class RolloutBuffer(Buffer):
         super().__init__(buffer_size, num_envs, device)
 
 
-    def init_buffer(self, observation_space:gymnasium.Space, action_space:gymnasium.Space):
+    def init_buffer(self, observation_space:gymnasium.Space, state_space:Union[gymnasium.Space | None], action_space:gymnasium.Space):
         """
         Initialization Rollout Buffer for On-Policy Setting including GAE Buffer
 
         Args:
             observation_space: observation space of agent
+            state_space : state space of agent
             action_space: action space of agent
         """
-        super().init_buffer(observation_space, action_space)
+        super().init_buffer(observation_space, state_space, action_space)
         # GAE Buffer
         self.create_tensor("returns", 1, dtype=torch.float32)
         self.create_tensor("advantages", 1, dtype=torch.float32)
 
 
-    def sample(self, names:Tuple[str], batch_size: int, mini_batch: int) -> List[List[torch.Tensor]]:
+    def sample(self, names:Tuple[str], mini_batch: int) -> List[List[torch.Tensor]]:
         """Random sampling from Stochastic Gradient Descent in On-policy Algorithm
         
         Args:
@@ -55,7 +56,7 @@ class RolloutBuffer(Buffer):
 
 
         # generate random samples
-        indexes = torch.randperm(size, dtype=torch.long)[:batch_size]
+        indexes = torch.randperm(size, dtype=torch.long)
 
         self.sampling_indexes = indexes
         return self.sample_by_index(names=names, indexes=indexes, mini_batches=mini_batch)

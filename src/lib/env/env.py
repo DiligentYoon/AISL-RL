@@ -280,7 +280,7 @@ class Env(gym.Env):
     Operations.
     """
 
-    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[VecEnvObs, dict]:
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[torch.Tensor, torch.Tensor | None, dict]:
         """Resets all the environments and returns observations.
 
         This function calls the :meth:`_reset_idx` function to reset all the environments.
@@ -319,9 +319,9 @@ class Env(gym.Env):
                 self.sim.render()
 
         # return observations
-        return self._get_observations(), self.extras
+        return self._get_observations(), self._get_states(),  self.extras
 
-    def step(self, action: torch.Tensor) -> VecEnvStepReturn:
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -399,6 +399,7 @@ class Env(gym.Env):
 
         # update observations
         self.obs_buf = self._get_observations()
+        self.state_buf = self._get_states()
 
         # add observation noise
         # note: we apply no noise to the state space (since it is used for critic networks)
@@ -406,7 +407,7 @@ class Env(gym.Env):
             self.obs_buf["policy"] = self._observation_noise_model(self.obs_buf["policy"])
 
         # return observations, rewards, resets and extras
-        return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+        return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 
     @staticmethod
     def seed(seed: int = -1) -> int:
@@ -656,7 +657,7 @@ class Env(gym.Env):
         raise NotImplementedError(f"Please implement the '_apply_action' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _get_observations(self) -> VecEnvObs:
+    def _get_observations(self) -> torch.Tensor:
         """Compute and return the observations for the environment.
 
         Returns:
@@ -664,7 +665,7 @@ class Env(gym.Env):
         """
         raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
 
-    def _get_states(self) -> VecEnvObs | None:
+    def _get_states(self) -> torch.Tensor | None:
         """Compute and return the states for the environment.
 
         The state-space is used for asymmetric actor-critic architectures. It is configured
@@ -674,7 +675,12 @@ class Env(gym.Env):
             The states for the environment. If the environment does not have a state-space, the function
             returns a None.
         """
-        return None  # noqa: R501
+        if self.state_space is not None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__}: state_space is set ({self.state_space}), "
+                "so '_get_states' must be implemented to return privileged critic states.")
+        else:
+            return None  # noqa: R501
 
     @abstractmethod
     def _get_rewards(self) -> torch.Tensor:
