@@ -11,8 +11,9 @@ from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 
+
 @configclass
-class GOATPDStandEnvCfg(GOATBaseEnvCfg):
+class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -86,10 +87,10 @@ class GOATPDStandEnvCfg(GOATBaseEnvCfg):
         dt=sim_dt,
         render_interval=decimation,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="average",
-            restitution_combine_mode="average",
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
             static_friction=1.0,
-            dynamic_friction=0.8,
+            dynamic_friction=1.0,
             restitution=0.0,
         ),
     )

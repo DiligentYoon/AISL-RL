@@ -6,6 +6,7 @@
 import os
 import isaaclab.sim as sim_utils
 
+from isaaclab.sim import SimulationCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import DCMotorCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -17,19 +18,19 @@ from lib.env.env_cfg import EnvCfg
 
 # Robot asset paths
 current_dir = os.path.dirname(__file__)
-GOAT_ASSET = {
-    "urdf_path": os.path.join(current_dir, "../assets/GOAT/WF_GOAT/urdf/WF_GOAT.urdf"),
-    "usd_path": os.path.join(current_dir, "../assets/GOAT/WF_GOAT/usd/WF_GOAT.usd"),
-    "usd_place": os.path.join(current_dir, "../assets/GOAT/WF_GOAT/usd/"),
+WF_GOAT_ASSET = {
+    "urdf_path": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/urdf/WF_GOAT.urdf"),
+    "usd_path": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/usd/WF_GOAT.usd"),
+    "usd_place": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/usd/"),
     "usd_filename": "WF_GOAT.usd"
 }
 
 # URDF to USD conversion
 urdf_cfg: sim_utils.UrdfConverterCfg = sim_utils.UrdfConverterCfg(
     root_link_name = "base_Link",
-    asset_path = GOAT_ASSET["urdf_path"],
-    usd_dir = GOAT_ASSET["usd_place"],
-    usd_file_name = GOAT_ASSET["usd_filename"],
+    asset_path = WF_GOAT_ASSET["urdf_path"],
+    usd_dir = WF_GOAT_ASSET["usd_place"],
+    usd_file_name = WF_GOAT_ASSET["usd_filename"],
     fix_base=False,
     joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
         drive_type="force",
@@ -39,7 +40,7 @@ urdf_cfg: sim_utils.UrdfConverterCfg = sim_utils.UrdfConverterCfg(
 urdf_converter = sim_utils.UrdfConverter(cfg = urdf_cfg)
 
 # URDF conversion check
-if urdf_converter.usd_path == GOAT_ASSET["usd_path"]:
+if urdf_converter.usd_path == WF_GOAT_ASSET["usd_path"]:
     print("urdf conversion success!")
 else:
     print("urdf conversion failed!")
@@ -121,8 +122,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             stiffness=0.0,
             damping=0.0,
             friction=0.0235,
-            dynamic_friction=4.432008e-01,
-            viscous_friction=2.993308e-01,
+            dynamic_friction=0,
+            viscous_friction=0,
         ),
         
         "wheel": DCMotorCfg(
@@ -132,9 +133,9 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             velocity_limit=15.0,
             stiffness=0.0,
             damping=0.0,
-            friction=None,
-            dynamic_friction=4.432008e-01,
-            viscous_friction=2.993308e-01,
+            friction=0.02,
+            dynamic_friction=0,
+            viscous_friction=0,
         )
     }
 )
@@ -175,6 +176,19 @@ class GOATBaseEnvCfg(EnvCfg):
 
     # Scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=3.0, replicate_physics=True)
+
+    # Simulation
+    sim: SimulationCfg = SimulationCfg(
+        dt=sim_dt,
+        render_interval=decimation,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            restitution=0.0,
+        ),
+    )
 
     # GOAT cfg
     GOAT_cfg: ArticulationCfg = GOAT_Cfg

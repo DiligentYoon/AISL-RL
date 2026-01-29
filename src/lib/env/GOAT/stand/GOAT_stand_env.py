@@ -9,7 +9,7 @@ from isaaclab.terrains import TerrainImporter
 from isaaclab.sensors import ContactSensor
 from isaacsim.core.utils import bounds
 from isaacsim.core.utils import prims
-from lib.env.GOAT.stand.GOAT_stand_env_cfg import GOATPDStandEnvCfg
+from lib.env.GOAT.stand.GOAT_stand_env_cfg import GOATStandEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
@@ -17,10 +17,10 @@ from lib.utils.Running_mean_std import RunningMeanStd
 
 csv_path = "initial_pose_data.csv"              # Path to csv file
 
-class GOATPDStandEnv(GOATBaseEnv):
-    cfg: GOATPDStandEnvCfg
+class GOATStandEnv(GOATBaseEnv):
+    cfg: GOATStandEnvCfg
 
-    def __init__(self, cfg: GOATPDStandEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: GOATStandEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.cfg = cfg
