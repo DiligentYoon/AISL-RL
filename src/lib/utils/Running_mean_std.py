@@ -55,7 +55,7 @@ class RunningMeanStd(nn.Module):
         self.var = new_var
         self.count = new_count
 
-    def standardization(self, x: torch.Tensor, update: bool = True) -> None:
+    def standardization(self, x: torch.Tensor, update: bool = True) -> None:    # TODO: change name into standardize
         """
         Update the statistics with a new batch of data.
 

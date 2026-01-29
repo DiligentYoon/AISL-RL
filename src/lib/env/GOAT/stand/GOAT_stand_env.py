@@ -55,8 +55,8 @@ class GOATStandEnv(GOATBaseEnv):
         self.state = torch.zeros((self.num_envs, self.cfg.state_space), dtype=torch.float32, device=self.device)
 
         # Running mean std initialization (for normalization)
-        self.observation_normalizer = RunningMeanStd(shape=self.cfg.observation_space, device=self.device)
-        self.state_normalizer = RunningMeanStd(shape=self.cfg.state_space, device=self.device)
+        self.observation_standardizer = RunningMeanStd(shape=self.cfg.observation_space, device=self.device)
+        self.state_standardizer = RunningMeanStd(shape=self.cfg.state_space, device=self.device)
 
         # Torque controller initialization
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
@@ -291,11 +291,11 @@ class GOATStandEnv(GOATBaseEnv):
         
         self.state = torch.cat((self.observation, self.privileged_info), dim=1)
 
-        # Normalize observation, state space
-        self.normalized_observation = self.observation_normalizer.normalize(self.observation)
-        self.normalized_state = self.state_normalizer.normalize(self.state)
+        # Standardize observation, state space
+        self.standardized_observation = self.observation_standardizer.standardization(self.observation)
+        self.standardized_state = self.state_standardizer.standardization(self.state)
 
-        return {"policy": self.normalized_observation, "value": self.normalized_state}
+        return {"policy": self.standardized_observation, "value": self.standardized_state}
     
     def _get_rewards(self) -> torch.Tensor:
         # ======================= Scheduler ======================= #
@@ -318,7 +318,7 @@ class GOATStandEnv(GOATBaseEnv):
         is_upright = is_upright.view(-1)
         is_height_reached = is_height_reached.view(-1)
         is_stable = is_stable.view(-1)
-        current_task_name = self.total_task_curriculum_level[self.task_curriculum_level]
+        # current_task_name = self.total_task_curriculum_level[self.task_curriculum_level]
 
         # Balancing: must be upright, at height, and stable
         success_measure = is_upright & is_height_reached & is_stable
@@ -348,7 +348,7 @@ class GOATStandEnv(GOATBaseEnv):
         #     self.global_success_rate = 0
 
         # Clipping
-        self.task_curriculum_level = max(0, min(self.task_curriculum_level, len(self.total_task_curriculum_level) - 1))
+        # self.task_curriculum_level = max(0, min(self.task_curriculum_level, len(self.total_task_curriculum_level) - 1))
         self.DR_curriculum_level = max(0, min(self.DR_curriculum_level, self.total_DR_curriculum_level - 1))
         # print(f"DR: {self.DR_curriculum_level},     Task: {self.cfg.total_task_curriculum_level[self.task_curriculum_level]}")
         
