@@ -9,7 +9,7 @@ Ant locomotion environment.
 
 import gymnasium as gym
 
-from . import config as agents
+from . import cfg as agents
 
 ##
 # Register Gym environments.
