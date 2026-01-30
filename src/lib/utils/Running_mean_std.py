@@ -19,43 +19,7 @@ class RunningMeanStd(nn.Module):
         self.register_buffer("var", torch.ones(shape, dtype=torch.float32, device=device))
         self.register_buffer("count", torch.tensor(epsilon, dtype=torch.float32, device=device))
 
-    def _copy(self) -> "RunningMeanStd":
-        """
-        :return: Return a copy of the current object.
-        """
-        new_object = RunningMeanStd(shape=self.mean.shape, epsilon=self.epsilon, device=self.device)
-        new_object.mean.copy_(self.mean)
-        new_object.var.copy_(self.var)
-        new_object.count.copy_(self.count)
-        return new_object
-
-    def _combine(self, other: "RunningMeanStd") -> None:
-        """
-        Combine stats from another ``RunningMeanStd`` object.
-        """
-        self._update_distrubution(other.mean, other.var, other.count)
-
-    def _update_distrubution(self, batch_mean: torch.Tensor, batch_var: torch.Tensor, batch_count: torch.Tensor) -> None:
-        """
-        Updates internal stats based on external batch moments.
-        """
-        delta = batch_mean - self.mean
-        tot_count = self.count + batch_count
-
-        new_mean = self.mean + delta * batch_count / tot_count
-        m_a = self.var * self.count
-        m_b = batch_var * batch_count
-        
-        m_2 = m_a + m_b + torch.square(delta) * self.count * batch_count / tot_count
-        new_var = m_2 / tot_count
-
-        new_count = batch_count + self.count
-
-        self.mean.copy_(new_mean)
-        self.var.copy_(new_var)
-        self.count.copy_(new_count)
-
-    def standardization(self, x: torch.Tensor, update: bool = False) -> None:
+    def standardize(self, x: torch.Tensor, update: bool = False) -> None:
         """
         Update the statistics with a new batch of data.
 
@@ -80,16 +44,59 @@ class RunningMeanStd(nn.Module):
 
         return (x - self.mean) / torch.sqrt(self.var + self.epsilon)
         
-    def destandardization(self, x: torch.Tensor) -> torch.Tensor:
+    def destandardize(self, x: torch.Tensor) -> torch.Tensor:
         """
         Restore the standardized data to pure data
         
         x: Standardized input
         return: Real scale value (x * std + mean)
         """
+
+        # Convert into tensor if it's not
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
+        else:
+            x = x.to(self.device)
             
         std = torch.sqrt(self.var + self.epsilon)
         
         return x * std + self.mean
+    
+    def _copy(self) -> "RunningMeanStd":
+        """
+        :return: Return a copy of the current object.
+        """
+
+        new_object = RunningMeanStd(shape=self.mean.shape, epsilon=self.epsilon, device=self.device)
+        new_object.mean.copy_(self.mean)
+        new_object.var.copy_(self.var)
+        new_object.count.copy_(self.count)
+        return new_object
+
+    def _combine(self, other: "RunningMeanStd") -> None:
+        """
+        Combine stats from another ``RunningMeanStd`` object.
+        """
+
+        self._update_distrubution(other.mean, other.var, other.count)
+
+    def _update_distrubution(self, batch_mean: torch.Tensor, batch_var: torch.Tensor, batch_count: torch.Tensor) -> None:
+        """
+        Updates internal stats based on external batch moments.
+        """
+        
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        
+        m_2 = m_a + m_b + torch.square(delta) * self.count * batch_count / tot_count
+        new_var = m_2 / tot_count
+
+        new_count = batch_count + self.count
+
+        self.mean.copy_(new_mean)
+        self.var.copy_(new_var)
+        self.count.copy_(new_count)

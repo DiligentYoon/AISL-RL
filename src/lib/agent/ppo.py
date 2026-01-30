@@ -13,8 +13,6 @@ from lib.agent.agent import Agent
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
 
-
-
 class PPO(Agent):
     def __init__(self,
                  model: Dict[str, nn.Module],
@@ -33,20 +31,20 @@ class PPO(Agent):
         """
         super().__init__(cfg, model, device)
 
-        # models
+        # Models
         self.actor = self.model.get("actor", None).to(self.device)
         self.critic = self.model.get("critic", None).to(self.device)
         self.value_standardizer = RunningMeanStd(shape=1, device=device)
         
-        # buffer
+        # Buffer
         self.buffer = buffer
 
-        # checkpoint models
+        # Checkpoint models
         self.checkpoint_modules["actor"] = self.actor
         self.checkpoint_modules["critic"] = self.critic
         self.checkpoint_modules["value_standardizer"] = self.value_standardizer
 
-        # configuration
+        # Load parameters form cfg
         self.rollouts = self.cfg["rollouts"]
         self.learning_epochs = self.cfg["learning_epochs"]
         self.mini_batches = self.cfg["mini_batches"]
@@ -68,14 +66,13 @@ class PPO(Agent):
         self.time_limit_bootstrap = self.cfg["time_limit_bootstrap"]
         self.clip_predicted_values = self.cfg["clip_predicted_values"]
 
-        self.async_actor_critic = self.cfg.get("async_actor_critic", False)
+        self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
-        # set up optimizer and (Future) learning rate scheduler 
+        # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
             self.optimizer = torch.optim.Adam(
                     itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
             self.checkpoint_modules["optimizer"] = self.optimizer
-
 
         self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
                               "value_preds", "rewards", "truncated", "terminated"
@@ -88,7 +85,7 @@ class PPO(Agent):
         self.set_running_mode("eval")
 
         # State Space for previled learning & Asyncronous Actor Critic
-        if self.async_actor_critic:
+        if self.is_async_actor_critic:
             self.tensors_names = ["observations", "next_observations",
                                   "states", "next_states",
                                   "actions", "action_log_probs", 
@@ -113,21 +110,24 @@ class PPO(Agent):
     
     def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
         """
-        Process the environment's states to make a decision (actions) using the main policy
+        Process the environment's observations to make a decision (actions) using the main policy
 
         Args:
-            states: Environment's states
-            timestep: Current timestep
+            observations(torch.Tensor): Environment's observations
+            timestep(int): Current timestep
+            deterministic(bool): Deterministic action (No Gaussian)
+            update_rms(bool): Update a Runningmeanstd distrubution
 
         Returns:
             actions : RL actions
             log_prob : Log probability of RL actions
-            values : Value preidctions
+            values : Value(Return) preidctions
         """
         if timestep < self.random_timesteps:
-            # TODO: random action logic should be implemented manually
+            # Random act
             actions, log_prob, entropy = self.actor.random_act(observations)
         else:
+            # Normal act
             actions, log_prob, entropy = self.actor(observations=observations,
                                                     taken_actions=None,
                                                     deterministic=deterministic, 
@@ -164,13 +164,13 @@ class PPO(Agent):
         critic_inputs = states if states is not None else observations
 
         with torch.no_grad():
-            value_preds, _ = self.critic(critic_inputs)
+            value_preds, _, _ = self.critic(critic_inputs)
             
         # time-limit (truncation) bootstrapping
         if self.time_limit_bootstrap:
             rewards += self.discount_factor * value_preds * truncated
 
-        if self.async_actor_critic:
+        if self.is_async_actor_critic:
             self.buffer.add_samples(observations=observations,
                                     states=states,
                                     actions=actions,
@@ -197,18 +197,19 @@ class PPO(Agent):
         Algorithm's main update step
         """
         with torch.no_grad():
-            critic_input = self.buffer.get_tensor_by_name("next_states")[-1] if self.async_actor_critic else self.buffer.get_tensor_by_name("next_observations")[-1]
-            last_values, _ = self.critic(critic_input)
+            critic_input = self.buffer.get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer.get_tensor_by_name("next_observations")[-1]
+            last_values, _, _ = self.critic(critic_input)
         
         # GAE Calculation
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
 
         # Value Standardization
-        returns = self.value_standardizer.standardization(self.buffer.get_tensor_by_name("returns").reshape(-1, 1), update=True)
-        value_preds = self.value_standardizer.standardization(self.buffer.get_tensor_by_name("value_preds").reshape(-1, 1))
+        returns = self.value_standardizer.standardize(self.buffer.get_tensor_by_name("returns").reshape(-1, 1), update=True)
+        value_preds = self.value_standardizer.standardize(self.buffer.get_tensor_by_name("value_preds").reshape(-1, 1))
         self.buffer.set_tensor_by_name("returns", returns.reshape(self.buffer.buffer_size, -1, 1))
         self.buffer.set_tensor_by_name("value_preds", value_preds.reshape(self.buffer.buffer_size, -1, 1))
         
+        # Loss initialization
         cumulative_policy_loss = 0
         cumulative_entropy_loss = 0
         cumulative_value_loss = 0
@@ -216,14 +217,16 @@ class PPO(Agent):
         # Parameter Update
         kl_divergences = []
         self.set_running_mode("train")
+
         # Sample mini batch
         mini_batches = self.buffer.sample(
             names=self.tensors_name_for_update,
             mini_batch=self.mini_batches)
+        
         for epoch in range(self.learning_epochs):
             for mb in mini_batches:
                 # (mini batch size, Data-specific)
-                if self.async_actor_critic:
+                if self.is_async_actor_critic:
                     (sampled_observations,
                      sampled_states,
                      sampled_actions,
@@ -234,6 +237,7 @@ class PPO(Agent):
 
                     actor_input = sampled_observations
                     critic_input = sampled_states                
+                
                 else:
                     (sampled_observations,
                      sampled_actions,
@@ -274,15 +278,14 @@ class PPO(Agent):
                 policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
 
                 # Compute value loss
-                predicted_values, _ = self.critic(critic_input, update_rms=not epoch)
-                predicted_values = self.value_standardizer.standardization(predicted_values)
+                predicted_values, _, _ = self.critic(critic_input, update_rms=not epoch)
+                predicted_values = self.value_standardizer.standardize(predicted_values)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip
                     )
                 value_loss = self.value_loss_scale * F.mse_loss(sampled_returns, predicted_values)
                 
-
                 # Optimization step
                 self.optimizer.zero_grad()
                 (policy_loss + entropy_loss + value_loss).backward()

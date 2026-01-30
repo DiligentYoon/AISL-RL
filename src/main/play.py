@@ -15,7 +15,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="My-Ant-Test", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/ant/2026-01-25_03-31-42_ppo/agent_32000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/GOAT_Stand_No_DR/2026-01-30_21-06-48_ppo/agent_32000.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -130,6 +130,8 @@ def main():
     # 1. Initialization
     actor = Actor(num_observations=obs_size,
                   num_actions=act_size,
+                  min_log_std=experiment_cfg["models"]["policy"]["min_log_std"],
+                  max_log_std=experiment_cfg["models"]["policy"]["max_log_std"],
                   device=env.device)
 
     critic = Critic(num_states=state_size,

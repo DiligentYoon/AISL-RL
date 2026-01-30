@@ -3,13 +3,15 @@ import torch.nn as nn
 
 from torch.distributions import Normal
 from lib.utils.Running_mean_std import RunningMeanStd
+from lib.model.model import Model
 
-class Actor(nn.Module):
-    def __init__(self, num_observations, num_actions, device):
+class Actor(Model):
+    def __init__(self, num_observations, num_actions, min_log_std, max_log_std, device):
         super().__init__()
 
-        self.log_std_min = -20.0
-        self.log_std_max = 2.0
+        self.min_log_std = min_log_std
+        self.max_log_std = max_log_std
+        
         # Define instances 
         self.device = device
         self.num_observations = num_observations
@@ -30,27 +32,31 @@ class Actor(nn.Module):
 
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
 
+        # Initialize parameters
         self.init_weights()
         self.init_biases(val=0)
 
     def forward(self, observations: torch.Tensor, taken_actions: torch.Tensor | None, deterministic: bool = False, update_rms: bool = False):
-        '''
+        """
         Forward propagation of actor NN
         
         :param observations: Observation vector
         :type observations: torch.Tensor
-        :param actions: Action vector
-        :type actions: torch.Tensor
+        :param taken_actions: Action vector
+        :type taken_actions: torch.Tensor
         :param deterministic: Is actor evaluation mode
-        :type deterministic: bool 
-        '''
-        standardized_input = self.actor_standardizer.standardization(observations, update=update_rms)
+        :type deterministic: bool
+        :param update_rms: Update a Runningmeanstd distrubution
+        :type update_rms: bool 
+        """
+        # Input standardization
+        standardized_input = self.actor_standardizer.standardize(observations, update=update_rms)
 
         mean_actions = self.net(standardized_input)
         log_std = self.log_std_parameter
         
         # Clamp log standard deviations
-        log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
+        log_std = torch.clamp(log_std, self.min_log_std, self.max_log_std)
 
         # Action distribution
         self.action_distribution = Normal(mean_actions, log_std.exp())
@@ -74,62 +80,33 @@ class Actor(nn.Module):
 
         return actions, log_prob, entropy
     
-    ## =============== Auxilary functions =============== ##
-
-    def init_weights(self) -> None:
+    def random_act(self, observations: torch.Tensor):
         """
-        Orthogonal initialize the model weights
-
-        The following layers will be initialized:
-        - torch.nn.Linear
-        """
-        def _orthogonal_init(module):
-            if isinstance(module, nn.Linear):
-                nn.init.orthogonal_(module.weight)
-
-        self.apply(_orthogonal_init)
-
-    def init_biases(self, val: int = 0) -> None:
-        """
-        Constant initialize the model biases
-
-        The following layers will be initialized:
-        - torch.nn.Linear
-
-        :param val: constant value to initialize biases
-        :type val: int
-        """
-        def _constant_init(module):
-            if isinstance(module, nn.Linear):
-                nn.init.constant_(module.bias, val=val)
-
-        self.apply(_constant_init)
-
-    def save(self, path: str) -> None:
-        """
-        Save the model to the specific path
-
-        :param path: Path to save the model to
-        :type path: str
-        """
-
-        torch.save(self.state_dict(), path)
-
-    def load(self, path: str) -> None:
-        """
-        Load the model from the specific path
-
-        The final storage device is determined by the constructor of the model
-
-        :param path: Path to load the model from
-        :type path: str
+        Random act for RL's beginning
         """
         
-        state_dict = torch.load(path, map_location=self.device, weights_only=False)  # prevent torch:FutureWarning
-        self.load_state_dict(state_dict)
+        batch_size = observations.shape[0]
 
+        # Create a standard normal distribution for random actions (mean=0, std=1)
+        mean = torch.zeros((batch_size, self.num_actions), device=self.device)
+        std = torch.ones((batch_size, self.num_actions), device=self.device)
+        action_distribution = Normal(mean, std)
 
-class Critic(nn.Module):
+        # Sample raw actions and squash them to [-1, 1] using tanh
+        raw_actions = action_distribution.rsample()
+        actions = torch.tanh(raw_actions)
+
+        # Calculate log probability, correcting for the tanh transformation
+        log_prob = action_distribution.log_prob(raw_actions)
+        log_prob -= torch.log(1 - actions.pow(2) + 1e-6)
+        log_prob = log_prob.sum(dim=-1)
+
+        # Entropy of the base (Normal) distribution
+        entropy = action_distribution.entropy().mean()
+
+        return actions, log_prob, entropy
+
+class Critic(Model):
     def __init__(self, num_states, device):
         super().__init__()
 
@@ -149,73 +126,21 @@ class Critic(nn.Module):
                                  nn.ReLU(),
                                  nn.Linear(100, 1))
 
+        # Initialize parameters
         self.init_weights()
         self.init_biases(val=0)
 
     def forward(self, inputs: torch.Tensor, deterministic: bool = False, update_rms: bool = False):
-        '''
+        """
         Forward propagation of critic NN
         
         :param inputs: State vector
         :type inputs: torch.Tensor
         :param deterministic: Is critic evaluation mode
         :type deterministic: bool 
-        '''
-        standardized_input = self.critic_standardizer.standardization(inputs, update=update_rms)
+        """
+
+        standardized_input = self.critic_standardizer.standardize(inputs, update=update_rms)
         expected_return = self.net(standardized_input)
 
-        return expected_return, None
-    
-    ## =============== Auxilary functions =============== ##
-
-    def init_weights(self) -> None:
-        """
-        Orthogonal initialize the model weights
-
-        The following layers will be initialized:
-        - torch.nn.Linear
-        """
-        def _orthogonal_init(module):
-            if isinstance(module, nn.Linear):
-                nn.init.orthogonal_(module.weight)
-
-        self.apply(_orthogonal_init)
-
-    def init_biases(self, val: int = 0) -> None:
-        """
-        Constant initialize the model biases
-
-        The following layers will be initialized:
-        - torch.nn.Linear
-
-        :param val: constant value to initialize biases
-        :type val: int
-        """
-        def _constant_init(module):
-            if isinstance(module, nn.Linear):
-                nn.init.constant_(module.bias, val=val)
-
-        self.apply(_constant_init)
-
-    def save(self, path: str) -> None:
-        """
-        Save the model to the specific path
-
-        :param path: Path to save the model to
-        :type path: str
-        """
-
-        torch.save(self.state_dict(), path)
-
-    def load(self, path: str) -> None:
-        """
-        Load the model from the specific path
-
-        The final storage device is determined by the constructor of the model
-
-        :param path: Path to load the model from
-        :type path: str
-        """
-        
-        state_dict = torch.load(path, map_location=self.device, weights_only=False)  # prevent torch:FutureWarning
-        self.load_state_dict(state_dict)
+        return expected_return, None, None

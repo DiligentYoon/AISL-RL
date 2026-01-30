@@ -37,14 +37,5 @@ agent:
     write_interval: auto
     checkpoint_interval: auto
 
-
-# learning_rate_scheduler: KLAdaptiveLR
-# learning_rate_scheduler_kwargs:
-# kl_threshold: 0.008
-# state_preprocessor: RunningStandardScaler
-# state_preprocessor_kwargs: null
-# value_preprocessor: RunningStandardScaler
-# value_preprocessor_kwargs: null
-
 train:
   timesteps: 32000

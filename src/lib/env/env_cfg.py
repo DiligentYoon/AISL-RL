@@ -79,16 +79,10 @@ class EnvCfg:
 
     # environment settings
     scene: InteractiveSceneCfg = MISSING
-    """Scene settings.
-
-    Please refer to the :class:`isaaclab.scene.InteractiveSceneCfg` class for more details.
-    """
+    """Scene settings."""
 
     events: object | None = None
-    """Event settings. Defaults to None, in which case no events are applied through the event manager.
-
-    Please refer to the :class:`isaaclab.managers.EventManager` class for more details.
-    """
+    """Event settings. Defaults to None, in which case no events are applied through the event manager."""
 
     observation_space: SpaceType = MISSING
     """Observation space definition.
@@ -114,12 +108,7 @@ class EnvCfg:
     """
 
     num_observations: int | None = None
-    """The dimension of the observation space from each environment instance.
-
-    .. warning::
-
-        This attribute is deprecated. Use :attr:`~isaaclab.envs.DirectRLEnvCfg.observation_space` instead.
-    """
+    """The dimension of the observation space from each environment instance."""
 
     state_space: SpaceType | None = None
     """State space definition.
@@ -147,19 +136,7 @@ class EnvCfg:
     """
 
     num_states: int | None = None
-    """The dimension of the state-space from each environment instance.
-
-    .. warning::
-
-        This attribute is deprecated. Use :attr:`~isaaclab.envs.DirectRLEnvCfg.state_space` instead.
-    """
-
-    observation_noise_model: NoiseModelCfg | None = None
-    """The noise model to apply to the computed observations from the environment. Default is None,
-    which means no noise is added.
-
-    Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
-    """
+    """The dimension of the state-space from each environment instance."""
 
     action_space: SpaceType = MISSING
     """Action space definition.
@@ -185,19 +162,7 @@ class EnvCfg:
     """
 
     num_actions: int | None = None
-    """The dimension of the action space for each environment.
-
-    .. warning::
-
-        This attribute is deprecated. Use :attr:`~isaaclab.envs.DirectRLEnvCfg.action_space` instead.
-    """
-
-    action_noise_model: NoiseModelCfg | None = None
-    """The noise model applied to the actions provided to the environment. Default is None,
-    which means no noise is added.
-
-    Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
-    """
+    """The dimension of the action space for each environment."""
 
     rerender_on_reset: bool = False
     """Whether a render step is performed again after at least one environment has been reset.

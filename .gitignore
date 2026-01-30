@@ -9,6 +9,7 @@
 **/.thumbs
 
 # No USD files allowed in the repo
+**/usd/*
 **/*.usd
 **/*.usda
 **/*.usdc
@@ -45,6 +46,7 @@ docker/.container.cfg
 **/.neptune/*
 docker/artifacts/
 *.tmp
+*.csv
 
 # Doc Outputs
 **/docs/_build/*

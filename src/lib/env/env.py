@@ -28,12 +28,9 @@ from isaaclab.managers import EventManager
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
 from isaaclab.sim.utils.stage import attach_stage_to_usd_context, use_stage
-from isaaclab.utils.noise import NoiseModel
 from isaaclab.utils.seed import configure_seed
 from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
-
-from isaaclab.envs.common import VecEnvObs, VecEnvStepReturn
 from isaaclab.envs.ui import ViewportCameraController
 
 from lib.utils.space_utils import sample_space, spec_to_gym_space
@@ -193,16 +190,6 @@ class Env(gym.Env):
         # setup the action and observation spaces for Gym
         self._configure_gym_env_spaces()
 
-        # setup noise cfg for adding action and observation noise
-        if self.cfg.action_noise_model:
-            self._action_noise_model: NoiseModel = self.cfg.action_noise_model.class_type(
-                self.cfg.action_noise_model, num_envs=self.num_envs, device=self.device
-            )
-        if self.cfg.observation_noise_model:
-            self._observation_noise_model: NoiseModel = self.cfg.observation_noise_model.class_type(
-                self.cfg.observation_noise_model, num_envs=self.num_envs, device=self.device
-            )
-
         # perform events at the start of the simulation
         if self.cfg.events:
             # we print it here to make the logging consistent
@@ -218,8 +205,8 @@ class Env(gym.Env):
         # show deprecation message for rerender_on_reset
         if self.cfg.rerender_on_reset:
             msg = (
-                "\033[93m\033[1m[DEPRECATION WARNING] DirectRLEnvCfg.rerender_on_reset is deprecated. Use"
-                " DirectRLEnvCfg.num_rerenders_on_reset instead.\033[0m"
+                "\033[93m\033[1m[DEPRECATION WARNING] env_cfg.rerender_on_reset is deprecated. Use"
+                " env_cfg.num_rerenders_on_reset instead.\033[0m"
             )
             warnings.warn(
                 msg,
@@ -326,8 +313,8 @@ class Env(gym.Env):
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
         lower time-step. This is to ensure that the simulation is stable. These two time-steps can be configured
-        independently using the :attr:`DirectRLEnvCfg.decimation` (number of simulation steps per environment step)
-        and the :attr:`DirectRLEnvCfg.sim.physics_dt` (physics time-step). Based on these parameters, the environment
+        independently using the :attr:`env_cfg.decimation` (number of simulation steps per environment step)
+        and the :attr:`env_cfg.sim.physics_dt` (physics time-step). Based on these parameters, the environment
         time-step is computed as the product of the two.
 
         This function performs the following steps:
@@ -346,9 +333,6 @@ class Env(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
         action = action.to(self.device)
-        # add action noise
-        if self.cfg.action_noise_model:
-            action = self._action_noise_model(action)
 
         # process actions
         self._pre_physics_step(action)
@@ -400,11 +384,6 @@ class Env(gym.Env):
         # update observations
         self.obs_buf = self._get_observations()
         self.state_buf = self._get_states()
-
-        # add observation noise
-        # note: we apply no noise to the state space (since it is used for critic networks)
-        if self.cfg.observation_noise_model:
-            self.obs_buf["policy"] = self._observation_noise_model(self.obs_buf["policy"])
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
@@ -564,17 +543,17 @@ class Env(gym.Env):
         """Configure the action and observation spaces for the Gym environment."""
         # show deprecation message and overwrite configuration
         if self.cfg.num_actions is not None:
-            logger.warning("DirectRLEnvCfg.num_actions is deprecated. Use DirectRLEnvCfg.action_space instead.")
+            logger.warning("env_cfg.num_actions is deprecated. Use env_cfg.action_space instead.")
             if isinstance(self.cfg.action_space, type(MISSING)):
                 self.cfg.action_space = self.cfg.num_actions
         if self.cfg.num_observations is not None:
             logger.warning(
-                "DirectRLEnvCfg.num_observations is deprecated. Use DirectRLEnvCfg.observation_space instead."
+                "env_cfg.num_observations is deprecated. Use env_cfg.observation_space instead."
             )
             if isinstance(self.cfg.observation_space, type(MISSING)):
                 self.cfg.observation_space = self.cfg.num_observations
         if self.cfg.num_states is not None:
-            logger.warning("DirectRLEnvCfg.num_states is deprecated. Use DirectRLEnvCfg.state_space instead.")
+            logger.warning("env_cfg.num_states is deprecated. Use env_cfg.state_space instead.")
             if isinstance(self.cfg.state_space, type(MISSING)):
                 self.cfg.state_space = self.cfg.num_states
 
@@ -609,12 +588,6 @@ class Env(gym.Env):
             if "reset" in self.event_manager.available_modes:
                 env_step_count = self._sim_step_counter // self.cfg.decimation
                 self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
-
-        # reset noise models
-        if self.cfg.action_noise_model:
-            self._action_noise_model.reset(env_ids)
-        if self.cfg.observation_noise_model:
-            self._observation_noise_model.reset(env_ids)
 
         # reset the episode length buffer
         self.episode_length_buf[env_ids] = 0
@@ -670,7 +643,7 @@ class Env(gym.Env):
         """Compute and return the states for the environment.
 
         The state-space is used for asymmetric actor-critic architectures. It is configured
-        using the :attr:`DirectRLEnvCfg.state_space` parameter.
+        using the :attr:`env_cfg.state_space` parameter.
 
         Returns:
             The states for the environment. If the environment does not have a state-space, the function
