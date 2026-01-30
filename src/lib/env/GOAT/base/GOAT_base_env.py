@@ -1,10 +1,3 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
-#from __future__ import annotations
-
 import torch
 
 from abc import abstractmethod
@@ -25,28 +18,19 @@ class GOATBaseEnv(Env):
 
         # Total env ids
         self.total_env_ids = torch.arange(self.num_envs, device=self.device)
-
-        # # Joint & Link Limits
-        # self.robot_dof_lower_limits = self._robot.data.joint_pos_limits[0, :, 0].to(device=self.device)
-        # self.robot_dof_upper_limits = self._robot.data.joint_pos_limits[0, :, 1].to(device=self.device)
+        # Joint & Link Limits
+        self.joint_pos_limits = self._robot.data.joint_pos_limits
+        self.joint_vel_limits = self._robot.data.joint_vel_limits
         
     # Create scene
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.GOAT_cfg)
         self.scene.articulations["robot"] = self._robot
-
         self.scene.clone_environments(copy_from_source=True)          # clone environents
 
     # Reset Env
     def _reset_idx(self, env_ids: torch.Tensor):
         super()._reset_idx(env_ids)
-        # joint_pos = self._robot.data.default_joint_pos[env_ids].clone()
-        # joint_pos = torch.clamp(joint_pos, self.robot_dof_lower_limits, self.robot_dof_upper_limits)
-        # joint_vel = torch.zeros_like(joint_pos)
-
-        # # Publish to simulator
-        # self._robot.set_joint_position_target(joint_pos, env_ids=env_ids)
-        # self._robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
 
     ## =============== RL main abstract methods ================ ##
@@ -86,6 +70,24 @@ class GOATBaseEnv(Env):
         raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
 
     @abstractmethod
+    def _get_states(self) -> torch.Tensor | None:
+        """Compute and return the states for the environment.
+
+        The state-space is used for asymmetric actor-critic architectures. It is configured
+        using the :attr:`DirectRLEnvCfg.state_space` parameter.
+
+        Returns:
+            The states for the environment. If the environment does not have a state-space, the function
+            returns a None.
+        """
+        if self.state_space is not None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__}: state_space is set ({self.state_space}), "
+                "so '_get_states' must be implemented to return privileged critic states.")
+        else:
+            return None  # noqa: R501
+
+    @abstractmethod
     def _get_rewards(self) -> torch.Tensor:
         """Compute and return the rewards for the environment.
 
@@ -103,6 +105,13 @@ class GOATBaseEnv(Env):
             Shape of individual tensors is (num_envs,).
         """
         raise NotImplementedError(f"Please implement the '_get_dones' method for {self.__class__.__name__}.")
+    
+    @abstractmethod
+    def _compute_intermediate_values(self):
+        """Compute planning states for convenient observation setting and reward calculating."""
+
+        raise NotImplementedError(f"Please implement the '_compute_intermediate_values' method for {self.__class__.__name__}.")
+    
 
 
 

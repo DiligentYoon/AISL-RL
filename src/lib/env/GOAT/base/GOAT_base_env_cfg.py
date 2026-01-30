@@ -175,7 +175,7 @@ class GOATBaseEnvCfg(EnvCfg):
     )
 
     # Scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=3.0, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=3.0, replicate_physics=True)
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(

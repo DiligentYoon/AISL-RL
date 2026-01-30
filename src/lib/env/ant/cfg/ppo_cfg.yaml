@@ -46,10 +46,5 @@ agent:
 # value_preprocessor: RunningStandardScaler
 # value_preprocessor_kwargs: null
 
-
-# Sequential trainer
-# https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
-trainer:
-  class: SequentialTrainer
-  timesteps: 8000
-  environment_info: log
+train:
+  timesteps: 32000

@@ -665,6 +665,7 @@ class Env(gym.Env):
         """
         raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
 
+    @abstractmethod
     def _get_states(self) -> torch.Tensor | None:
         """Compute and return the states for the environment.
 
