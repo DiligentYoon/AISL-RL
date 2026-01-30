@@ -87,16 +87,16 @@ def main():
 
     # ============================ Env & Wrapper Spawn ================================
 
-    # create isaac environment
+    # Create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
-    # get environment (step) dt for real-time evaluation
+    # Get environment (step) dt for real-time evaluation
     try:
         dt = env.step_dt
     except AttributeError:
         dt = env.unwrapped.step_dt
 
-    # wrap around environment
+    # Wrap around environment
     env = IsaacLabWrapper(env)  
 
     if cfg["agent"]["experiment"]["write_interval"] == "auto":
@@ -107,7 +107,7 @@ def main():
 
     # ======================= Buffer =========================
 
-    # 1. initialization
+    # Initialization
     if cfg["buffer"]["buffer_size"] == -1:
         cfg["buffer"]["buffer_size"] = cfg["agent"]["rollouts"]
         buffer = RolloutBuffer(cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
@@ -130,21 +130,25 @@ def main():
 
     # =================== Model & Agent Spawn Test ==========================
     
-    # 1. Initialization
+    # Model initialization
     actor = Actor(num_observations=obs_size,
                   num_actions=act_size,
+                  min_log_std=cfg["models"]["policy"]["min_log_std"],
+                  max_log_std=cfg["models"]["policy"]["max_log_std"],
                   device=env.device)
 
     critic = Critic(num_states=state_size,
                     device=env.device)
 
     model = {"actor": actor, "critic": critic}
+
+    # Agent initialization
     agent = PPO(model=model,
                 buffer=buffer, 
                 device=env.device,
                 cfg=cfg["agent"])
     
-    # 2. Checkpoint
+    # Checkpoint
     if args_cli.checkpoint is not None:
         resume_path = os.path.abspath(args_cli.checkpoint)
         agent.load(resume_path)
@@ -168,13 +172,15 @@ def main():
     t2_update = 0
     CLI_track_rewards = []
     CLI_track_timesteps = []
-    CLI_step_reward_means = [] 
-    # reset environment
+    CLI_step_reward_means = []
+
+    # Reset environment
     obs, states, _ = env.reset()
     timestep = 0
     rollout = 0
     elapsed_time = 0
-    # simulate environment
+    
+    # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================

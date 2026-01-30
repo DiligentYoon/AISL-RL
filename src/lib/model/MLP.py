@@ -46,7 +46,7 @@ class Actor(Model):
         :type taken_actions: torch.Tensor
         :param deterministic: Is actor evaluation mode
         :type deterministic: bool
-        :param update_rms: update a Runningmeanstd distrubution
+        :param update_rms: Update a Runningmeanstd distrubution
         :type update_rms: bool 
         """
         # Input standardization
@@ -77,6 +77,32 @@ class Actor(Model):
 
         # Entropy : mean of (Batch, Action) dimension
         entropy = self.action_distribution.entropy().mean()
+
+        return actions, log_prob, entropy
+    
+    def random_act(self, observations: torch.Tensor):
+        """
+        Random act for RL's beginning
+        """
+        
+        batch_size = observations.shape[0]
+
+        # Create a standard normal distribution for random actions (mean=0, std=1)
+        mean = torch.zeros((batch_size, self.num_actions), device=self.device)
+        std = torch.ones((batch_size, self.num_actions), device=self.device)
+        action_distribution = Normal(mean, std)
+
+        # Sample raw actions and squash them to [-1, 1] using tanh
+        raw_actions = action_distribution.rsample()
+        actions = torch.tanh(raw_actions)
+
+        # Calculate log probability, correcting for the tanh transformation
+        log_prob = action_distribution.log_prob(raw_actions)
+        log_prob -= torch.log(1 - actions.pow(2) + 1e-6)
+        log_prob = log_prob.sum(dim=-1)
+
+        # Entropy of the base (Normal) distribution
+        entropy = action_distribution.entropy().mean()
 
         return actions, log_prob, entropy
 
