@@ -1,0 +1,270 @@
+from __future__ import annotations
+
+import torch
+import os
+import numpy as np
+
+from isaaclab.utils.math import normalize, quat_from_angle_axis
+from isaaclab.terrains import TerrainImporter 
+from isaaclab.sensors import ContactSensor
+from isaacsim.core.utils import bounds
+from isaacsim.core.utils import prims
+from lib.env.GOAT.stand_no_dr.GOAT_stand_no_dr_env_cfg import GOATStandNoDREnvCfg
+from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
+from lib.controller.PD_controller import PD_Controller
+from lib.controller.PI_controller import PI_Controller
+
+csv_path = "initial_pose_data.csv"              # Path to csv file
+
+class GOATStandNoDREnv(GOATBaseEnv):
+    cfg: GOATStandNoDREnvCfg
+
+    def __init__(self, cfg: GOATStandNoDREnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        
+        # Config
+        self.cfg = cfg
+        self._contact_sensor =  self.scene.sensors["contact_sensor"]
+        self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+
+        # Torque controller initialization
+        self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
+        self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
+                                            kd=self.cfg.joint_kd,
+                                            alpha=0.059,
+                                            num_envs=self.num_envs,
+                                            num_dof=self.cfg.leg_dof,
+                                            num_leg=self.cfg.num_leg,
+                                            device=self.device,
+                                            dt=self.cfg.sim_dt)
+        
+        self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
+                                              ki=self.cfg.wheel_ki,
+                                              alpha=0.059,
+                                              num_envs=self.num_envs,
+                                              num_dof=1,                        # One wheel per legs
+                                              num_leg=self.cfg.num_leg,
+                                              device=self.device,
+                                              dt=self.cfg.sim_dt)
+        # HW limits
+        self.joint_input_limits = self.cfg.joint_input_limits.unsqueeze(0).expand(self.num_envs, -1, -1).to(device=self.device)         # Currently not used
+        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
+    
+    def _setup_scene(self):
+        super()._setup_scene()
+
+        self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
+        self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
+                                           self.cfg.dome_light_cfg.spawn)
+        
+        # Compute collision box info
+        robot_prim_path = "/World/envs/env_0/Robot"
+        robot_bbox_cache = bounds.create_bbox_cache()
+        robot_aabb = bounds.compute_aabb(bbox_cache=robot_bbox_cache,
+                                         prim_path=robot_prim_path,
+                                         include_children=True)
+        self.robot_collision_min_z = -robot_aabb[2]
+
+        # Spawn contact sensor
+        contact_sensor = ContactSensor(cfg=self.cfg.contact_sensor)
+        self.scene.sensors["contact_sensor"] = contact_sensor
+
+    def _reset_idx(self, env_ids: torch.Tensor):
+        super()._reset_idx(env_ids)
+        # Reset previous action observation
+        self.actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
+
+        # Base link state
+        root_state = self._robot.data.default_root_state[env_ids].clone()
+        root_state[:, 2] += self.robot_collision_min_z
+
+        # Joint state
+        limits = self.joint_pos_limits[env_ids]
+        joint_pos = torch.zeros_like(limits[:, :, 0]) * (limits[:, :, 1] - limits[:, :, 0])
+        joint_vel = torch.zeros_like(joint_pos)
+
+        # Change to global position
+        root_state[:,:3] += self.scene.env_origins[env_ids]
+
+        self._robot.write_joint_state_to_sim(position=joint_pos,
+                                             velocity=joint_vel,
+                                             env_ids=env_ids)
+        self._robot.write_root_state_to_sim(root_state=root_state,
+                                            env_ids=env_ids)
+        
+        # Update planning state
+        self._compute_intermediate_values()
+        
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
+        """
+        Preprocessor that helps applying policy's action to simulation
+
+        Args:
+            actions (torch.Tensor): Joint pos command (angle), wheel's velocity for each legs in shape (num_envs, 2, 4)
+        """
+        
+        # Refine command
+        self.actions = actions.clone()
+        self.joint_pos_delta_cmd = self.actions[:, :-2] * self.cfg.joint_action_weight
+        self.wheel_vel_cmd = self.actions[:, -2:] * self.cfg.wheel_action_weight
+        
+    def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
+        # Current state
+        joint_pos = self._robot.data.joint_pos
+        joint_vel = self._robot.data.joint_vel
+
+        self.joint_torque_cmd = self.leg_controller.compute_torque(joint_pos=joint_pos,
+                                                                   joint_vel=joint_vel,
+                                                                   joint_pos_cmd=self.joint_pos_delta_cmd,
+                                                                   joint_pos_limits=None,
+                                                                   torque_limits=self.torque_limits)
+        
+        self.wheel_torque_cmd = self.wheel_controller.compute_torque(joint_vel=joint_vel,
+                                                                     joint_vel_cmd=self.wheel_vel_cmd,
+                                                                     joint_vel_limits=self.joint_vel_limits,
+                                                                     torque_limits=self.torque_limits)
+        # Combine torque commands
+        self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
+        
+        # Load to sim buffer
+        self._robot.set_joint_effort_target(self.torque_cmd)
+
+    def _get_observations(self) -> torch.Tensor:
+        """
+        Get sensor data without curriculum Gaussian noise
+
+        Returns:
+            Observation space
+        """
+        observation = torch.cat((self.base_acceleration,
+                                 self.base_angular_vel,
+                                 self.gravity_vector,
+                                 self.base_quaternion,
+                                 self.joint_pos,
+                                 self.joint_vel), dim=1)
+
+        return observation
+    
+    def _get_states(self) -> torch.Tensor:
+        """"
+        Get State space using previleged information
+
+        Returns
+            State space
+        """
+        observation = torch.cat((self.base_acceleration,
+                                 self.base_angular_vel,
+                                 self.gravity_vector,
+                                 self.base_quaternion,
+                                 self.joint_pos,
+                                 self.joint_vel), dim=1)
+        
+        privileged_info = torch.cat((self.base_vel,
+                                     self.base_height,
+                                     self.contact_force,
+                                     self.friction_coefficient), dim=1)
+        
+        state = torch.cat((observation, privileged_info), dim=1)
+
+        return state
+    
+    def _get_rewards(self) -> torch.Tensor:
+        # ======================= Scheduler ======================= #
+        current_time = self.episode_length_buf.float()
+        # Target gravity in base frame (Upright state = [0, 0, -1])
+        target_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device).repeat(self.num_envs, 1)
+        
+        # Upright_rate (1.0: upright properly, -1.0: upside down)
+        upright_rate = torch.sum(self.gravity_vector * target_gravity, dim=1)       # Dot product
+        
+        # boolean for success measure
+        is_upright = upright_rate > (self.cfg.upright_threshold * torch.pi / 180)
+        is_height_reached = torch.abs(self.base_height - self.cfg.target_height) < self.cfg.height_threshold
+        
+        # Velocity criteria (Only strict for balancing)
+        lin_vel_norm = torch.norm(self.base_vel, dim=1)                             # L2 norm 
+        ang_vel_norm = torch.norm(self.base_angular_vel, dim=1)
+        is_stable = (lin_vel_norm < 0.5) & (ang_vel_norm < 1.0)
+
+        is_upright = is_upright.view(-1)
+        is_height_reached = is_height_reached.view(-1)
+        is_stable = is_stable.view(-1)
+        
+        # ======================= Reward ======================= #
+        # Orientation Reward (Projected Gravity Alignment) [Highest Priority]
+        upright_error = torch.norm(self.gravity_vector - target_gravity, dim=1)
+        r_upright = torch.exp(-torch.square(upright_error) / 0.25)                                       # Raidial Basis FUnction (RBF)
+
+        # Base Height Reward
+        height_error = torch.norm(self.base_height - self.cfg.target_height, dim=1)
+        r_height = torch.exp(-torch.square(height_error) / 0.3)
+        
+        # vel_penalty_scale = torch.clamp(upright_rate, 0.0, 1.0)                                     # Clamp the rate
+        # vel_penalty_scale = torch.pow(vel_penalty_scale, 4)                                         # Make it sharper (only active when really it's upright)
+
+        # r_vel_lin = -torch.sum(torch.abs(self.base_vel), dim=1) * vel_penalty_scale                 # Penalty
+        # r_vel_ang = -torch.sum(torch.abs(self.base_angular_vel), dim=1) * vel_penalty_scale         # Penalty
+        # r_vel_joint = -torch.sum(torch.abs(self.joint_vel[:, :-2]), dim=1) * vel_penalty_scale      # Penalty
+
+        vel_lin_error = torch.norm(-self.base_vel, dim=1)
+        r_vel_lin = torch.exp(-torch.square(vel_lin_error) / 0.5)
+
+        vel_ang_error = torch.norm(-self.base_angular_vel, dim=1)
+        r_vel_ang = torch.exp(-torch.square(vel_ang_error) / 0.5)
+
+        vel_joint_error = torch.norm(-self.joint_vel, dim=1)
+        r_vel_joint = torch.exp(-torch.square(vel_joint_error) / 1)
+
+        # Energy / Action Smoothness
+        r_effort = -torch.sum(torch.abs(self.torque_cmd), dim=1)     
+        
+        r_terminated = - self.reset_terminated.float()
+
+        r_alive = self.cfg.r_alive_weight * current_time/(self.cfg.max_episode_length)
+
+        # Total Reward Summation
+        total_reward = (
+            self.cfg.r_upright_weight * r_upright * r_alive +
+            self.cfg.r_height_weight * r_height +
+            self.cfg.r_vel_lin_weight * r_vel_lin +
+            self.cfg.r_vel_ang_weight * r_vel_ang +
+            self.cfg.r_vel_joint_weight * r_vel_joint +
+            self.cfg.r_effort_weight * r_effort +
+            self.cfg.r_terminated_weight * r_terminated +
+            self.cfg.r_alive_weight * r_alive
+        )
+
+        return total_reward
+    
+    def _get_dones(self):
+        self._compute_intermediate_values() # planning state calculation
+        tilt_threshold_rad = torch.tensor(self.cfg.base_tilt_reset_condition, device=self.device) * torch.pi / 180.0
+        cos_threshold = torch.cos(tilt_threshold_rad)
+
+        target_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device)
+        base_tilt = torch.sum(self.gravity_vector * target_gravity, dim=1)
+
+        terminated = (self.base_height < self.cfg.height_reset_condition) | (base_tilt < cos_threshold).unsqueeze(-1)
+        terminated = terminated.squeeze(-1)
+
+        truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
+
+        return terminated, truncated
+
+    def _compute_intermediate_values(self):
+        # Observation data
+        self.base_acceleration = self._robot.root_physx_view.get_link_accelerations()[:, 0, 3:]
+        self.base_angular_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
+        self.gravity_vector = self._robot.data.projected_gravity_b                                      # Unit vector
+        self.base_quaternion = self._robot.root_physx_view.get_root_transforms()[:, 3:]
+        self.joint_pos = self._robot.data.joint_pos
+        self.joint_vel = self._robot.data.joint_vel
+        self.previous_action = self.actions.clone()
+        self.flat_previous_action = self.previous_action.view(self.num_envs, -1)
+
+        # State(privileged) data
+        self.base_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
+        self.base_height = self._robot.root_physx_view.get_root_transforms()[:, 2].unsqueeze(1)
+        self.contact_force = self._contact_sensor.data.net_forces_w.view(self.num_envs, -1)
+        material_property = self._robot.root_physx_view.get_material_properties()                   # device is "cpu" not "cuda" 
+        self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
