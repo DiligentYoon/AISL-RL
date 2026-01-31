@@ -224,15 +224,15 @@ class randomize_rigid_body_material(ManagerTermBase):
             self.num_shapes_per_body = None
 
         # obtain parameters for sampling friction and restitution values
-        static_friction_range = cfg.params.get("static_friction_range", (1.0, 1.0))
-        dynamic_friction_range = cfg.params.get("dynamic_friction_range", (1.0, 1.0))
+        self.static_friction_range = cfg.params.get("static_friction_range", (1.0, 1.0))
+        self.dynamic_friction_range = cfg.params.get("dynamic_friction_range", (1.0, 1.0))
         restitution_range = cfg.params.get("restitution_range", (0.0, 0.0))
         num_buckets = int(cfg.params.get("num_buckets", 1))
 
         # sample material properties from the given ranges
         # note: we only sample the materials once during initialization
         #   afterwards these are randomly assigned to the geometries of the asset
-        range_list = [static_friction_range, dynamic_friction_range, restitution_range]
+        range_list = [self.static_friction_range, self.dynamic_friction_range, restitution_range]
         ranges = torch.tensor(range_list, device="cpu")
         self.material_buckets = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (num_buckets, 3), device="cpu")
 
@@ -257,6 +257,19 @@ class randomize_rigid_body_material(ManagerTermBase):
             env_ids = torch.arange(env.scene.num_envs, device="cpu")
         else:
             env_ids = env_ids.cpu()
+
+        # resample material buckets by a curriculum signal (static_friction_range, dynamic_friction_range)
+        if (self.static_friction_range != static_friction_range) or (self.dynamic_friction_range != dynamic_friction_range):
+            self.static_friction_range = static_friction_range
+            self.dynamic_friction_range = dynamic_friction_range
+
+            range_list = [self.static_friction_range, self.dynamic_friction_range, restitution_range]
+            ranges = torch.tensor(range_list, device="cpu")
+            self.material_buckets = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (num_buckets, 3), device="cpu")
+
+            make_consistent = self.cfg.params.get("make_consistent", False)
+            if make_consistent:
+                self.material_buckets[:, 1] = torch.min(self.material_buckets[:, 0], self.material_buckets[:, 1])
 
         # randomly assign material IDs to the geometries
         total_num_shapes = self.asset.root_physx_view.max_shapes

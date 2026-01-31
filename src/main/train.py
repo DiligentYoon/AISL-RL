@@ -14,7 +14,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=True, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="My-Ant-Test", help="Name of the task.")
+parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -31,6 +31,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
+args_cli.headless = True
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 

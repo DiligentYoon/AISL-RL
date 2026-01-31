@@ -70,7 +70,13 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.scene.sensors["contact_sensor"] = contact_sensor
 
     def _reset_idx(self, env_ids: torch.Tensor):
+
+        # NOTE: Other initializations (joint states, material properties, etc..) are implemented by domain randomizer
+        # Adjustment the Domain Randomization Parameters
+        self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.2) 
+        self.event_manager.cfg.wheel_physics_material.params["dynamic_friction_range"] = (0.5, 1.2)
         super()._reset_idx(env_ids)
+
         # Reset previous action observation
         self.actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
 
@@ -85,6 +91,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self._robot.write_root_state_to_sim(root_state=root_state,
                                             env_ids=env_ids)
         
+
+
         # Update planning state
         self._compute_intermediate_values()
         
