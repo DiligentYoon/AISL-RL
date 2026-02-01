@@ -33,6 +33,7 @@ from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
 from isaaclab.envs.ui import ViewportCameraController
 
+from lib.domain_randomizer.noise_model import NoiseModel
 from lib.utils.space_utils import sample_space, spec_to_gym_space
 from .env_cfg import EnvCfg
 
@@ -190,6 +191,16 @@ class Env(gym.Env):
         # setup the action and observation spaces for Gym
         self._configure_gym_env_spaces()
 
+        # setup noise cfg for adding action and observation noise
+        if self.cfg.action_noise_model:
+            self._action_noise_model: NoiseModel = self.cfg.action_noise_model.class_type(
+                self.cfg.action_noise_model, num_envs=self.num_envs, device=self.device
+            )
+        if self.cfg.observation_noise_model:
+            self._observation_noise_model: NoiseModel = self.cfg.observation_noise_model.class_type(
+                self.cfg.observation_noise_model, num_envs=self.num_envs, device=self.device
+            )
+
         # perform events at the start of the simulation
         if self.cfg.events:
             # we print it here to make the logging consistent
@@ -333,6 +344,9 @@ class Env(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
         action = action.to(self.device)
+        # add action noise
+        if self.cfg.action_noise_model:
+            action = self._action_noise_model(action)
 
         # process actions
         self._pre_physics_step(action)
@@ -381,10 +395,16 @@ class Env(gym.Env):
             if "interval" in self.event_manager.available_modes:
                 self.event_manager.apply(mode="interval", dt=self.step_dt)
 
+
         # update observations
         self.obs_buf = self._get_observations()
         self.state_buf = self._get_states()
 
+        # add observation noise
+        # note: we apply no noise to the state space (since it is used for critic networks)
+        if self.cfg.observation_noise_model:
+            self.obs_buf = self._observation_noise_model(self.obs_buf)
+            
         # return observations, rewards, resets and extras
         return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 

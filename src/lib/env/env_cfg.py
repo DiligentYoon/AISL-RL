@@ -138,6 +138,13 @@ class EnvCfg:
     num_states: int | None = None
     """The dimension of the state-space from each environment instance."""
 
+    observation_noise_model: NoiseModelCfg | None = None
+    """The noise model to apply to the computed observations from the environment. Default is None,
+    which means no noise is added.
+
+    Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
+    """
+
     action_space: SpaceType = MISSING
     """Action space definition.
 
@@ -163,6 +170,13 @@ class EnvCfg:
 
     num_actions: int | None = None
     """The dimension of the action space for each environment."""
+
+    action_noise_model: NoiseModelCfg | None = None
+    """The noise model applied to the actions provided to the environment. Default is None,
+    which means no noise is added.
+
+    Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
+    """
 
     rerender_on_reset: bool = False
     """Whether a render step is performed again after at least one environment has been reset.

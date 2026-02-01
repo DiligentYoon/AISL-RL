@@ -49,6 +49,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # HW limits
         self.joint_input_limits = self.cfg.joint_input_limits.unsqueeze(0).expand(self.num_envs, -1, -1).to(device=self.device)         # Currently not used
         self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
+
+        # Curriculum Info
+        self.extras["Curriculum"] = {}
     
     def _setup_scene(self):
         super()._setup_scene()
@@ -73,8 +76,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # NOTE: Other initializations (joint states, material properties, etc..) are implemented by domain randomizer
         # Adjustment the Domain Randomization Parameters
-        self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.2) 
-        self.event_manager.cfg.wheel_physics_material.params["dynamic_friction_range"] = (0.5, 1.2)
+        self.set_curriculum()
         super()._reset_idx(env_ids)
 
         # Reset previous action observation
@@ -269,3 +271,25 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.contact_force = self._contact_sensor.data.net_forces_w.view(self.num_envs, -1)
         material_property = self._robot.root_physx_view.get_material_properties()                   # device is "cpu" not "cuda" 
         self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
+
+        # Extra Information data
+        self.extras["Curriculum"]["step_progress"] = self.common_step_counter
+
+    # ============== Auxilary Functions ================
+    def set_curriculum(self):
+        """
+        Curriculum Learning for easy-to-hard task learning 
+        """
+        if self.extras["Curriculum"]["step_progress"] % 1e4 == 0:
+            # Observation & Action Noises Control (Only Gaussian Noise)
+            if self.cfg.action_noise_model:
+                self._action_noise_model._noise_model_cfg.noise_cfg.mean = 0.0
+                self._action_noise_model._noise_model_cfg.noise_cfg.std = 0.03
+
+            if self.cfg.observation_noise_model:
+                self._observation_noise_model._noise_model_cfg.noise_cfg.mean = 0.0
+                self._observation_noise_model._noise_model_cfg.noise_cfg.std = 0.03
+
+            # Environment Parameters Control
+            self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.2) 
+            self.event_manager.cfg.wheel_physics_material.params["dynamic_friction_range"] = (0.5, 1.2)

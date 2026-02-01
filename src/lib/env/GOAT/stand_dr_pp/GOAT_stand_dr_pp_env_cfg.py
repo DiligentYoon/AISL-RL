@@ -12,6 +12,8 @@ from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 
 from lib.domain_randomizer import randomizer
+from lib.domain_randomizer.noise_model import GaussianNoiseCfg
+from lib.domain_randomizer.noise_model import NoiseModelCfg, NoiseModelWithAdditiveBiasCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 
@@ -149,3 +151,11 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     
     # Domain Randomization
     events = EventCfg()
+
+    # Noise Model
+    action_noise_model: NoiseModelCfg = NoiseModelCfg(
+        noise_cfg=GaussianNoiseCfg(mean=0.0, std=0.05, operation="add"),
+    )
+    observation_noise_model: NoiseModelCfg = NoiseModelCfg(
+        noise_cfg=GaussianNoiseCfg(mean=0.0, std=0.05, operation="add"),
+    )
