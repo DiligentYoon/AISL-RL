@@ -429,11 +429,11 @@ def stepping_stones_terrain_init(border_width: float = 0.0,
     """
     Stepping Stones terrain initialization
 
-    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+        :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
     :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
     :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
     :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
                                    in which case no correction is applied.
     """
     base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
-    cfg = HfWaveTerrainCfg(base_cfg)
+    cfg = HfSteppingStonesTerrainCfg(base_cfg)
