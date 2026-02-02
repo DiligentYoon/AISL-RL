@@ -52,6 +52,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Curriculum Info
         self.extras["Curriculum"] = {}
+        self.extras["Curriculum"]["step_progress"] = 0
     
     def _setup_scene(self):
         super()._setup_scene()
@@ -282,13 +283,13 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         """
         if self.extras["Curriculum"]["step_progress"] % 1e4 == 0:
             # Observation & Action Noises Control (Only Gaussian Noise)
-            if self.cfg.action_noise_model:
-                self._action_noise_model._noise_model_cfg.noise_cfg.mean = 0.0
-                self._action_noise_model._noise_model_cfg.noise_cfg.std = 0.03
+            if self.cfg.action_noise_type:
+                self.cfg.action_noise_params["mean"] = 0.0
+                self.cfg.action_noise_params["std"] = 0.03
 
-            if self.cfg.observation_noise_model:
-                self._observation_noise_model._noise_model_cfg.noise_cfg.mean = 0.0
-                self._observation_noise_model._noise_model_cfg.noise_cfg.std = 0.03
+            if self.cfg.observation_noise_type:
+                self.cfg.observation_noise_params["mean"] = 0.0
+                self.cfg.observation_noise_params["std"] = 0.03
 
             # Environment Parameters Control
             self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.2) 
