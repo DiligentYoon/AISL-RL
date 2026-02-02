@@ -11,6 +11,7 @@ from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg, SubTerrainBaseCfg
 from lib.utils.terrain_utils import *
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from isaaclab.terrains.height_field.hf_terrains_cfg import *
 
 
 @configclass
@@ -97,11 +98,16 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
 
     # Terrain
     flat = FlatTerrain()
-    pyramid = InvertedPyramidStairsTerrain(border_width=0.1,
+    pyramid = PyramidStairsTerrain(border_width=0.1,
                                    step_height_range=(0.1, 0.3),
                                    step_width=0.2,
                                    platform_width=0.3,
                                    holes=False)
+    inverted_pyramid = InvertedPyramidStairsTerrain(border_width=0.1,
+                                                    step_height_range=(0.1, 0.3),
+                                                    step_width=0.2,
+                                                    platform_width=0.3,
+                                                    holes=False)
     random_grid = RandomGridTerrain(grid_width=0.3,
                                     grid_height_range=(0.0, 0.3),
                                     platform_width=1.0,
@@ -124,20 +130,24 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
                                              object_prop_start=(5, 0.5),
                                              object_prop_end=(10, 1.0))
 
+    random_uniform = random_uniform_terrain_init(noise_range=(0.0, 0.2),
+                                                 noise_step=0.1)
+
     terrain_generator_cfg = TerrainGeneratorCfg(
         curriculum = True,
         size=[10.0, 10.0],
-        num_rows = 1,
-        num_cols = 2,
+        num_rows = 1,                               # curriculum level for each terrain
+        num_cols = 6,                               # variation of terrain
         color_scheme="random",
         sub_terrains = {
             "flat_terrain": SubTerrainBaseCfg(function=flat.generate,
-                                              proportion=0.0),
+                                              proportion=0.0),                              # TODO: 각 proportion은 따로 변수화해서 관리
 
             "pyramid_stairs_terrain": SubTerrainBaseCfg(function=pyramid.generate,
                                                         proportion=0.0),
 
-            # "inverted_pyramid_stairs_terrain"
+            "inverted_pyramid_stairs_terrain": SubTerrainBaseCfg(function=inverted_pyramid.generate,
+                                                                 proportion=0.0),
             "random_grid_terrain": SubTerrainBaseCfg(function=random_grid.generate,
                                                      proportion=0.0),
 
@@ -152,9 +162,36 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
             "floating_ring_terrain": SubTerrainBaseCfg(function=floating_ring.generate,
                                                        proportion=0.0),
             "star_terrain": SubTerrainBaseCfg(function=star.generate,
-                                              proportion=0.5),
+                                              proportion=0.0),
             # "repeated_objects_terrain": SubTerrainBaseCfg(function=repeated_object.generate,
-            #                                               proportion=0.5)
+            #                                               proportion=0.5),
+            "random_uniform_terrain": HfRandomUniformTerrainCfg(proportion=1.0,                     # TODO: 위의 trimesh랑 여기서 부터 있는 height terrain은 호출방식이 살짝 다름. 우선 통일 안해놓음
+                                                                noise_range=(0.0, 0.2),
+                                                                noise_step=0.1),
+            "pyramid_sloped_terrain": HfPyramidSlopedTerrainCfg(proportion=1.0,
+                                                                slope_range=(0.3, 1.0),
+                                                                platform_width=1.0,
+                                                                inverted=False),
+            "pyramid_stairs_terrain": HfPyramidStairsTerrainCfg(proportion=1.0,
+                                                                step_height_range=(0.3, 0.6),
+                                                                step_width=0.5,
+                                                                platform_width=1.0,
+                                                                inverted=False),
+            "discrete_obstacles_terrain": HfDiscreteObstaclesTerrainCfg(proportion=1.0,
+                                                                        obstacle_height_mode="choice",
+                                                                        obstacle_width_range=(0.5, 0.8),
+                                                                        obstacle_height_range=(0.5, 0.8),
+                                                                        num_obstacles=10,
+                                                                        platform_width=1.0),
+            "wave_terrain": HfWaveTerrainCfg(proportion=1.0,
+                                             amplitude_range=(0.5, 1.0),
+                                             num_waves=3),
+            "stepping_stones_terrain": HfSteppingStonesTerrainCfg(proportion=1.0,
+                                                                  stone_height_max=0.5,
+                                                                  stone_width_range=(0.3, 0.6),
+                                                                  stone_distance_range=(0.5, 1.0),
+                                                                  holes_depth=-0.5,
+                                                                  platform_width=1.0)
         }
     
     )

@@ -1,7 +1,10 @@
 from isaaclab.utils import configclass
 from isaaclab.terrains.trimesh.mesh_terrains import *
 from isaaclab.terrains.trimesh.mesh_terrains_cfg import *
+from isaaclab.terrains.height_field.hf_terrains import *
+from isaaclab.terrains.height_field.hf_terrains_cfg import *
 
+## ========================= Trimesh Terrain ========================= ##
 
 @configclass
 class ObjectCfg(MeshRepeatedObjectsTerrainCfg.ObjectCfg):
@@ -275,3 +278,162 @@ class RepeatedObjectsTerrain:
 
     def generate(self, difficulty, cfg):
         return repeated_objects_terrain(difficulty=difficulty, cfg=self.cfg)
+    
+
+## ========================= Height Terrain ========================= ##
+
+def random_uniform_terrain_init(border_width: float = 0.0,
+                                horizontal_scale: float = 0.1,
+                                vertical_scale: float = 0.005,
+                                slope_threshold: float | None = None,
+                                noise_range: tuple[float, float] = MISSING,
+                                noise_step: float = MISSING,
+                                downsampled_scale: float | None = None):
+    """
+    Random Uniform terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                    in which case no correction is applied.
+    :param noise_range(tuple): The minimum and maximum height noise (i.e. along z) of the terrain (in m).
+    :param noise_step(float): The minimum height (in m) change between two points.
+    :param downsampled_scale(float): The distance between two randomly sampled points on the terrain. Defaults to None,\n
+                                        in which case the :obj:`horizontal scale` is used.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfRandomUniformTerrainCfg(base_cfg)
+    cfg.noise_range = noise_range
+    cfg.noise_step = noise_step
+    cfg.downsampled_scale = downsampled_scale
+
+    return cfg
+
+def pyramid_sloped_terrain_init(border_width: float = 0.0,
+                                horizontal_scale: float = 0.1,
+                                vertical_scale: float = 0.005,
+                                slope_threshold: float | None = None,
+                                slope_range: tuple[float, float] = MISSING,
+                                platform_width: float = 1.0,
+                                inverted: bool = False):
+    """
+    Pyramid Sloped terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                   in which case no correction is applied.    
+    :param slope_range(tuple): The slope of the terrain (in radians).
+    :param platform_width(float): The width of the square platform at the center of the terrain. Defaults to 1.0.
+    :param inverted(bool): Whether the pyramid is inverted. Defaults to False.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfPyramidSlopedTerrainCfg(base_cfg)
+    cfg.slope_range = slope_range
+    cfg.platform_width = platform_width
+    cfg.inverted = inverted
+
+    return cfg
+
+def pyramid_stairs_terrain_init(border_width: float = 0.0,
+                                horizontal_scale: float = 0.1,
+                                vertical_scale: float = 0.005,
+                                slope_threshold: float | None = None,
+                                step_height_range: tuple[float, float] = MISSING,
+                                step_width: float = MISSING,
+                                platform_width: float = 1.0,
+                                inverted: bool = False):
+    """
+    Pyramid Stairs terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                   in which case no correction is applied.
+    :param step_height_range(tuple): The minimum and maximum height of the steps (in m).
+    :param step_width(float): The width of the steps (in m).
+    :param platform_width(float): The width of the square platform at the center of the terrain. Defaults to 1.0.
+    :param inverted(bool): Whether the pyramid stairs is inverted. Defaults to False.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfPyramidStairsTerrainCfg(base_cfg)
+    cfg.step_height_range = step_height_range
+    cfg.step_width = step_width
+    cfg.platform_width = platform_width
+    cfg.inverted = inverted
+
+    return cfg
+
+def discrete_obstacles_terrain_init(border_width: float = 0.0,
+                                    horizontal_scale: float = 0.1,
+                                    vertical_scale: float = 0.005,
+                                    slope_threshold: float | None = None,
+                                    obstacle_height_mode: str = "choice",
+                                    obstacle_width_range: tuple[float, float] = MISSING,
+                                    obstacle_height_range: tuple[float, float] = MISSING,
+                                    num_obstacles: int = MISSING,
+                                    platform_width: float = 1.0):
+    """
+    Discrete Obstacle terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                   in which case no correction is applied.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfDiscreteObstaclesTerrainCfg(base_cfg)
+    cfg.obstacle_height_mode = obstacle_height_mode
+    cfg.obstacle_width_range = obstacle_width_range
+    cfg.obstacle_height_range = obstacle_height_range
+    cfg.num_obstacles = num_obstacles
+    cfg.platform_width =platform_width
+
+    return cfg
+    
+def wave_terrain_init(border_width: float = 0.0,
+                      horizontal_scale: float = 0.1,
+                      vertical_scale: float = 0.005,
+                      slope_threshold: float | None = None,
+                      amplitude_range: tuple[float, float] = MISSING,
+                      num_waves: int = 1):
+    """
+    Wave terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                   in which case no correction is applied.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfWaveTerrainCfg(base_cfg)
+    cfg.amplitude_range = amplitude_range
+    cfg.num_waves = num_waves
+
+    return cfg
+
+def stepping_stones_terrain_init(border_width: float = 0.0,
+                                 horizontal_scale: float = 0.1,
+                                 vertical_scale: float = 0.005,
+                                 slope_threshold: float | None = None,
+                                 stone_height_max: float = MISSING,
+                                 stone_width_range: tuple[float, float] = MISSING,
+                                 stone_distance_range: tuple[float, float] = MISSING,
+                                 holes_depth: float = -10.0,
+                                 platform_width: float = 1.0):
+    """
+    Stepping Stones terrain initialization
+
+    :param border_width(float): The width of the border/padding around the terrain (in m). Defaults to 0.0.
+    :param horizontal_scale(float): The discretization of the terrain along the x and y axes (in m). Defaults to 0.1.
+    :param vertical_scale(float): The discretization of the terrain along the z axis (in m). Defaults to 0.005.
+    :param slope_threshold(float): The slope threshold above which surfaces are made vertical. Defaults to None,\n
+                                   in which case no correction is applied.
+    """
+    base_cfg = HfTerrainBaseCfg(border_width, horizontal_scale, vertical_scale, slope_threshold)
+    cfg = HfWaveTerrainCfg(base_cfg)
