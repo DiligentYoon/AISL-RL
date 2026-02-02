@@ -9,7 +9,6 @@ from isaaclab.devices.openxr import XrCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.noise import NoiseModelCfg
 
 from isaaclab.envs.common import SpaceType, ViewerCfg
 from isaaclab.envs.ui import BaseEnvWindow
@@ -138,6 +137,12 @@ class EnvCfg:
     num_states: int | None = None
     """The dimension of the state-space from each environment instance."""
 
+    observation_noise_type: str = None
+    observation_noise_params: dict = None
+    """The noise model to apply to the computed observations from the environment. Default is None,
+    which means no noise is added.
+    """
+
     action_space: SpaceType = MISSING
     """Action space definition.
 
@@ -163,6 +168,12 @@ class EnvCfg:
 
     num_actions: int | None = None
     """The dimension of the action space for each environment."""
+
+    action_noise_type: str = None
+    action_noise_params: dict = None
+    """The noise model applied to the actions provided to the environment. Default is None,
+    which means no noise is added.
+    """
 
     rerender_on_reset: bool = False
     """Whether a render step is performed again after at least one environment has been reset.

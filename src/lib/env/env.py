@@ -33,6 +33,7 @@ from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
 from isaaclab.envs.ui import ViewportCameraController
 
+from lib.domain_randomizer.noise_model import gaussian_noise, uniform_noise, constant_noise
 from lib.utils.space_utils import sample_space, spec_to_gym_space
 from .env_cfg import EnvCfg
 
@@ -333,6 +334,16 @@ class Env(gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
         action = action.to(self.device)
+        # add action noise
+        if self.cfg.action_noise_type:
+            if self.cfg.action_noise_type == "gaussian":
+                action = gaussian_noise(action, **self.cfg.action_noise_params)
+            elif self.cfg.action_noise_type == "uniform":
+                action = uniform_noise(action, **self.cfg.action_noise_params)
+            elif self.cfg.action_noise_type == "constant":
+                action = constant_noise(action, **self.cfg.action_noise_params)
+            else:
+                raise RuntimeError(f"Unknown action noise type: {self.cfg.action_noise_type}")
 
         # process actions
         self._pre_physics_step(action)
@@ -381,10 +392,23 @@ class Env(gym.Env):
             if "interval" in self.event_manager.available_modes:
                 self.event_manager.apply(mode="interval", dt=self.step_dt)
 
+
         # update observations
         self.obs_buf = self._get_observations()
         self.state_buf = self._get_states()
 
+        # add observation noise
+        # note: we apply no noise to the state space (since it is used for critic networks)
+        if self.cfg.observation_noise_type:
+            if self.cfg.observation_noise_type == "gaussian":
+                self.obs_buf = gaussian_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            elif self.cfg.observation_noise_type == "uniform":
+                self.obs_buf = uniform_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            elif self.cfg.observation_noise_type == "constant":
+                self.obs_buf = constant_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            else:
+                raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
+            
         # return observations, rewards, resets and extras
         return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 
