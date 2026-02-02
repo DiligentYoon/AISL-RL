@@ -9,6 +9,7 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg, SubTerrainBaseCfg
+from lib.utils.terrain_utils import *
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 
 
@@ -93,28 +94,67 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
             restitution=0.0,
         ),
     )
-    
+
     # Terrain
+    flat = FlatTerrain()
+    pyramid = InvertedPyramidStairsTerrain(border_width=0.1,
+                                   step_height_range=(0.1, 0.3),
+                                   step_width=0.2,
+                                   platform_width=0.3,
+                                   holes=False)
+    random_grid = RandomGridTerrain(grid_width=0.3,
+                                    grid_height_range=(0.0, 0.3),
+                                    platform_width=1.0,
+                                    holes=True)
+    rails = RailsTerrain()
+
+    pit = PitTerrain(double_pit=True)
+
+    box = BoxTerrain(double_box=True)
+
+    gap = GapTerrain()
+
+    floating_ring = FloatingRingTerrain(ring_width_range=(0.1, 0.8),
+                                        ring_height_range=(0.0, 0.8),
+                                        ring_thickness=0.5,
+                                        platform_width=0.3)
+    star = StarTerrain()
+
+    repeated_object = RepeatedObjectsTerrain(object_type="box",
+                                             object_prop_start=(5, 0.5),
+                                             object_prop_end=(10, 1.0))
+
     terrain_generator_cfg = TerrainGeneratorCfg(
         curriculum = True,
-        size=[3, 3],
-        num_rows = 3,
-        num_cols = 3,
+        size=[10.0, 10.0],
+        num_rows = 1,
+        num_cols = 2,
         color_scheme="random",
-        # [지형 종류 배치 전략]
-        # Isaac Lab은 비율(proportion)이나 난이도 범위로 지형을 섞습니다.
-        # 여기서는 간단히 여러 지형을 섞는 예시입니다.
         sub_terrains = {
-            "flat": rough_terrains.MESH_PLANE_TERRAIN_CFG.replace(proportion=0.2),
-            "rough_weak": rough_terrains.HF_PYRAMID_SLOPE_TERRAIN_CFG.replace(
-                proportion=0.3, slope_range=(0.0, 0.1)
-            ),
-            "rough_hard": rough_terrains.HF_PYRAMID_SLOPE_TERRAIN_CFG.replace(
-                proportion=0.5, slope_range=(0.1, 0.4)
-            ),
-            "rough": SubTerrainBaseCfg(function=,
-                                       proportion=,
-                                       )
+            "flat_terrain": SubTerrainBaseCfg(function=flat.generate,
+                                              proportion=0.0),
+
+            "pyramid_stairs_terrain": SubTerrainBaseCfg(function=pyramid.generate,
+                                                        proportion=0.0),
+
+            # "inverted_pyramid_stairs_terrain"
+            "random_grid_terrain": SubTerrainBaseCfg(function=random_grid.generate,
+                                                     proportion=0.0),
+
+            "rails_terrain": SubTerrainBaseCfg(function=rails.generate,
+                                               proportion=0.0),
+            "pit_terrain": SubTerrainBaseCfg(function=pit.generate,
+                                             proportion=0.0),
+            "box_terrain": SubTerrainBaseCfg(function=box.generate,
+                                             proportion=0.0),
+            "gap_terrain": SubTerrainBaseCfg(function=gap.generate,
+                                             proportion=0.0),
+            "floating_ring_terrain": SubTerrainBaseCfg(function=floating_ring.generate,
+                                                       proportion=0.0),
+            "star_terrain": SubTerrainBaseCfg(function=star.generate,
+                                              proportion=0.5),
+            # "repeated_objects_terrain": SubTerrainBaseCfg(function=repeated_object.generate,
+            #                                               proportion=0.5)
         }
     
     )
@@ -122,8 +162,8 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
     terrain_importer_cfg = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
-        terrain_generator=terrain_generator_cfg(),
-        env_spacing=3.0,
+        terrain_generator=terrain_generator_cfg,
+        env_spacing=5.0,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             static_friction=default_terrain_static_friction,
             dynamic_friction=default_terrain_dynamic_friction,

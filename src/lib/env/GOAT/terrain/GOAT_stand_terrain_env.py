@@ -9,7 +9,7 @@ from isaaclab.terrains import TerrainImporter
 from isaaclab.sensors import ContactSensor
 from isaacsim.core.utils import bounds
 from isaacsim.core.utils import prims
-from src.lib.env.GOAT.stand_no_dr.GOAT_stand_terrain_env_cfg import GOATStandTerrainEnvCfg
+from lib.env.GOAT.terrain.GOAT_stand_terrain_env_cfg import GOATStandTerrainEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
