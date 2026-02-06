@@ -75,4 +75,4 @@ class AntGNNEnvCfg(EnvCfg):
     # Node Info for GNN
     node_info: dict = None
     num_nodes: int = 0
-    num_actuated_nodes: int = 8
+    num_actuated_nodes: int = action_space

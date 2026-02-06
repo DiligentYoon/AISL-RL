@@ -8,7 +8,8 @@ import gymnasium as gym
 from typing import Union
 
 from lib.model.model import Model
-from lib.utils.wrapper_utils import unflatten_tensorized_space
+from lib.utils.Running_mean_std import RunningMeanStd
+from lib.utils.wrapper_utils import unflatten_tensorized_space, flatten_tensorized_space
 
 def count_module_params(module: Model):
     return sum(p.numel() for p in module.parameters())
@@ -59,6 +60,10 @@ class NerveNetPolicy(Model):
         self.action_dim = action_dim
         self.num_prop_steps = num_prop_steps
         self.device = device
+
+        # Running mean, standard deviation standardizer
+        self.body_standardizer = RunningMeanStd(shape=observation_space['body'].shape, device=device)
+        self.joint_standardizer = RunningMeanStd(shape=observation_space['joint'].shape, device=device)
         
         # -----------------------------------------------------------
         # 1. Embedding Layers
@@ -144,6 +149,8 @@ class NerveNetPolicy(Model):
         # Step 1: Embedding & Alignment
         # 각 노드 데이터들을 순차적으로 모두 인코딩하여 GNN 신경망 입력 텐서 세팅 
         # -----------------------------------------------------------
+        observations['body'] = self.body_standardizer.standardize(observations['body'], update=update_rms)
+        observations['joint'] = self.joint_standardizer.standardize(observations['joint'], update=update_rms)
         batch_size = observations['body'].shape[0]
         all_hidden = torch.zeros(batch_size, self.num_nodes, self.hidden_dim, device=observations['body'].device)
         

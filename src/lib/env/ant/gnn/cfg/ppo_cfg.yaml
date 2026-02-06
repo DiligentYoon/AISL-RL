@@ -33,7 +33,7 @@ agent:
   clip_predicted_values: False
   # logging and checkpoint
   experiment:
-    directory: "ant"
+    directory: "ant_gnn"
     experiment_name: ""
     write_interval: auto
     checkpoint_interval: auto
