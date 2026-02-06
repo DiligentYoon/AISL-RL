@@ -1,25 +1,31 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Normal
+
+import gymnasium as gym
 
 from typing import Union
 
 from lib.model.model import Model
-from torch.distributions import Normal
+from lib.utils.wrapper_utils import unflatten_tensorized_space
 
 def count_module_params(module: Model):
     return sum(p.numel() for p in module.parameters())
 
 class NerveNetPolicy(Model):
-    def __init__(self, 
+    def __init__(self,
+                 observation_space: gym.Space,
+                 action_space: gym.Space,
                  node_info: dict[str, Union[dict, str]],
                  device: torch.device,
                  num_nodes: int = None,
+                 num_actuated_nodes: int = None,
                  num_prop_steps: int = 3, 
                  action_dim: int = 1,
                  min_log_std: float = -20,
                  max_log_std: float = -2,
-                 hidden_dim: int = 64):
+                 hidden_dim: int = 128):
         """
         Stochastic Policy based on NerveNet Architecture
         References: https://github.com/WilsonWangTHU/NerveNet/tree/master
@@ -31,9 +37,12 @@ class NerveNetPolicy(Model):
         :param action_dim: dimension of final action
         :type action_dim: int
         """
-        if num_nodes is None:
-            raise ValueError("Please provide 'num_nodes' when initializing NerveNetPolicy.")
+        if num_nodes is None or num_actuated_nodes is None:
+            raise ValueError("Please provide 'num_nodes' and 'num_actuated_nodes' when initializing NerveNetPolicy.")
         super().__init__()
+
+        self.observation_space = observation_space
+        self.action_space = action_space
 
         self.min_log_std = min_log_std
         self.max_log_std = max_log_std
@@ -45,6 +54,7 @@ class NerveNetPolicy(Model):
         self.output_node_types = node_info['output_node_types']
 
         self.num_nodes = num_nodes
+        self.num_actuated_nodes = num_actuated_nodes
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
         self.num_prop_steps = num_prop_steps
@@ -100,7 +110,7 @@ class NerveNetPolicy(Model):
             )
         
         # LogStd
-        self.log_std = nn.Parameter(torch.zeros(self.num_nodes, device=device))
+        self.log_std = nn.Parameter(torch.zeros(self.num_actuated_nodes, device=device))
 
 
         # Initialize parameters
@@ -108,35 +118,36 @@ class NerveNetPolicy(Model):
         self.init_biases(val=0)
 
         # Model Info Logging
-        print("\n[Detail Breakdown]")
-        print(f"1. Encoders      : {count_module_params(policy.encoders):,}")
-        print(f"2. Prop MLPs     : {count_module_params(policy.prop_mlps):,}")
-        print(f"3. GRU Cells     : {count_module_params(policy.gru_cells):,}")
-        print(f"4. Actor Heads   : {count_module_params(policy.actor_heads):,}")
-        print(f"5. Log Std       : {policy.log_std.numel():,}")
+        print("\n[Model Info]")
+        print(f"1. Encoders      : {count_module_params(self.encoders):,}")
+        print(f"2. Prop MLPs     : {count_module_params(self.prop_mlps):,}")
+        print(f"3. GRU Cells     : {count_module_params(self.gru_cells):,}")
+        print(f"4. Actor Heads   : {count_module_params(self.actor_heads):,}")
+        print(f"--> Total Params : {count_module_params(self):,}\n") 
 
 
     def forward(self, 
-                obs: dict[str, torch.Tensor],
+                observations: Union[dict[str, torch.Tensor], torch.Tensor],
                 taken_actions: Union[torch.Tensor, None],
-                deterministic: bool = False):
+                deterministic: bool = False,
+                update_rms: bool = False):
         """
         Feature Extraction by GNN Policy
 
-        :param obs: a dictionary containing the observation of ecah node
-            obs: {'body': [B, N_b, m], 'joint': [Batch, N_j, n]}
+        :param observations: {'body': [B, N_b, m], 'joint': [Batch, N_j, n]}
+        :type observations: dict[str, torch.Tensor]
         :param taken_actions: actions from buffer for log_prob calculation
-        :param edge_index_dict: 
         """
-        
+        if isinstance(observations, torch.Tensor):
+            observations = unflatten_tensorized_space(self.observation_space, observations)
         # -----------------------------------------------------------
         # Step 1: Embedding & Alignment
         # 각 노드 데이터들을 순차적으로 모두 인코딩하여 GNN 신경망 입력 텐서 세팅 
         # -----------------------------------------------------------
-        batch_size = obs['body'].shape[0]
-        all_hidden = torch.zeros(batch_size, self.num_nodes, self.hidden_dim, device=obs['body'].device)
+        batch_size = observations['body'].shape[0]
+        all_hidden = torch.zeros(batch_size, self.num_nodes, self.hidden_dim, device=observations['body'].device)
         
-        for node_type, node_obs in obs.items():
+        for node_type, node_obs in observations.items():
             indices = self.node_types_with_ids[node_type]
             encoded = self.encoders[node_type](node_obs)
             
@@ -205,6 +216,9 @@ class NerveNetPolicy(Model):
         actions_mean = actions_mean.squeeze(-1)
         actions_mask = actions_mask.squeeze(-1)
 
+        active_ids = actions_mask[0, :].bool()
+        actions_mean = actions_mean[:, active_ids]
+
         # -----------------------------------------------------------
         # Step 4: Stochastic Action Processing
         # -----------------------------------------------------------
@@ -226,15 +240,12 @@ class NerveNetPolicy(Model):
         else:
             log_prob = self.action_distribution.log_prob(actions)
 
-        # action masking
-        actions = actions * actions_mask
-
         # Log prob with action masking
-        log_prob = log_prob * actions_mask
+        log_prob = log_prob
         log_prob = log_prob.sum(dim=-1)
 
         # Entropy : mean of (Batch, Action) dimension with action masking
-        entropy = self.action_distribution.entropy() * actions_mask
+        entropy = self.action_distribution.entropy()
         entropy = entropy.sum() / (actions_mask.sum() + 1e-8)
 
         return actions, log_prob, entropy
@@ -315,7 +326,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # Random Input
     # ---------------------------------------------------------
-    obs = {
+    observations = {
         # Body: [Batch, 1, 12]
         'body': torch.randn(BATCH_SIZE, 1, 12, device=device),
         # Joint: [Batch, 4, 4]
@@ -325,7 +336,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # Forward propagation
     # ---------------------------------------------------------
-    actions, log_prob, entropy = policy(obs, taken_actions=None)
+    actions, log_prob, entropy = policy(observations, taken_actions=None)
 
     # ---------------------------------------------------------
     # Evaluation

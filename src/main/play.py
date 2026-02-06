@@ -14,7 +14,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="My-Ant-Test", help="Name of the task.")
+parser.add_argument("--task", type=str, default="Ant-GNN", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -125,14 +125,31 @@ def main():
     # ======================================== Model & Agent Spawn Test ========================================================
     # ==========================================================================================================================
     from lib.model.MLP import Actor, Critic
+    from lib.model.NerveNet import NerveNetPolicy
     from lib.agent.ppo import PPO
     
     # 1. Initialization
-    actor = Actor(num_observations=obs_size,
-                  num_actions=act_size,
-                  min_log_std=experiment_cfg["models"]["policy"]["min_log_std"],
-                  max_log_std=experiment_cfg["models"]["policy"]["max_log_std"],
-                  device=env.device)
+    # Model initialization
+    model_type = experiment_cfg["models"]["policy"].get("type", None)
+    if model_type is None:
+        actor = Actor(num_observations=obs_size,
+                    num_actions=act_size,
+                    min_log_std=experiment_cfg["models"]["policy"]["min_log_std"],
+                    max_log_std=experiment_cfg["models"]["policy"]["max_log_std"],
+                    device=env.device)
+    else:
+        model_type_lower = model_type.lower()
+        if model_type_lower == "gnn":
+            actor = NerveNetPolicy(
+                observation_space=observation_space,
+                action_space=action_space,
+                node_info=env._unwrapped.cfg.node_info,
+                device=env.device,
+                num_nodes=env._unwrapped.cfg.num_nodes,
+                num_actuated_nodes=env._unwrapped.cfg.num_actuated_nodes,
+            )
+        else:
+            raise ValueError(f"Unknown model type specified in cfg: {model_type}")
 
     critic = Critic(num_states=state_size,
                     device=env.device)

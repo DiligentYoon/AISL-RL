@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 
 from lib.env.env import Env
-from lib.env.ant.ant_env_cfg import AntEnvCfg
+from lib.env.ant.basic.ant_env_cfg import AntEnvCfg
 
 def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
