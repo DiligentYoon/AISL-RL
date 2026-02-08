@@ -9,16 +9,16 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 
 from lib.env.env import Env
-from lib.env.humanoid.humanoid_env_cfg import HumanoidEnvCfg
+from lib.env.ant.basic.ant_env_cfg import AntEnvCfg
 
 def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
 
 
-class HumanoidEnv(Env):
-    cfg: HumanoidEnvCfg
+class AntEnv(Env):
+    cfg: AntEnvCfg
 
-    def __init__(self, cfg: HumanoidEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: AntEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_scale = self.cfg.action_scale

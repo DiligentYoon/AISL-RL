@@ -13,8 +13,8 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="Humanoid-GNN", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -56,6 +56,7 @@ from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.MLP import Actor, Critic
+from lib.model.NerveNet import NerveNetPolicy
 from lib.agent.ppo import PPO
 
 # config shortcuts
@@ -132,11 +133,26 @@ def main():
     # =================== Model & Agent Spawn Test ==========================
     
     # Model initialization
-    actor = Actor(num_observations=obs_size,
-                  num_actions=act_size,
-                  min_log_std=cfg["models"]["policy"]["min_log_std"],
-                  max_log_std=cfg["models"]["policy"]["max_log_std"],
-                  device=env.device)
+    model_type = cfg["models"]["policy"].get("type", None)
+    if model_type is None:
+        actor = Actor(num_observations=obs_size,
+                    num_actions=act_size,
+                    min_log_std=cfg["models"]["policy"]["min_log_std"],
+                    max_log_std=cfg["models"]["policy"]["max_log_std"],
+                    device=env.device)
+    else:
+        model_type_lower = model_type.lower()
+        if model_type_lower == "gnn":
+            actor = NerveNetPolicy(
+                observation_space=observation_space,
+                action_space=action_space,
+                node_info=env._unwrapped.cfg.node_info,
+                device=env.device,
+                num_nodes=env._unwrapped.cfg.num_nodes,
+                num_actuated_nodes=env._unwrapped.cfg.num_actuated_nodes,
+            )
+        else:
+            raise ValueError(f"Unknown model type specified in cfg: {model_type}")
 
     critic = Critic(num_states=state_size,
                     device=env.device)
@@ -281,12 +297,12 @@ def main():
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.2f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.2f}"
 
-            elapsed_time += (t2_rollout - t1_rollout)
+            elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
             total_rollout = int(cfg["train"]["timesteps"] // buffer.buffer_size)
-            complete_time = (t2_rollout - t1_rollout) * (total_rollout - rollout)
+            complete_time = (t2_rollout + t2_update - t1_rollout - t1_update) * (total_rollout - rollout)
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)
             c_s = int(complete_time % 60)
