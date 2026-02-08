@@ -7,10 +7,11 @@ from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
-from isaaclab.utils.math import subtract_frame_transforms
+from isaaclab.markers import VisualizationMarkers
+from isaaclab.utils.math import subtract_frame_transforms, quat_apply, quat_apply_inverse
 
 from lib.env.env import Env
-from lib.env.ant.gnn.ant_gnn_env_cfg import AntGNNEnvCfg
+from lib.env.humanoid.gnn.humanoid_gnn_env_cfg import HumanoidGNNEnvCfg
 
 from lib.utils.graph_utils import build_node_info
 
@@ -18,10 +19,10 @@ def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
 
 
-class AntGNNEnv(Env):
-    cfg: AntGNNEnvCfg
+class HumanoidGNNEnv(Env):
+    cfg: HumanoidGNNEnvCfg
 
-    def __init__(self, cfg: AntGNNEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: HumanoidGNNEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.action_scale = self.cfg.action_scale
@@ -29,7 +30,8 @@ class AntGNNEnv(Env):
         self.motor_effort_ratio = torch.ones_like(self.joint_gears, device=self.sim.device)
         self._joint_dof_idx, _ = self.robot.find_joints(".*")
         self.num_joints = self.robot.num_joints
-        self.num_body_links = self.robot.num_bodies - 1
+        self.num_body_links = self.robot.num_bodies - 2
+        self.body_joint_mapping = self.create_dof_to_body_mapping()
 
         self.potentials = torch.zeros(self.num_envs, dtype=torch.float32, device=self.sim.device)
         self.prev_potentials = torch.zeros_like(self.potentials)
@@ -46,6 +48,32 @@ class AntGNNEnv(Env):
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()
 
+        debug_vis = self.num_envs <= 32
+        self.set_debug_vis(debug_vis)
+
+    def _set_debug_vis_impl(self, debug_vis: bool):
+
+        if debug_vis:
+            if not hasattr(self, "node_visualizer"):
+                self.node_visualizer = VisualizationMarkers(self.cfg.node_marker_cfg)
+            self.node_visualizer.set_visibility(True)
+
+        else:
+            if hasattr(self, "node_visualizer"):
+                self.node_visualizer.set_visibility(False)
+    
+    def _debug_vis_callback(self, event):
+        # update the visualization info
+        root_pos = self.torso_position.unsqueeze(1)
+        root_rot = self.torso_rotation.unsqueeze(1)
+        link_pos_b = torch.cat(subtract_frame_transforms(
+            root_pos.expand(-1, self.num_body_links, -1), root_rot.expand(-1, self.num_body_links, -1),
+            self.robot.data.body_link_pos_w[:, 2:], self.robot.data.body_link_quat_w[:, 2:]), dim=-1)
+        
+        link_pos = root_pos.expand(-1, self.num_body_links, -1) + quat_apply(root_rot.expand(-1, self.num_body_links, -1), link_pos_b[:, :, :3])
+
+        self.node_visualizer.visualize(translations=link_pos[:, self.body_joint_mapping, :].view(-1, 3))
+
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
         # add ground plane
@@ -54,16 +82,13 @@ class AntGNNEnv(Env):
         self.terrain = self.cfg.terrain.class_type(self.cfg.terrain)
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
-        # we need to explicitly filter collisions for CPU simulation
-        if self.device == "cpu":
-            self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
         # add articulation to scene
         self.scene.articulations["robot"] = self.robot
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
         # Node Info for GNN
-        self.cfg.node_info, self.cfg.num_nodes = build_node_info(robot_name="Ant", device=self.device)
+        self.cfg.node_info, self.cfg.num_nodes = build_node_info(robot_name="Humanoid", device=self.device)
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
@@ -77,11 +102,28 @@ class AntGNNEnv(Env):
         self.velocity, self.ang_velocity = self.robot.data.root_lin_vel_w, self.robot.data.root_ang_vel_w
         self.dof_pos, self.dof_vel = self.robot.data.joint_pos, self.robot.data.joint_vel
 
-        root_pos = self.torso_position.unsqueeze(1)
-        root_rot = self.torso_rotation.unsqueeze(1)
-        self.link_pos_b = torch.cat(subtract_frame_transforms(
-            root_pos.expand(-1, self.num_body_links, -1), root_rot.expand(-1, self.num_body_links, -1),
-            self.robot.data.body_link_pos_w[:, 1:], self.robot.data.body_link_quat_w[:, 1:]), dim=-1)
+        root_pos     = self.torso_position.unsqueeze(1).expand(-1, self.num_body_links, -1)
+        root_rot     = self.torso_rotation.unsqueeze(1).expand(-1, self.num_body_links, -1)
+        root_lin_vel = self.velocity.unsqueeze(1).expand(-1, self.num_body_links, -1)
+        root_ang_vel = self.ang_velocity.unsqueeze(1).expand(-1, self.num_body_links, -1)
+
+        link_pos = self.robot.data.body_link_pos_w[:, 2:]
+        link_rot = self.robot.data.body_link_quat_w[:, 2:]
+        link_lin_vel_w = self.robot.data.body_link_lin_vel_w[:, 2:]
+        link_ang_vel_w = self.robot.data.body_link_ang_vel_w[:, 2:]
+
+        link_pos_b = torch.cat(subtract_frame_transforms(root_pos, root_rot, 
+                                                         link_pos, link_rot), dim=-1)
+
+        rel_lin_vel_w = link_lin_vel_w - root_lin_vel
+        rel_lin_vel_b = quat_apply_inverse(root_rot, rel_lin_vel_w)
+
+        rel_ang_vel_w = link_ang_vel_w - root_ang_vel
+        rel_ang_vel_b = quat_apply_inverse(root_rot, rel_ang_vel_w)
+        
+        self.link_pos_b = link_pos_b[:, self.body_joint_mapping, :]
+        self.link_lin_vel_b = rel_lin_vel_b[:, self.body_joint_mapping, :]
+        self.link_ang_vel_b = rel_ang_vel_b[:, self.body_joint_mapping, :]
 
         (
             self.up_proj,
@@ -117,14 +159,14 @@ class AntGNNEnv(Env):
     def _get_observations(self) -> torch.Tensor:
         obs_body = torch.cat(
             (
-                self.torso_position[:, 2].view(-1, 1),               # (N, 1)
-                self.vel_loc,                                        # (N, 3)
-                self.angvel_loc * self.cfg.angular_velocity_scale,   # (N, 3)
+                self.torso_position[:, 2].view(-1, 1),                # (N, 1)
+                self.vel_loc,                                         # (N, 3)
+                self.angvel_loc * self.cfg.angular_velocity_scale,    # (N, 3)
                 normalize_angle(self.yaw).unsqueeze(-1),
                 normalize_angle(self.roll).unsqueeze(-1),
-                normalize_angle(self.angle_to_target).unsqueeze(-1), # (N, 3)
-                self.up_proj.unsqueeze(-1),                          # (N, 1)
-                self.heading_proj.unsqueeze(-1)                      # (N, 1)
+                normalize_angle(self.angle_to_target).unsqueeze(-1),  # (N, 3)
+                self.up_proj.unsqueeze(-1),                           # (N, 1)
+                self.heading_proj.unsqueeze(-1)                       # (N, 1)
             ),
             dim=-1
         ).view(self.num_envs, 1, -1) # (N, 1, 12)
@@ -134,36 +176,39 @@ class AntGNNEnv(Env):
                 self.dof_pos_scaled.unsqueeze(-1),                    # (N, J, 1)
                 self.dof_vel.unsqueeze(-1) * self.cfg.dof_vel_scale,  # (N, J, 1)
                 self.actions.unsqueeze(-1),                           # (N, J, 1)
-                self.link_pos_b[:, :, :3]                             # (N, J, 3)
+                self.link_pos_b[:, :, :3],                            # (N, J, 3)
+                self.link_lin_vel_b,                                  # (N, J, 3)
+                self.link_ang_vel_b,                                  # (N, J, 3)
             ),
             dim=-1
-        ).view(self.num_envs, self.num_joints, -1) # (N, J, 6)
+        ).view(self.num_envs, self.num_joints, -1) # (N, J, 12)
 
         obs = {
             "body": obs_body,
             "joint": obs_joint,
         }
+
         return obs
     
-    def _get_states(self) -> torch.Tensor:
-        state = torch.cat(
-            (
-                self.torso_position[:, 2].view(-1, 1),
-                self.vel_loc,
-                self.angvel_loc * self.cfg.angular_velocity_scale,
-                normalize_angle(self.yaw).unsqueeze(-1),
-                normalize_angle(self.roll).unsqueeze(-1),
-                normalize_angle(self.angle_to_target).unsqueeze(-1),
-                self.up_proj.unsqueeze(-1),
-                self.heading_proj.unsqueeze(-1),
-                self.dof_pos_scaled,
-                self.dof_vel * self.cfg.dof_vel_scale,
-                self.actions,
-            ),
-            dim=-1,
-        )
+    # def _get_states(self) -> torch.Tensor:
+    #     state = torch.cat(
+    #         (
+    #             self.torso_position[:, 2].view(-1, 1),
+    #             self.vel_loc,
+    #             self.angvel_loc * self.cfg.angular_velocity_scale,
+    #             normalize_angle(self.yaw).unsqueeze(-1),
+    #             normalize_angle(self.roll).unsqueeze(-1),
+    #             normalize_angle(self.angle_to_target).unsqueeze(-1),
+    #             self.up_proj.unsqueeze(-1),
+    #             self.heading_proj.unsqueeze(-1),
+    #             self.dof_pos_scaled,
+    #             self.dof_vel * self.cfg.dof_vel_scale,
+    #             self.actions,
+    #         ),
+    #         dim=-1,
+    #     )
 
-        return state
+    #     return state
 
     def _get_rewards(self) -> torch.Tensor:
         total_reward = compute_rewards(
@@ -213,6 +258,32 @@ class AntGNNEnv(Env):
 
         self._compute_intermediate_values()
 
+    def create_dof_to_body_mapping(self):
+        """
+        """
+        # Body_names: ['torso', 'head', 'lower_waist', ...]
+        target_bodies = self.robot.body_names[2:]
+        target_joints = self.robot.joint_names
+
+        mapping_indices = []
+        
+        for dof in target_joints:
+            best_match_idx = -1
+            max_overlap = 0
+            
+            for i, body in enumerate(target_bodies):
+                if body in dof:
+                    if len(body) > max_overlap:
+                        max_overlap = len(body)
+                        best_match_idx = i
+        
+            if best_match_idx == -1:
+                print(f"[Warning] Cannot find body match for DoF: {dof}. Using logic based on specific rules.")
+                pass
+
+            mapping_indices.append(best_match_idx)
+
+        return mapping_indices
 
 @torch.jit.script
 def compute_rewards(

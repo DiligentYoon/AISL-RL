@@ -9,7 +9,7 @@ from typing import Union
 
 from lib.model.model import Model
 from lib.utils.Running_mean_std import RunningMeanStd
-from lib.utils.wrapper_utils import unflatten_tensorized_space, flatten_tensorized_space
+from lib.utils.wrapper_utils import unflatten_tensorized_space
 
 def count_module_params(module: Model):
     return sum(p.numel() for p in module.parameters())
@@ -26,7 +26,7 @@ class NerveNetPolicy(Model):
                  action_dim: int = 1,
                  min_log_std: float = -20,
                  max_log_std: float = -2,
-                 hidden_dim: int = 128):
+                 hidden_dim: int = 64):
         """
         Stochastic Policy based on NerveNet Architecture
         References: https://github.com/WilsonWangTHU/NerveNet/tree/master
@@ -82,9 +82,9 @@ class NerveNetPolicy(Model):
         # 엣지 타입 별로 별도의 Propagation Layer
         # Type of Edge : {downstream, upstream}
         # -----------------------------------------------------------
-        self.prop_mlps = nn.ModuleDict()
+        self.prop_layers = nn.ModuleDict()
         for edge_type in self.edge_types.keys():
-            self.prop_mlps[edge_type] = nn.Sequential(
+            self.prop_layers[edge_type] = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, hidden_dim),
@@ -96,9 +96,13 @@ class NerveNetPolicy(Model):
         # 메시지를 받은 후 내 상태를 갱신하는 최종 Feature Extract Layer
         # Type of Node : {body, joint}
         # -----------------------------------------------------------
-        self.gru_cells = nn.ModuleDict()
+        self.update_layers = nn.ModuleDict()
+        # for node_type in self.node_types_with_dim.keys():
+        #     self.update_layers[node_type] = nn.GRUCell(hidden_dim, hidden_dim)
         for node_type in self.node_types_with_dim.keys():
-            self.gru_cells[node_type] = nn.GRUCell(hidden_dim, hidden_dim)
+            self.update_layers[node_type] = nn.Sequential(
+                nn.Linear(hidden_dim*2, hidden_dim),
+                nn.ReLU(),)
 
         # -----------------------------------------------------------
         # 4. Readout/Action Layers
@@ -108,9 +112,9 @@ class NerveNetPolicy(Model):
         self.actor_heads = nn.ModuleDict()
         for out_type in self.output_node_types.keys(): 
             self.actor_heads[out_type] = nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim),
+                nn.Linear(hidden_dim, int(hidden_dim*0.5)),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, action_dim),
+                nn.Linear(int(hidden_dim*0.5), action_dim),
                 nn.Tanh()
             )
         
@@ -125,8 +129,8 @@ class NerveNetPolicy(Model):
         # Model Info Logging
         print("\n[Model Info]")
         print(f"1. Encoders      : {count_module_params(self.encoders):,}")
-        print(f"2. Prop MLPs     : {count_module_params(self.prop_mlps):,}")
-        print(f"3. GRU Cells     : {count_module_params(self.gru_cells):,}")
+        print(f"2. Prop Layers   : {count_module_params(self.prop_layers):,}")
+        print(f"3. Upate Layers  : {count_module_params(self.update_layers):,}")
         print(f"4. Actor Heads   : {count_module_params(self.actor_heads):,}")
         print(f"--> Total Params : {count_module_params(self):,}\n") 
 
@@ -143,6 +147,7 @@ class NerveNetPolicy(Model):
         :type observations: dict[str, torch.Tensor]
         :param taken_actions: actions from buffer for log_prob calculation
         """
+        # From Tensor to Dict switching
         if isinstance(observations, torch.Tensor):
             observations = unflatten_tensorized_space(self.observation_space, observations)
         # -----------------------------------------------------------
@@ -175,12 +180,12 @@ class NerveNetPolicy(Model):
                 source_hidden = all_hidden[:, source_idx, :]
                 
                 # Transform: MLP 통과
-                message = self.prop_mlps[edge_type](source_hidden)
+                message = self.prop_layers[edge_type](source_hidden)
                 
                 # Aggregate: 받는 놈 인덱스 위치에 메시지 더하기
                 aggregated_messages.index_add_(1, target_idx, message)
             
-            # Update: GRU를 통해 상태 갱신
+            # Update: 상태 갱신
             next_hidden = torch.zeros_like(all_hidden) # [B, N, H]
             for node_type, indices in self.node_types_with_ids.items():
                 # 해당 타입 노드들의 message와 hidden만 골라냄
@@ -191,8 +196,8 @@ class NerveNetPolicy(Model):
                 flat_type_msg = type_msg.view(-1, self.hidden_dim)
                 flat_type_h = type_h.view(-1, self.hidden_dim)
                 
-                # 해당 타입 전용 GRU로 업데이트
-                updated_h = self.gru_cells[node_type](flat_type_msg, flat_type_h)
+                # 업데이트
+                updated_h = self.update_layers[node_type](torch.cat((flat_type_msg, flat_type_h), dim=-1))
                 
                 # 결과 저장 [B*N,H] -> [B,N,H]
                 next_hidden[:, indices] = updated_h.view(type_msg.shape)
@@ -248,126 +253,9 @@ class NerveNetPolicy(Model):
             log_prob = self.action_distribution.log_prob(actions)
 
         # Log prob with action masking
-        log_prob = log_prob
         log_prob = log_prob.sum(dim=-1)
 
         # Entropy : mean of (Batch, Action) dimension with action masking
-        entropy = self.action_distribution.entropy()
-        entropy = entropy.sum() / (actions_mask.sum() + 1e-8)
+        entropy = self.action_distribution.entropy().mean()
 
         return actions, log_prob, entropy
-
-
-if __name__ == "__main__":
-    # Virutal Robot: Body(0) -> UpperLeg(1, 3) -> LowerLeg(2, 4)
-    device = torch.device("cpu") 
-    BATCH_SIZE = 4
-    NUM_NODES = 5
-    HIDDEN_DIM = 16
-    
-    # Node Info Virtual Structure
-    node_info = {
-        # Input dimensions per type
-        'node_types_dim': {
-            'body': 12,  # Body features : 12 dims
-            'joint': 4   # Joint features : 4 dims
-        },
-        # Node Ids per type
-        'node_types_ids': {
-            'body': [0],
-            'joint': [1, 2, 3, 4]
-        },
-        # Edge
-        'edge_types': {
-            'downstream': torch.tensor([
-                [0, 1, 0, 3], # Source
-                [1, 2, 3, 4]  # Target
-            ], dtype=torch.long, device=device),
-            
-            'upstream': torch.tensor([
-                [1, 2, 3, 4], # Source (reversed)
-                [0, 1, 0, 3]  # Target
-            ], dtype=torch.long, device=device)
-        },
-        # Output groping
-        'output_node_types': {
-            'upper_leg': [1, 3], 
-            'lower_leg': [2, 4],
-        }
-    }
-
-    print(f"Testing NerveNetPolicy on {device}...")
-
-    # ---------------------------------------------------------
-    # Model Instantiation
-    # ---------------------------------------------------------
-    policy = NerveNetPolicy(
-        node_info=node_info,
-        device=device,
-        num_nodes=NUM_NODES,
-        hidden_dim=HIDDEN_DIM,
-        action_dim=1
-    ).to(device)
-
-
-    print("\n" + "="*40)
-    print("Model initialized successfully.")
-    print(f"Model Architecture: {policy.__class__.__name__}")
-
-    total_params = 0
-    trainable_params = 0
-    
-    # 각 파라미터 그룹별로 이름과 크기를 출력
-    # (너무 길어질 수 있으니 모듈 단위로 요약해서 보여줍니다)
-    for name, param in policy.named_parameters():
-        num_params = param.numel()
-        total_params += num_params
-        if param.requires_grad:
-            trainable_params += num_params
-
-    print(f"Total Parameters     : {total_params:>10,}")
-    print(f"Trainable Parameters : {trainable_params:>10,}")
-    print(f"Non-Trainable params : {total_params - trainable_params:>10,}")
-    print("=" * 40)
-
-    # ---------------------------------------------------------
-    # Random Input
-    # ---------------------------------------------------------
-    observations = {
-        # Body: [Batch, 1, 12]
-        'body': torch.randn(BATCH_SIZE, 1, 12, device=device),
-        # Joint: [Batch, 4, 4]
-        'joint': torch.randn(BATCH_SIZE, 4, 4, device=device)
-    }
-
-    # ---------------------------------------------------------
-    # Forward propagation
-    # ---------------------------------------------------------
-    actions, log_prob, entropy = policy(observations, taken_actions=None)
-
-    # ---------------------------------------------------------
-    # Evaluation
-    # ---------------------------------------------------------
-    print("\n[Output Shapes]")
-    print(f"Actions  : {actions.shape} \t(Expected: [{BATCH_SIZE}, {NUM_NODES}])")
-    print(f"Log Prob : {log_prob.shape} \t(Expected: [{BATCH_SIZE}])")
-    print(f"Entropy  : {entropy.shape} \t(Expected: []) - Scalar")
-
-    print("\n[Logic Checks]")
-    
-    body_action_sum = actions[:, 0].abs().sum().item()
-    if body_action_sum == 0.0:
-        print("✅ Body Action Masking: PASSED (All zero)")
-    else:
-        print(f"❌ Body Action Masking: FAILED (Sum: {body_action_sum})")
-
-    joint_action_sum = actions[:, 1:].abs().sum().item()
-    if joint_action_sum > 0.0:
-        print("✅ Joint Action Generation: PASSED (Non-zero values)")
-    else:
-        print("❌ Joint Action Generation: FAILED (All zero)")
-        
-    if not torch.isnan(log_prob).any() and not torch.isnan(entropy):
-        print("✅ Numerical Stability: PASSED")
-    else:
-        print("❌ Numerical Stability: FAILED (NaN detected)")

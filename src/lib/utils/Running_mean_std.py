@@ -35,9 +35,15 @@ class RunningMeanStd(nn.Module):
         else:
             x = x.to(self.device)
 
-        batch_mean = torch.mean(x, dim=0)
-        batch_var = torch.var(x, dim=0, unbiased=False)
-        batch_count = torch.tensor(x.shape[0], dtype=torch.float32, device=self.device)
+        if len(x.shape) > 2:
+            # dims > 1 : batch + component-wise mean
+            batch_mean = torch.mean(x, dim=(0, 1))
+            batch_var = torch.var(x, dim=(0, 1), unbiased=False)
+            batch_count = torch.tensor(x.shape[0] * x.shape[1], dtype=torch.float32, device=self.device)
+        else:
+            batch_mean = torch.mean(x, dim=0)
+            batch_var = torch.var(x, dim=0, unbiased=False)
+            batch_count = torch.tensor(x.shape[0], dtype=torch.float32, device=self.device)
 
         if update:
             self._update_distrubution(batch_mean, batch_var, batch_count)

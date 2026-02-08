@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 
 from lib.env.env import Env
-from lib.env.humanoid.humanoid_env_cfg import HumanoidEnvCfg
+from lib.env.humanoid.basic.humanoid_env_cfg import HumanoidEnvCfg
 
 def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))

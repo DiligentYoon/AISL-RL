@@ -14,7 +14,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Ant-GNN", help="Name of the task.")
+parser.add_argument("--task", type=str, default="Humanoid-GNN", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -297,12 +297,12 @@ def main():
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.2f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.2f}"
 
-            elapsed_time += (t2_rollout - t1_rollout)
+            elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
             total_rollout = int(cfg["train"]["timesteps"] // buffer.buffer_size)
-            complete_time = (t2_rollout - t1_rollout) * (total_rollout - rollout)
+            complete_time = (t2_rollout + t2_update - t1_rollout - t1_update) * (total_rollout - rollout)
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)
             c_s = int(complete_time % 60)
