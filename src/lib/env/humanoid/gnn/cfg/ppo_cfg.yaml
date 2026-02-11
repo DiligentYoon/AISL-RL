@@ -1,8 +1,11 @@
 seed: 42
 
 models:
+  shared: True
+  use_mlp: False
+  
   policy:
-    type: "GNN"
+    type: "BodyTransformer"
     clip_actions: False
     clip_log_std: True
     min_log_std: -20.0

@@ -18,7 +18,8 @@ class PPO(Agent):
                  model: Dict[str, nn.Module],
                  buffer: RolloutBuffer,
                  device: Union[str, torch.device],
-                 cfg: Dict) -> None:
+                 cfg: Dict,
+                 shared: bool = False) -> None:
         """Proximal Policy Optimization (PPO)
 
         https://arxiv.org/abs/1707.06347
@@ -28,10 +29,12 @@ class PPO(Agent):
             buffer: Memory to storage the transitions.
             device: Device on which a tensor/array is or will be allocated (cuda, cpu).
             cfg: Configuration dictionary
+            shared: Whether the actor and critic share the specific model components.
         """
         super().__init__(cfg, model, device)
 
         # Models
+        self.shared = shared
         self.actor = self.model.get("actor", None).to(self.device)
         self.critic = self.model.get("critic", None).to(self.device)
         self.value_standardizer = RunningMeanStd(shape=1, device=device)
@@ -70,12 +73,17 @@ class PPO(Agent):
 
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
-            self.optimizer = torch.optim.Adam(
-                    itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
-            self.checkpoint_modules["optimizer"] = self.optimizer
+            if self.shared:
+                self.optimizer = torch.optim.Adam(
+                    list(set(self.actor.parameters()).union(set(self.critic.parameters()))), lr=self.learning_rate)
+                
+            else:
+                self.optimizer = torch.optim.Adam(
+                        itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
+                self.checkpoint_modules["optimizer"] = self.optimizer
 
         self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
-                              "value_preds", "rewards", "truncated", "terminated"
+                              "value_preds", "rewards", "truncated", "terminated",
                               "returns", "advantages"]
         
         self.tensors_name_for_update = ["observations", "actions", "action_log_probs",
@@ -90,7 +98,7 @@ class PPO(Agent):
                                   "states", "next_states",
                                   "actions", "action_log_probs", 
                                   "value_preds", "rewards", 
-                                  "truncated", "terminated"
+                                  "truncated", "terminated",
                                   "returns", "advantages"]
             
             self.tensors_name_for_update = ["observations", "states",
@@ -100,7 +108,7 @@ class PPO(Agent):
             self.tensors_names = ["observations", "next_observations",
                                   "actions", "action_log_probs", 
                                   "value_preds", "rewards", 
-                                  "truncated", "terminated"
+                                  "truncated", "terminated",
                                   "returns", "advantages"]
 
             self.tensors_name_for_update = ["observations", 
@@ -291,7 +299,11 @@ class PPO(Agent):
                 (policy_loss + entropy_loss + value_loss).backward()
 
                 if self.grad_norm_clip > 0:
-                    nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(), self.critic.parameters()), self.grad_norm_clip)
+                    if self.shared:
+                        nn.utils.clip_grad_norm_(list(set(self.actor.parameters()).union(set(self.critic.parameters()))), self.grad_norm_clip)
+
+                    else:
+                        nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(), self.critic.parameters()), self.grad_norm_clip)
                 
                 self.optimizer.step()
 

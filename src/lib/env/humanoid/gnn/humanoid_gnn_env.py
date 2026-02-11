@@ -88,7 +88,7 @@ class HumanoidGNNEnv(Env):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
         # Node Info for GNN
-        self.cfg.node_info, self.cfg.num_nodes = build_node_info(robot_name="Humanoid", device=self.device)
+        self.cfg.node_info, self.cfg.num_nodes, self.cfg.map_info = build_node_info(robot_name="Humanoid", device=self.device)
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone()
