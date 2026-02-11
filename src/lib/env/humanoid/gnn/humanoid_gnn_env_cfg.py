@@ -96,6 +96,7 @@ class HumanoidGNNEnvCfg(EnvCfg):
 
     # Node Info for GNN
     node_info: dict = None
+    map_info: dict = None
     num_nodes: int = 0
     num_actuated_nodes: int = action_space
 

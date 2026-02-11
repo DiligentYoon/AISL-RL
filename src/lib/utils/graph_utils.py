@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import scipy.sparse.csgraph as csgraph
 
 # =========== DOF Names Dictionary for Diffrent Node Building ===========
 
@@ -47,9 +49,11 @@ def build_node_info(robot_name: str, device: torch.device):
     robot_name_low = robot_name.lower()
 
     if robot_name_low == "ant":
+        dof_names = DOF_NAMES_ANT
         node_info, num_nodes = build_ant_node_info(device)
         
     elif robot_name_low == "humanoid":
+        dof_names = DOF_NAMES_HUMANOID
         node_info, num_nodes = build_humanoid_node_info(device)
 
     elif robot_name_low == "g1":
@@ -59,8 +63,43 @@ def build_node_info(robot_name: str, device: torch.device):
     else:
         raise ValueError(f"Unknown robot configuration! Proposed Robot Name: {robot_name}")
 
-    print(f"Node Info for {robot_name} built successfully.")
-    return node_info, num_nodes
+    # ========== Shortest Path Matrix ==========
+    # Parent -> Child Edges
+    edges = node_info['edge_types']['downstream'].cpu().numpy()
+
+    adj_matrix = np.zeros((num_nodes, num_nodes))
+    adj_matrix[edges[0], edges[1]] = 1
+    adj_matrix[edges[1], edges[0]] = 1
+
+    # Shortest path graph for maksed message passing (Multi DoFs is considered as a node with d=1)
+    sp_matrix = csgraph.shortest_path(adj_matrix, directed=False, unweighted=True)
+
+    # ========== Mapiing Dictionary ===========
+    map_dict = {}
+
+    body_dim = node_info['node_types_dim']['body']
+    joint_dim = node_info['node_types_dim']['joint']
+
+    # Body (Root) Node
+    map_dict['body'] = ([1, body_dim], [])
+
+    # Joint Nodes
+    current_obs_idx = 0
+    current_act_idx = 0
+
+    for i, dof_name in enumerate(dof_names):
+        node_key = dof_name
+        map_dict[node_key] = ([current_obs_idx, joint_dim], [current_act_idx])
+
+        current_obs_idx += 1
+        current_act_idx += 1
+    
+    mapping_config = {
+        'map': map_dict,
+        'sp_matrix': sp_matrix
+    }
+
+    return node_info, num_nodes, mapping_config
 
 
 def build_ant_node_info(device: torch.device) -> tuple[dict, int]:
@@ -290,7 +329,39 @@ def build_humanoid_node_info(device: torch.device) -> tuple[dict, int]:
     return node_info, num_joints + 1
 
 
-if __name__ == "__main__":
-    device = torch.device("cpu")
-    node_info = build_node_info(robot_name="Ant", device=device)
-    print("Node Info:", node_info)
+
+class Mapping:
+    def __init__(self, mapping):
+        self.map = mapping['map']
+        self.shortest_path_matrix = mapping['sp_matrix']
+    
+    def get_adjacency_matrix(self):
+        return self.shortest_path_matrix < 2
+    
+    def create_observation(self, observations:dict[str, torch.Tensor]):
+        """
+        Convert 2 dims tensor to dict of 1 dim tensors based on the mapping [B,N,D] -> [B,D]_1, [B,D]_2, ...
+        
+        :param observations: Dictionary of observations. Keys = {'body', 'joint'}
+
+        :return: Dictionary of observations split by all nodes.
+        :rtype: Dictionary. Keys = {DOF_names_1, DOF_names_2}
+        """
+        obs = observations
+        new_obs = {}
+        for k, v in self.map.items():
+            # Body : Root Node
+            if k == 'body':
+                new_obs['body'] = obs['body'] # [Batch, Nboides, Dim_per_body]
+                continue
+
+            # Joint : DOF names as keys 
+            input_dims, _ = v  # input indices are indexs of 2 dims tensor
+            new_obs[k] = obs['joint'][:, input_dims[0]].unsqueeze(1) # [B, Njoints, Dim_per_joint]
+        return new_obs
+
+    def create_action(self, action: torch.Tensor):
+        new_action = {}
+        for k, v in self.map.items():
+            new_action[k] = action[:,v[1]]
+        return new_action
