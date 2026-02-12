@@ -63,7 +63,7 @@ class IsaacLabWrapper(Wrapper):
         self._observations = flatten_tensorized_space(tensorize_space(self.observation_space, observations))
         if states is not None:
             self._states = flatten_tensorized_space(tensorize_space(self.state_space, states))
-        return self._observations, self._states, reward.view(-1, 1), terminated.view(-1, 1), truncated.view(-1, 1), self._info
+        return self._observations, self._states, reward.reshape(-1, 1), terminated.reshape(-1, 1), truncated.reshape(-1, 1), self._info
 
     def reset(self) -> Tuple[torch.Tensor, Any]:
         """Reset the environment
