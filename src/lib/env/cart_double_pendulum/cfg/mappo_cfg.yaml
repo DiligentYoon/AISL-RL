@@ -1,7 +1,9 @@
 seed: 42
 
 models:
-  policy:  
+  cooperative: True
+
+  policy:
     clip_actions: False
     clip_log_std: True
     min_log_std: -20.0
@@ -13,6 +15,9 @@ buffer:
   buffer_size: -1
 
 agent:
+  proactive:
+  reactive:
+  
   class: PPO
   rollouts: 16
   learning_epochs: 8

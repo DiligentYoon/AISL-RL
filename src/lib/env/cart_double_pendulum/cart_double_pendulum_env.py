@@ -16,8 +16,6 @@ from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
 
-from isaaclab_assets.robots.cart_double_pendulum import CART_DOUBLE_PENDULUM_CFG
-
 from lib.env.env import Env
 from lib.env.cart_double_pendulum.cart_double_pendulum_env_cfg import CartDoublePendulumEnvCfg
 
@@ -84,6 +82,26 @@ class CartDoublePendulumEnv(Env):
             ),
         }
         return observations
+    
+    def _get_states(self) -> dict[str, torch.Tensor]:
+        pole_joint_pos = normalize_angle(self.joint_pos[:, self._pole_dof_idx[0]].unsqueeze(dim=1))
+        pendulum_joint_pos = normalize_angle(self.joint_pos[:, self._pendulum_dof_idx[0]].unsqueeze(dim=1))
+
+        shared_states = torch.cat([
+            self.joint_pos[:, self._cart_dof_idx[0]].unsqueeze(dim=1),
+            self.joint_vel[:, self._cart_dof_idx[0]].unsqueeze(dim=1),
+            pole_joint_pos,
+            self.joint_vel[:, self._pole_dof_idx[0]].unsqueeze(dim=1),
+            pole_joint_pos + pendulum_joint_pos,
+            pendulum_joint_pos,
+            self.joint_vel[:, self._pendulum_dof_idx[0]].unsqueeze(dim=1)], dim=-1)
+        
+        states = {
+            "cart": shared_states,
+            "pendulum": shared_states}
+
+        return states
+        
 
     def _get_rewards(self) -> torch.Tensor:
         total_reward = compute_rewards(

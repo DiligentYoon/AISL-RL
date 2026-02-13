@@ -57,6 +57,7 @@ from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.agent.ppo import PPO
 from lib.agent.mappo import MAPPO
+from lib.agent.cooperative_mappo import CooperativeMAPPO
 
 from lib.model.MLP import Actor, Critic
 
@@ -173,6 +174,15 @@ def main():
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
 
+        cooperative = cfg["models"].get("cooperative", None)
+        if cooperative is not None:
+            cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
+            cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
+
+            # For proactive action processing 
+            obs_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]] 
+            state_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]]
+
         for uid in possible_agents:
             # Per-Agent Network
             actor = Actor(num_observations=obs_size[uid],
@@ -188,15 +198,26 @@ def main():
                 'actor': actor,
                 'critic': critic
             }
+
+        if cooperative is not None:
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                     state_space=env.state_space,
+                                     action_space=env.action_space,
+                                     possible_agents=possible_agents,
+                                     model=model,
+                                     buffer=buffers,
+                                     device=env.device,
+                                     cfg=cfg["agent"])
         
-        agent = MAPPO(observation_space=env.observation_space,
-                      state_space=env.state_space,
-                      action_space=env.action_space,
-                      possible_agents=possible_agents,
-                      model=model,
-                      buffer=buffers,
-                      device=env.device,
-                      cfg=cfg["agent"])
+        else:
+            agent = MAPPO(observation_space=env.observation_space,
+                        state_space=env.state_space,
+                        action_space=env.action_space,
+                        possible_agents=possible_agents,
+                        model=model,
+                        buffer=buffers,
+                        device=env.device,
+                        cfg=cfg["agent"])
 
     else:
         if model_type is None:

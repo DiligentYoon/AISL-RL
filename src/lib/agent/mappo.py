@@ -30,12 +30,14 @@ class MAPPO(MultiAgent):
         https://arxiv.org/abs/2103.01955
 
         Args:
+            observation_space: observation space for each policy network
+            state_space: state space for each value network
+            action_space: action space of each policy network
             possible_agents: Name of all possible agents the environment could generate
             model: Models used by the agent
             buffer: Memory to storage the transitions.
             device: Device on which a tensor/array is or will be allocated (cuda, cpu).
             cfg: Configuration dictionary
-            shared: Whether the actor and critic share the specific model components.
         """
         super().__init__(possible_agents, observation_space, state_space, action_space, cfg, model, device)
 
@@ -134,7 +136,7 @@ class MAPPO(MultiAgent):
         Returns:
             actions : RL actions
             log_prob : Log probability of RL actions
-            values : Value(Return) preidctions
+            entropy : Entropy of RL actions
         """
         # From Tensor to Dict
         observations = unflatten_tensorized_space(self.observation_space, observations)
@@ -190,7 +192,7 @@ class MAPPO(MultiAgent):
         actions = unflatten_tensorized_space(self.action_space, actions)
         if states is not None:
             states = unflatten_tensorized_space(self.state_space, states)
-            next_states = unflatten_tensorized_space(self.state_space, states)
+            next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
         action_log_probs = action_log_probs.view(-1, self.num_agents)
         rewards = rewards.view(-1, self.num_agents)

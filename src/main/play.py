@@ -67,16 +67,6 @@ def main():
         print(e)
         return
 
-    # # specify directory for logging experiments (load checkpoint)
-    # log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
-    # log_root_path = os.path.abspath(log_root_path)
-    # log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
-    # print(f"[INFO] Loading experiment from directory: {log_root_path}")
-    # print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
-    # if cfg["agent"]["experiment"]["experiment_name"]:
-    #     log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
-    # log_dir = os.path.join(log_root_path, log_dir)
-
     # ============================================================================================================================
     # =========================================== Env Spawn & Wrapper Test =======================================================
     # ============================================================================================================================
@@ -160,6 +150,7 @@ def main():
     from lib.model.BodyTransformer.transformer_components import BodyTransformer
     from lib.agent.ppo import PPO
     from lib.agent.mappo import MAPPO
+    from lib.agent.cooperative_mappo import CooperativeMAPPO
     
     # 1. Initialization
     # Model initialization
@@ -169,6 +160,15 @@ def main():
         model = {}
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
+
+        cooperative = cfg["models"].get("cooperative", None)
+        if cooperative is not None:
+            cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
+            cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
+
+            # For proactive action processing 
+            obs_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]] 
+            state_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]]
 
         for uid in possible_agents:
             # Per-Agent Network
@@ -186,14 +186,25 @@ def main():
                 'critic': critic
             }
         
-        agent = MAPPO(observation_space=env.observation_space,
-                      state_space=env.state_space,
-                      action_space=env.action_space,
-                      possible_agents=possible_agents,
-                      model=model,
-                      buffer=buffers,
-                      device=env.device,
-                      cfg=cfg["agent"])
+        if cooperative is not None:
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                     state_space=env.state_space,
+                                     action_space=env.action_space,
+                                     possible_agents=possible_agents,
+                                     model=model,
+                                     buffer=buffers,
+                                     device=env.device,
+                                     cfg=cfg["agent"])
+            
+        else:
+            agent = MAPPO(observation_space=env.observation_space,
+                        state_space=env.state_space,
+                        action_space=env.action_space,
+                        possible_agents=possible_agents,
+                        model=model,
+                        buffer=buffers,
+                        device=env.device,
+                        cfg=cfg["agent"])
 
     else:
         if model_type is None:
