@@ -288,14 +288,14 @@ def main():
             else:
                 raise ValueError(f"Unknown model type specified in cfg: {model_type}")
 
-            model = {"actor": actor, "critic": critic}
+        model = {"actor": actor, "critic": critic}
 
-            # Agent initialization
-            agent = PPO(model=model,
-                        buffer=buffer, 
-                        device=env.device,
-                        cfg=cfg["agent"],
-                        shared=is_shared)
+        # Agent initialization
+        agent = PPO(model=model,
+                    buffer=buffer, 
+                    device=env.device,
+                    cfg=cfg["agent"],
+                    shared=is_shared)
     
 
     # 2. Checkpoint
