@@ -21,13 +21,13 @@ class Actor(Model):
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_observations, 400),
+        self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
                                  nn.ReLU(),
-                                 nn.Linear(400, 200),
+                                 nn.Linear(256, 128),
                                  nn.ReLU(),
-                                 nn.Linear(200, 100),
+                                 nn.Linear(128, 64),
                                  nn.ReLU(),
-                                 nn.Linear(100, self.num_actions),
+                                 nn.Linear(64, self.num_actions),
                                  nn.Tanh())
 
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
@@ -118,13 +118,13 @@ class Critic(Model):
         self.critic_standardizer = RunningMeanStd(shape=self.num_states, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_states, 400),
+        self.net = nn.Sequential(nn.Linear(self.num_states, 256),
                                  nn.ReLU(),
-                                 nn.Linear(400, 200),
+                                 nn.Linear(256, 128),
                                  nn.ReLU(),
-                                 nn.Linear(200, 100),
+                                 nn.Linear(128, 64),
                                  nn.ReLU(),
-                                 nn.Linear(100, 1))
+                                 nn.Linear(64, 1))
 
         # Initialize parameters
         self.init_weights()

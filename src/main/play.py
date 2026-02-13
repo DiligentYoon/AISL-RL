@@ -20,7 +20,7 @@ parser.add_argument("--checkpoint", type=str, default=None, help="Path to model 
 parser.add_argument("--algorithm",
                     type=str,
                     default="PPO",
-                    choices=["PPO", "SAC", "TD3"],
+                    choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 # append AppLauncher cli args
@@ -62,19 +62,19 @@ def main():
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric)
     try:
-        experiment_cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
+        cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
     except ValueError as e:
         print(e)
         return
 
     # # specify directory for logging experiments (load checkpoint)
-    # log_root_path = os.path.join("logs", experiment_cfg["agent"]["experiment"]["directory"])
+    # log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
     # log_root_path = os.path.abspath(log_root_path)
     # log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
     # print(f"[INFO] Loading experiment from directory: {log_root_path}")
     # print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
-    # if experiment_cfg["agent"]["experiment"]["experiment_name"]:
-    #     log_dir += f"_{experiment_cfg['agent']['experiment']['experiment_name']}"
+    # if cfg["agent"]["experiment"]["experiment_name"]:
+    #     log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
     # log_dir = os.path.join(log_root_path, log_dir)
 
     # ============================================================================================================================
@@ -94,31 +94,59 @@ def main():
     env = IsaacLabWrapper(env)  
 
     # configure and instantiate the skrl runner
-    experiment_cfg["agent"]["experiment"]["write_interval"] = 0  
-    experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
+    cfg["agent"]["experiment"]["write_interval"] = 0  
+    cfg["agent"]["experiment"]["checkpoint_interval"] = 0
 
     # ==================================================================================================================
     # ======================================== Buffer Spawn Test =======================================================
     # ==================================================================================================================
     from lib.buffer.rolloutbuffer import RolloutBuffer
 
-    # 1. initialization
-    if experiment_cfg["buffer"]["buffer_size"] == -1:
-        experiment_cfg["buffer"]["buffer_size"] = experiment_cfg["agent"]["rollouts"]
-    buffer = RolloutBuffer(experiment_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-    
-    observation_space = env.observation_space
-    action_space = env.action_space
-    if env.state_space:
-        state_space = env.state_space
-        experiment_cfg["agent"]["async_actor_critic"] = True
+    multi_agent = algorithm == "mappo"
+    # Initialization
+    if cfg["buffer"]["buffer_size"] == -1:
+        cfg["buffer"]["buffer_size"] = cfg["agent"]["rollouts"]
     else:
-        state_space = None
-        experiment_cfg["agent"]["async_actor_critic"] = False
-    buffer.init_buffer(observation_space, state_space, action_space)
-    obs_size = buffer.tensors["observations"].shape[-1]
-    state_size = buffer.tensors["states"].shape[-1] if env.state_space else obs_size
-    act_size = buffer.tensors["actions"].shape[-1]
+        raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
+    
+    if multi_agent:
+        obs_size = {}
+        state_size = {}
+        act_size = {}
+        buffers = {}
+        possible_agents = env._unwrapped.cfg.possible_agents
+        for uid in possible_agents:
+            observation_space = env.observation_space[uid]
+            action_space = env.action_space[uid]
+            if env.state_space:
+                state_space = env.state_space[uid]
+                cfg["agent"]["async_actor_critic"] = True
+            else:
+                state_space = None
+                cfg["agent"]["async_actor_critic"] = False
+            
+            buffer = RolloutBuffer(cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+            buffer.init_buffer(observation_space, state_space, action_space)
+            buffers[uid] = buffer
+            obs_size[uid] = buffer.tensors["observations"].shape[-1]
+            state_size[uid] = buffer.tensors["states"].shape[-1] if env.state_space else obs_size[uid]
+            act_size[uid] = buffer.tensors["actions"].shape[-1]
+
+    else:
+        observation_space = env.observation_space
+        action_space = env.action_space
+        if env.state_space:
+            state_space = env.state_space
+            cfg["agent"]["async_actor_critic"] = True
+        else:
+            state_space = None
+            cfg["agent"]["async_actor_critic"] = False
+        
+        buffer = RolloutBuffer(cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+        buffer.init_buffer(observation_space, state_space, action_space)
+        obs_size = buffer.tensors["observations"].shape[-1]
+        state_size = buffer.tensors["states"].shape[-1] if env.state_space else obs_size
+        act_size = buffer.tensors["actions"].shape[-1]
 
 
     # ==========================================================================================================================
@@ -126,39 +154,148 @@ def main():
     # ==========================================================================================================================
     from lib.model.MLP import Actor, Critic
     from lib.model.NerveNet import NerveNetPolicy
+    from lib.utils.graph_utils import Mapping
+    from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
+    from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
+    from lib.model.BodyTransformer.transformer_components import BodyTransformer
     from lib.agent.ppo import PPO
+    from lib.agent.mappo import MAPPO
     
     # 1. Initialization
     # Model initialization
-    model_type = experiment_cfg["models"]["policy"].get("type", None)
-    if model_type is None:
-        actor = Actor(num_observations=obs_size,
-                    num_actions=act_size,
-                    min_log_std=experiment_cfg["models"]["policy"]["min_log_std"],
-                    max_log_std=experiment_cfg["models"]["policy"]["max_log_std"],
-                    device=env.device)
+    is_shared = False
+    model_type = cfg["models"]["policy"].get("type", None)
+    if multi_agent:
+        model = {}
+        if model_type is not None:
+            raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
+
+        for uid in possible_agents:
+            # Per-Agent Network
+            actor = Actor(num_observations=obs_size[uid],
+                          num_actions=act_size[uid],
+                          min_log_std=cfg["models"]["policy"]["min_log_std"],
+                          max_log_std=cfg["models"]["policy"]["max_log_std"],
+                          device=env.device)
+            
+            critic = Critic(num_states=state_size[uid],
+                            device=env.device)
+            
+            model[uid] = {
+                'actor': actor,
+                'critic': critic
+            }
+        
+        agent = MAPPO(observation_space=env.observation_space,
+                      state_space=env.state_space,
+                      action_space=env.action_space,
+                      possible_agents=possible_agents,
+                      model=model,
+                      buffer=buffers,
+                      device=env.device,
+                      cfg=cfg["agent"])
+
     else:
-        model_type_lower = model_type.lower()
-        if model_type_lower == "gnn":
-            actor = NerveNetPolicy(
-                observation_space=observation_space,
-                action_space=action_space,
-                node_info=env._unwrapped.cfg.node_info,
-                device=env.device,
-                num_nodes=env._unwrapped.cfg.num_nodes,
-                num_actuated_nodes=env._unwrapped.cfg.num_actuated_nodes,
-            )
+        if model_type is None:
+                actor = Actor(num_observations=obs_size,
+                              num_actions=act_size,
+                              min_log_std=cfg["models"]["policy"]["min_log_std"],
+                              max_log_std=cfg["models"]["policy"]["max_log_std"],
+                              device=env.device)
+                
+                critic = Critic(num_states=state_size,
+                                device=env.device)
+            
         else:
-            raise ValueError(f"Unknown model type specified in cfg: {model_type}")
+            model_type_lower = model_type.lower()
+            if model_type_lower == "gnn":
+                actor = NerveNetPolicy(
+                    observation_space=observation_space,
+                    action_space=action_space,
+                    node_info=env._unwrapped.cfg.node_info,
+                    device=env.device,
+                    num_nodes=env._unwrapped.cfg.num_nodes,
+                    num_actuated_nodes=env._unwrapped.cfg.num_actuated_nodes,
+                    min_log_std=cfg['models']['policy']['min_log_std'],
+                    max_log_std=cfg['models']['policy']['max_log_std'],
+                )
 
-    critic = Critic(num_states=state_size,
-                    device=env.device)
+                critic = Critic(num_states=state_size,
+                        device=env.device)
+                
+            elif model_type_lower == "bodytransformer":
+                mapping = Mapping(env._unwrapped.cfg.map_info)
+                is_shared = cfg["models"].get("shared", False)
+                use_mlp = cfg["models"].get("use_mlp", False)
+                action_detokenizer = ActionDetokenizer(mapping=mapping,
+                                                    action_dim=action_space.shape[0], 
+                                                    device=env.device)
+                value_detokenizer = ValueDetokenizer(mapping=mapping,
+                                                    use_mlp=use_mlp, 
+                                                    device=env.device)
+                if is_shared:
+                    if state_space is not None:
+                        raise RuntimeError("Shared structure should not use state space different from observation sapce.")
+                    
+                    tokenizer = ObsTokenizer(mapping=mapping,
+                                            device=env.device)
+                    trunk = BodyTransformer(mapping=mapping,
+                                            device=env.device)
 
-    model = {"actor": actor, "critic": critic}
-    agent = PPO(model=model,
-                buffer=buffer, 
-                device=env.device,
-                cfg=experiment_cfg["agent"])
+                    actor = BodyLevelActor(
+                        observation_space=observation_space,
+                        action_space=action_space,
+                        mapping=mapping,
+                        tokenizer=tokenizer,
+                        trunk=trunk,
+                        detokenizer=action_detokenizer,
+                        device=env.device,
+                        min_log_std=cfg['models']['policy']['min_log_std'],
+                        max_log_std=cfg['models']['policy']['max_log_std'],)
+                    
+                    critic = BodyLevelCritic(
+                        state_space=observation_space,
+                        mapping=mapping,
+                        tokenizer=tokenizer,
+                        trunk=trunk,
+                        detokenizer=value_detokenizer,
+                        device=env.device)
+                    
+                else:
+                    actor = BodyLevelActor(
+                        observation_space=observation_space,
+                        action_space=action_space,
+                        mapping=mapping,
+                        tokenizer=ObsTokenizer(mapping=mapping,
+                                            device=env.device),
+                        trunk=BodyTransformer(mapping=mapping,
+                                            device=env.device),
+                        detokenizer=action_detokenizer,
+                        device=env.device,
+                        min_log_std=cfg['models']['policy']['min_log_std'],
+                        max_log_std=cfg['models']['policy']['max_log_std'],)
+                    
+                    critic = BodyLevelCritic(
+                        state_space=observation_space if state_space is None else state_space,
+                        mapping=mapping,
+                        tokenizer=ObsTokenizer(mapping=mapping,
+                                            device=env.device),
+                        trunk=BodyTransformer(mapping=mapping,
+                                            device=env.device),
+                        detokenizer=value_detokenizer,
+                        device=env.device)
+
+            else:
+                raise ValueError(f"Unknown model type specified in cfg: {model_type}")
+
+        model = {"actor": actor, "critic": critic}
+
+        # Agent initialization
+        agent = PPO(model=model,
+                    buffer=buffer, 
+                    device=env.device,
+                    cfg=cfg["agent"],
+                    shared=is_shared)
     
 
     # 2. Checkpoint

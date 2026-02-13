@@ -14,7 +14,7 @@ import weakref
 from abc import abstractmethod
 from collections.abc import Sequence
 from dataclasses import MISSING
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Union, Dict
 
 import gymnasium as gym
 import numpy as np
@@ -309,7 +309,7 @@ class Env(gym.Env):
         # return observations
         return self._get_observations(), self._get_states(),  self.extras
 
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    def step(self, action: Union[torch.Tensor | Dict[str, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
 
         The environment steps forward at a fixed time-step, while the physics simulation is decimated at a
@@ -333,7 +333,11 @@ class Env(gym.Env):
         Returns:
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
-        action = action.to(self.device)
+        if isinstance(action, Dict):
+            for k in action.keys():
+                action[k] = action[k].to(self.device)
+        else:
+            action = action.to(self.device)
         # add action noise
         if self.cfg.action_noise_type:
             if self.cfg.action_noise_type == "gaussian":
