@@ -378,6 +378,10 @@ class Env(gym.Env):
         self.episode_length_buf += 1  # step in current episode (per env)
         self.common_step_counter += 1  # total step (common for all envs)
 
+        if self.cfg.commands is not None and hasattr(self, "commands"):
+            self.commands.update()
+
+
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
         self.reward_buf = self._get_rewards()
@@ -637,7 +641,7 @@ class Env(gym.Env):
         pass
 
     @abstractmethod
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: Dict[str, torch.Tensor] | torch.Tensor):
         """Pre-process actions before stepping through the physics.
 
         This function is responsible for pre-processing the actions before stepping through the physics.
@@ -658,7 +662,7 @@ class Env(gym.Env):
         raise NotImplementedError(f"Please implement the '_apply_action' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _get_observations(self) -> torch.Tensor:
+    def _get_observations(self) -> Dict[str, torch.Tensor] | torch.Tensor:
         """Compute and return the observations for the environment.
 
         Returns:
@@ -667,7 +671,7 @@ class Env(gym.Env):
         raise NotImplementedError(f"Please implement the '_get_observations' method for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _get_states(self) -> torch.Tensor | None:
+    def _get_states(self) -> Dict[str, torch.Tensor] | torch.Tensor | None:
         """Compute and return the states for the environment.
 
         The state-space is used for asymmetric actor-critic architectures. It is configured

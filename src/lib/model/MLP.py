@@ -22,12 +22,12 @@ class Actor(Model):
 
         # Backbone
         self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
-                                 nn.ReLU(),
+                                 nn.ELU(),
+                                 nn.Linear(256, 256),
+                                 nn.ELU(),
                                  nn.Linear(256, 128),
-                                 nn.ReLU(),
-                                 nn.Linear(128, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, self.num_actions),
+                                 nn.ELU(),
+                                 nn.Linear(128, self.num_actions),
                                  nn.Tanh())
 
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
@@ -119,12 +119,12 @@ class Critic(Model):
 
         # Backbone
         self.net = nn.Sequential(nn.Linear(self.num_states, 256),
-                                 nn.ReLU(),
+                                 nn.ELU(),
+                                 nn.Linear(256, 256),
+                                 nn.ELU(),
                                  nn.Linear(256, 128),
-                                 nn.ReLU(),
-                                 nn.Linear(128, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, 1))
+                                 nn.ELU(),
+                                 nn.Linear(128, 1))
 
         # Initialize parameters
         self.init_weights()

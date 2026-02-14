@@ -138,7 +138,7 @@ class CooperativeMAPPO(MAPPO):
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
-                rewards += self.discount_factor * value_preds * truncated # [E, 1]
+                rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
             if self.is_async_actor_critic:
                 self.buffer[uid].add_samples(observations=observations[uid],
@@ -256,13 +256,13 @@ class CooperativeMAPPO(MAPPO):
                     sampled_action_log_probs_r,
                     sampled_value_preds_r,
                     sampled_returns_r,
-                    sampled_advantages_r) = mb_p
+                    sampled_advantages_r) = mb_r
                     
                     actor_input_p = sampled_observations_p
                     critic_input_p = sampled_observations_p
             
                     actor_input_r = sampled_observations_r
-                    critic_input_r = sampled_states_r
+                    critic_input_r = sampled_observations_r
 
                 
                 # ==== Proactive Network Update ====

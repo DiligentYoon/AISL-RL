@@ -218,3 +218,6 @@ class EnvCfg:
 
     The contents of the list cannot be modified during the entire training process.
     """
+
+    commands: object | None = None
+    """Reference Generator for task-specific behaviors"""

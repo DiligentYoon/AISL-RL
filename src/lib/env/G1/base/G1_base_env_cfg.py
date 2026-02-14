@@ -20,10 +20,10 @@ from lib.env.env_cfg import EnvCfg
 @configclass
 class G1BaseEnvCfg(EnvCfg):
     # env
-    episode_length_s = 10.0
+    episode_length_s = 20.0
     action_scale = 1.0
-    sim_dt = 0.01
-    decimation = 2
+    sim_dt = 0.005
+    decimation = 4
     action_space = 0
     observation_space = 0 
     state_space = 0
@@ -46,14 +46,13 @@ class G1BaseEnvCfg(EnvCfg):
 
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4096, env_spacing=3.0, replicate_physics=True, clone_in_fabric=True
-    )
+        num_envs=4096, env_spacing=3.0, replicate_physics=True)
 
     # robot
     robot: ArticulationCfg = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
+        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,

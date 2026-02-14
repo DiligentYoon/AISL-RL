@@ -24,7 +24,6 @@ class G1BaseEnv(Env):
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
-        self.scene.clone_environments(copy_from_source=True)          # clone environents
 
     # Reset Env
     def _reset_idx(self, env_ids: torch.Tensor):

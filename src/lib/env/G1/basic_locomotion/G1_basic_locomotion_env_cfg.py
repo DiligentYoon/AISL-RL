@@ -1,42 +1,163 @@
 
 from __future__ import annotations
 
-from isaaclab.utils import configclass
+import math
+
 import isaaclab.sim as sim_utils
+from isaaclab.utils import configclass
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
+from lib.domain_randomizer import randomizer
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from isaaclab.managers import SceneEntityCfg
+
+
+@configclass
+class EventCfg:
+    """Configuration for events."""
+
+    # startup
+    # physics_material = EventTerm(
+    #     func=randomizer.randomize_rigid_body_material,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+    #         "static_friction_range": (0.8, 0.8),
+    #         "dynamic_friction_range": (0.6, 0.6),
+    #         "restitution_range": (0.0, 0.0),
+    #         "num_buckets": 64,
+    #     },
+    # )
+
+    # add_base_mass = EventTerm(
+    #     func=randomizer.randomize_rigid_body_mass,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+    #         "mass_distribution_params": (-5.0, 5.0),
+    #         "operation": "add",
+    #     },
+    # )
+
+    # base_com = EventTerm(
+    #     func=randomizer.randomize_rigid_body_com,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+    #         "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+    #     },
+    # )
+
+    # reset
+    # base_external_force_torque = EventTerm(
+    #     func=randomizer.apply_external_force_torque,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+    #         "force_range": (0.0, 0.0),
+    #         "torque_range": (-0.0, 0.0),
+    #     },
+    # )
+
+    reset_base = EventTerm(
+        func=randomizer.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (-0.0, 0.0),
+                "z": (-0.0, 0.0),
+                "roll": (-0.0, 0.0),
+                "pitch": (-0.0, 0.0),
+                "yaw": (-0.0, 0.0),
+            },
+        },
+    )
+
+    # reset_robot_joints = EventTerm(
+    #     func=randomizer.reset_joints_by_scale,
+    #     mode="reset",
+    #     params={
+    #         "position_range": (0.5, 1.5),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
+
+    # interval
+    # push_robot = EventTerm(
+    #     func=randomizer.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(10.0, 15.0),
+    #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    # )
+
+
 
 @configclass
 class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 15.0
-    sim_dt = 1/120
-    decimation = 2                       
-    action_scale = 1.0
-    action_space = 37                           
-    observation_space = 123                    
-    state_space = 0                  
+    episode_length_s = 20.0
+    sim_dt = 1/200
+    decimation = 4                       
+    action_scale = 0.5
+
+    # ==== Multi Agent Setting ====
+    # possible_agents = ["leg", "arm"]
+    # action_space = {"leg": 12, "arm": 25}                         
+    # observation_space = {"leg": 45, "arm": 84}                    
+    # state_space = {"leg": 123, "arm": 123}
+    # num_agents = 2
+    # proactive_id = possible_agents[0]
+    # reactive_id = possible_agents[1]  
+
+    # ==== Single Agent Setting ====      
+    action_space = 37                     
+    observation_space = 123                  
+    state_space = 0
+    num_agents = 1
 
     ## ==================== Reward Shaping ==================== ##
-    heading_weight: float = 0.5
-    up_weight: float = 0.1
+    w_track_lin_vel: float = 2.0
+    w_track_ang_vel: float = 2.0
 
-    energy_cost_scale: float = 0.05
-    actions_cost_scale: float = 0.01
-    alive_reward_scale: float = 2.0
-    dof_vel_scale: float = 0.1
+    w_feet_air_time: float = 0.75
+    w_feet_slide: float = 0.1
+    feet_air_time_threshold: float = 0.4
 
-    death_cost: float = -1.0
-    termination_height: float = 0.8
+    w_limits_ankle: float = 1.0
+    w_limits_hip: float = 0.1
+    w_limits_arm: float = 0.1
+    w_limits_fingers: float = 0.05
+    w_limits_torso: float = 0.1
 
-    angular_velocity_scale: float = 0.25
-    contact_force_scale: float = 0.01         
-
+    w_termination: float = 100
+    termination_height: float = 0.4
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
+
+    # Event
+    events: EventCfg = EventCfg()
+
+    # Commander
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(10.0, 10.0),
+        prob_standing_envs=0.02,
+        prob_heading_envs=1.0,
+        heading_command=True,
+        heading_control_stiffness=0.5,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+        ),
+    )
 
     # Terrain
     terrain_importer_cfg = TerrainImporterCfg(
@@ -52,3 +173,29 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
         ),
         debug_vis=False,
     )
+
+    # sensors
+    # height_scanner = RayCasterCfg(
+    #     prim_path="/World/envs/env_.*/Robot/torso_link",
+    #     offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+    #     ray_alignment="yaw",
+    #     pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+    #     debug_vis=False,
+    #     mesh_prim_paths=["/World/ground"],
+    # )
+    contact_forces = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*", 
+                                      history_length=3, 
+                                      track_air_time=True)
+
+    # visualization
+    goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_goal"
+    )
+
+    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_current"
+    )
+
+    # Set the scale of the visualization markers to (0.5, 0.5, 0.5)
+    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
