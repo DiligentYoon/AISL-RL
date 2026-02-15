@@ -124,12 +124,19 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
     num_agents = 1
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 2.0
-    w_track_ang_vel: float = 2.0
+    w_track_lin_vel: float = 1.0
+    w_track_ang_vel: float = 1.0
 
     w_feet_air_time: float = 0.75
     w_feet_slide: float = 0.1
     feet_air_time_threshold: float = 0.4
+
+    w_lin_vel_z: float  = 0.2
+    w_ang_vel_xy: float = 0.05
+    w_joint_torque: float = 2.0e-6
+    w_joint_acc: float = 1.0e-7
+    w_action_rate: float = 0.005
+    w_flat: float = 1.0
 
     w_limits_ankle: float = 1.0
     w_limits_hip: float = 0.1

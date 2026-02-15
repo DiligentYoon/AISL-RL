@@ -213,7 +213,7 @@ class EnvCfg:
     log_dir: str | None = None
     """Directory for logging experiment artifacts. Defaults to None, in which case no specific log directory is set."""
   
-    possible_agents: list = MISSING
+    possible_agents: list = None
     """A list of all possible agents the environment could generate.
 
     The contents of the list cannot be modified during the entire training process.

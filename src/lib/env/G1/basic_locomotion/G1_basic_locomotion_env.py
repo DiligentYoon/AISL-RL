@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import torch
+import copy
 
 import isaaclab.sim as sim_utils
 from isaaclab.terrains import TerrainImporter
@@ -13,7 +14,7 @@ from isaaclab.markers import VisualizationMarkers
 
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
-from isaaclab.sensors import ContactSensor, RayCaster
+from isaaclab.sensors import ContactSensor
 from isaaclab.managers import SceneEntityCfg
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
@@ -266,6 +267,10 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
 
+        # Control Penalty (Torso)
+        lin_vel_z_penalty  = -torch.square(self.torso_lin_vel_b[:, 2])
+        ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
+
         # Joint Pos Limits & Deviation Penalty
         joint_pos_penalty_ankle   = -torch.sum(self.out_of_limits_ankle, dim=1)          # Leg
         joint_pos_penalty_hip     = -torch.sum(torch.abs(self.deviation_hip), dim=1)     # Leg
@@ -276,25 +281,49 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
 
-        if self.cfg.num_agents > 1:
+        if self.cfg.possible_agents is not None:
+            # Control Penalty (2)
+            joint_torque_penalty_leg = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
+            joint_torque_penalty_arm = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
+
+            joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
+            joint_acc_penalty_arm = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
+
+            action_rate_penalty_leg = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
+            action_rate_penalty_arm = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
+
             # Multi Agent
             common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards + \
                              self.cfg.w_track_ang_vel * ang_vel_rewards + \
                              self.cfg.w_limits_torso  * joint_pos_penalty_torso + \
-                             self.cfg.w_termination   * terminate_penalty
+                             self.cfg.w_termination   * terminate_penalty + \
+                             self.cfg.w_lin_vel_z     * lin_vel_z_penalty + \
+                             self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty
 
             leg_rewards = common_rewards + \
-                        self.cfg.w_feet_air_time * gait_reward + \
-                        self.cfg.w_feet_slide * slide_penalty + \
-                        self.cfg.w_limits_ankle * joint_pos_penalty_ankle + \
-                        self.cfg.w_limits_hip * joint_pos_penalty_hip
+                          self.cfg.w_feet_air_time * gait_reward + \
+                          self.cfg.w_feet_slide    * slide_penalty + \
+                          self.cfg.w_limits_ankle  * joint_pos_penalty_ankle + \
+                          self.cfg.w_limits_hip    * joint_pos_penalty_hip + \
+                          self.cfg.w_joint_torque  * joint_torque_penalty_leg + \
+                          self.cfg.w_joint_acc     * joint_acc_penalty_leg + \
+                          self.cfg.w_action_rate   * action_rate_penalty_leg 
+                          
 
             arm_rewards = common_rewards + \
-                        self.cfg.w_limits_arm * joint_pos_penalty_arms + \
-                        self.cfg.w_limits_fingers * joint_pos_penalty_fingers
+                          self.cfg.w_limits_arm * joint_pos_penalty_arms + \
+                          self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
+                          self.cfg.w_joint_torque  * joint_torque_penalty_arm + \
+                          self.cfg.w_joint_acc     * joint_acc_penalty_arm + \
+                          self.cfg.w_action_rate   * action_rate_penalty_arm 
 
             rewards = torch.stack([leg_rewards, arm_rewards], dim=-1) # [E, 2]
         else:
+            # Control Penalty (2)
+            joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
+            joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
+            action_rate_penalty = -torch.sum(torch.square(self.actions - self.prev_actions), dim=1)
+
             # Single Agent
             rewards = self.cfg.w_track_lin_vel * lin_vel_rewards + \
                       self.cfg.w_track_ang_vel * ang_vel_rewards + \
@@ -305,7 +334,15 @@ class G1BasicLocomotionEnv(G1BaseEnv):
                       self.cfg.w_limits_arm * joint_pos_penalty_arms + \
                       self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
                       self.cfg.w_limits_torso  * joint_pos_penalty_torso + \
-                      self.cfg.w_termination   * terminate_penalty      # [E, 1]
+                      self.cfg.w_termination   * terminate_penalty + \
+                      self.cfg.w_lin_vel_z     * lin_vel_z_penalty + \
+                      self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
+                      self.cfg.w_joint_torque  * joint_torque_penalty + \
+                      self.cfg.w_joint_acc     * joint_acc_penalty + \
+                      self.cfg.w_action_rate   * action_rate_penalty
+            
+        # Update Prev actions
+        self.prev_actions = copy.deepcopy(self.actions)
         
         return rewards
 
@@ -327,6 +364,26 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         self._robot.reset(env_ids)
         self.commands.reset(env_ids)
         super()._reset_idx(env_ids)
+
+        # Prev State Initialization
+        if hasattr(self, "prev_actions"):
+            if self.cfg.possible_agents is not None:
+                # Multi Agent
+                self.prev_actions["leg"][env_ids] = 0.0
+                self.prev_actions["arm"][env_ids] = 0.0
+            else:
+                # Single Agent
+                self.prev_actions[env_ids] = 0.0
+        else:
+            if self.cfg.possible_agents is not None:
+                # Multi Agent
+                self.prev_actions = {
+                    "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
+                    "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
+                }
+            else:
+                # Single Agent
+                self.prev_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
         self._compute_intermediate_values()
 
