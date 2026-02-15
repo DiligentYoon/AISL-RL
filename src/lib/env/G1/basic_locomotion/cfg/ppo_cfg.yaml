@@ -1,12 +1,15 @@
 seed: 42
 
 models:
-  shared: False
   policy:  
     min_log_std: -20.0
     max_log_std: 2.0
+
   value: 
     clip_actions: False
+
+  shared: False
+  squashed: False
 
 buffer:
   buffer_size: -1

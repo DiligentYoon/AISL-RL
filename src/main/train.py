@@ -168,17 +168,17 @@ def main():
     
     # Model initialization
     is_shared = cfg["models"].get("shared", False)
+    is_squashed = cfg["models"].get("squashed", False)
+    is_cooperative = cfg["models"].get("cooperative", None)
     model_type = cfg["models"]["policy"].get("type", None)
+    model = {}
     if multi_agent:
-        model = {}
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
 
-        cooperative = cfg["models"].get("cooperative", None)
-        if cooperative is not None:
+        if is_cooperative is not None:
             cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
             cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
-
             # For proactive action processing 
             obs_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]] 
             state_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]]
@@ -189,8 +189,8 @@ def main():
                           num_actions=act_size[uid],
                           min_log_std=cfg["models"]["policy"]["min_log_std"],
                           max_log_std=cfg["models"]["policy"]["max_log_std"],
+                          squash=is_squashed,
                           device=env.device)
-            
             critic = Critic(num_states=state_size[uid],
                             device=env.device)
             
@@ -199,7 +199,7 @@ def main():
                 'critic': critic
             }
 
-        if cooperative is not None:
+        if is_cooperative is not None:
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,
                                      action_space=env.action_space,
@@ -225,6 +225,7 @@ def main():
                               num_actions=act_size,
                               min_log_std=cfg["models"]["policy"]["min_log_std"],
                               max_log_std=cfg["models"]["policy"]["max_log_std"],
+                              squash=is_squashed,
                               device=env.device)
                 
                 critic = Critic(num_states=state_size,
@@ -245,7 +246,7 @@ def main():
                 )
 
                 critic = Critic(num_states=state_size,
-                        device=env.device)
+                                device=env.device)
                 
             elif model_type_lower == "bodytransformer":
                 mapping = Mapping(env._unwrapped.cfg.map_info)
@@ -338,16 +339,13 @@ def main():
     tracking_data = collections.defaultdict(list)
     track_rewards = collections.deque(maxlen=100)
     track_timesteps = collections.deque(maxlen=100)
+    CLI_track_rewards = collections.deque(maxlen=100)
+    CLI_track_timesteps = collections.deque(maxlen=100)
+    CLI_step_reward_means = collections.deque(maxlen=100)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
     t2_update = 0
-    # CLI_track_rewards = []
-    # CLI_track_timesteps = []
-    # CLI_step_reward_means = []
-    CLI_track_rewards = collections.deque(maxlen=100)
-    CLI_track_timesteps = collections.deque(maxlen=100)
-    CLI_step_reward_means = collections.deque(maxlen=100)
 
     # Reset environment
     obs, states, _ = env.reset()
