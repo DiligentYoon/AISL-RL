@@ -1,6 +1,7 @@
 seed: 42
 
 models:
+  shared: False
   policy:  
     min_log_std: -20.0
     max_log_std: 2.0
@@ -38,4 +39,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 32000
+  timesteps: 36000

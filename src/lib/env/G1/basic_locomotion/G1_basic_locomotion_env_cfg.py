@@ -81,14 +81,14 @@ class EventCfg:
         },
     )
 
-    # reset_robot_joints = EventTerm(
-    #     func=randomizer.reset_joints_by_scale,
-    #     mode="reset",
-    #     params={
-    #         "position_range": (0.5, 1.5),
-    #         "velocity_range": (0.0, 0.0),
-    #     },
-    # )
+    reset_robot_joints = EventTerm(
+        func=randomizer.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
 
     # interval
     # push_robot = EventTerm(
@@ -144,7 +144,7 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
     w_limits_fingers: float = 0.05
     w_limits_torso: float = 0.1
 
-    w_termination: float = 100
+    w_termination: float = 200
     termination_height: float = 0.4
 
     # Simulation
@@ -162,7 +162,7 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(0.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
     )
 

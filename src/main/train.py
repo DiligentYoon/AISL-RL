@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
@@ -167,7 +167,7 @@ def main():
     # =================== Model & Agent Spawn Test ==========================
     
     # Model initialization
-    is_shared = False
+    is_shared = cfg["models"].get("shared", False)
     model_type = cfg["models"]["policy"].get("type", None)
     if multi_agent:
         model = {}
@@ -249,7 +249,6 @@ def main():
                 
             elif model_type_lower == "bodytransformer":
                 mapping = Mapping(env._unwrapped.cfg.map_info)
-                is_shared = cfg["models"].get("shared", False)
                 use_mlp = cfg["models"].get("use_mlp", False)
                 action_detokenizer = ActionDetokenizer(mapping=mapping,
                                                     action_dim=action_space.shape[0], 
@@ -343,9 +342,12 @@ def main():
     t2_rollout = 0
     t1_update = 0
     t2_update = 0
-    CLI_track_rewards = []
-    CLI_track_timesteps = []
-    CLI_step_reward_means = []
+    # CLI_track_rewards = []
+    # CLI_track_timesteps = []
+    # CLI_step_reward_means = []
+    CLI_track_rewards = collections.deque(maxlen=100)
+    CLI_track_timesteps = collections.deque(maxlen=100)
+    CLI_step_reward_means = collections.deque(maxlen=100)
 
     # Reset environment
     obs, states, _ = env.reset()
@@ -397,13 +399,15 @@ def main():
             cumulative_rewards = torch.zeros_like(rewards, dtype=torch.float32)
             cumulative_timesteps = torch.zeros_like(rewards, dtype=torch.int32)
         
+        # Accumulates per-step rewards
         cumulative_rewards.add_(rewards)
         cumulative_timesteps.add_(1)
+        # Mean of per-step rewards
         CLI_step_reward_means.append(torch.mean(rewards).item())
 
         finished_episodes = (terminated + truncated).nonzero(as_tuple=False)
         if finished_episodes.numel():
-            # storage cumulative rewards and timesteps
+            # Storage cumulative rewards and timesteps
             track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
             track_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].reshape(-1).tolist())
             CLI_track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].detach().cpu().tolist())
@@ -428,6 +432,10 @@ def main():
             tracking_data["Episode / Total timesteps (max)"].append(np.max(track_timestep_np))
             tracking_data["Episode / Total timesteps (min)"].append(np.min(track_timestep_np))
             tracking_data["Episode / Total timesteps (mean)"].append(np.mean(track_timestep_np))
+
+            # reset data containers for next iteration
+            track_rewards.clear()
+            track_timesteps.clear()
         
         # Tensorboard logging
         if timestep % write_interval == 0: 
@@ -439,8 +447,6 @@ def main():
                 else:
                     writer.add_scalar(k, np.mean(v), timestep)
             # reset data containers for next iteration
-            track_rewards.clear()
-            track_timesteps.clear()
             tracking_data.clear()
 
         # CLI Logging about the training process at each parameter update
@@ -449,9 +455,9 @@ def main():
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
 
-            ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.2f} steps"
-            per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.2f}"
-            ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.2f}"
+            ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
+            per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
+            ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)
@@ -466,11 +472,11 @@ def main():
             content_width = 64
             line_header = f"Step Progress {timestep} / {cfg['train']['timesteps']}"
             line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
-            line_rollout_time = f"Rollout Time      : {t2_rollout - t1_rollout:6.2f} sec"
-            line_train_time = f"Training Time     : {t2_update - t1_update:6.2f} sec"
-            line_value_loss = f"Value Loss        : {value_loss:6.2f}"
-            line_policy_loss = f"Policy Loss       : {policy_loss:6.2f}"
-            line_entropy_loss = f"Entropy Loss      : {entropy_loss:6.2f}"
+            line_rollout_time = f"Rollout Time      : {t2_rollout - t1_rollout:6.3f} sec"
+            line_train_time = f"Training Time     : {t2_update - t1_update:6.3f} sec"
+            line_value_loss = f"Value Loss        : {value_loss:6.3f}"
+            line_policy_loss = f"Policy Loss       : {policy_loss:6.3f}"
+            line_entropy_loss = f"Entropy Loss      : {entropy_loss:6.3f}"
             line_episode_step = f"Avg Episode Step  : {ep_step}"
             line_per_step_reward = f"Per-Step Rewards  : {per_r}"
             line_episode_reward = f"Epiode Rewards    : {ep_r}"

@@ -21,16 +21,24 @@ class Actor(Model):
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Backbone
+        # self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
+        #                          nn.ELU(),
+        #                          nn.Linear(256, 256),
+        #                          nn.ELU(),
+        #                          nn.Linear(256, 128),
+        #                          nn.ELU(),
+        #                          nn.Linear(128, self.num_actions),
+        #                          nn.Tanh())
+        
         self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
-                                 nn.ELU(),
-                                 nn.Linear(256, 256),
                                  nn.ELU(),
                                  nn.Linear(256, 128),
                                  nn.ELU(),
-                                 nn.Linear(128, self.num_actions),
-                                 nn.Tanh())
+                                 nn.Linear(128, 64),
+                                 nn.ELU(),
+                                 nn.Linear(64, self.num_actions))
 
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
+        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device), requires_grad=True) # State independent log std
 
         # Initialize parameters
         self.init_weights()
@@ -120,11 +128,11 @@ class Critic(Model):
         # Backbone
         self.net = nn.Sequential(nn.Linear(self.num_states, 256),
                                  nn.ELU(),
-                                 nn.Linear(256, 256),
-                                 nn.ELU(),
                                  nn.Linear(256, 128),
                                  nn.ELU(),
-                                 nn.Linear(128, 1))
+                                 nn.Linear(128, 64),
+                                 nn.ELU(),
+                                 nn.Linear(64, 1))
 
         # Initialize parameters
         self.init_weights()

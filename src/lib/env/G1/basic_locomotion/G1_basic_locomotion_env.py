@@ -55,6 +55,11 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         self.hip_joint_ids, _ = self._robot.find_joints([".*_hip_yaw_joint", 
                                                          ".*_hip_roll_joint"])
         
+        self.knee_joint_ids, _ = self._robot.find_joints([".*_knee_joint"])
+
+        self.hip_knee_joint_ids, _ = self._robot.find_joints([".*_hip_.*", 
+                                                               ".*_knee_joint"])
+        
         self.arm_joint_ids, _ = self._robot.find_joints([".*_shoulder_pitch_joint",
                                                          ".*_shoulder_roll_joint",
                                                          ".*_shoulder_yaw_joint",
@@ -77,8 +82,11 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         
         # Link ids
         self.torso_link_ids, _ = self._robot.find_bodies("torso_link")
-        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
         self.ankle_roll_link_ids, _ = self._robot.find_bodies(".*_ankle_roll_link")
+
+        # Contact Link ids
+        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
+        self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
 
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
@@ -271,6 +279,9 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         lin_vel_z_penalty  = -torch.square(self.torso_lin_vel_b[:, 2])
         ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
 
+        # Attitute Penalty (Torso)
+        flat_penalty = -torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+
         # Joint Pos Limits & Deviation Penalty
         joint_pos_penalty_ankle   = -torch.sum(self.out_of_limits_ankle, dim=1)          # Leg
         joint_pos_penalty_hip     = -torch.sum(torch.abs(self.deviation_hip), dim=1)     # Leg
@@ -283,11 +294,8 @@ class G1BasicLocomotionEnv(G1BaseEnv):
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (2)
-            joint_torque_penalty_leg = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-            joint_torque_penalty_arm = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
-
-            joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
-            joint_acc_penalty_arm = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
+            joint_torque_penalty_leg = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
+            joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
 
             action_rate_penalty_leg = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
             action_rate_penalty_arm = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
@@ -296,6 +304,7 @@ class G1BasicLocomotionEnv(G1BaseEnv):
             common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards + \
                              self.cfg.w_track_ang_vel * ang_vel_rewards + \
                              self.cfg.w_limits_torso  * joint_pos_penalty_torso + \
+                             self.cfg.w_flat          * flat_penalty + \
                              self.cfg.w_termination   * terminate_penalty + \
                              self.cfg.w_lin_vel_z     * lin_vel_z_penalty + \
                              self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty
@@ -313,33 +322,32 @@ class G1BasicLocomotionEnv(G1BaseEnv):
             arm_rewards = common_rewards + \
                           self.cfg.w_limits_arm * joint_pos_penalty_arms + \
                           self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
-                          self.cfg.w_joint_torque  * joint_torque_penalty_arm + \
-                          self.cfg.w_joint_acc     * joint_acc_penalty_arm + \
                           self.cfg.w_action_rate   * action_rate_penalty_arm 
 
             rewards = torch.stack([leg_rewards, arm_rewards], dim=-1) # [E, 2]
         else:
             # Control Penalty (2)
-            joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
-            joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
+            joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
+            joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
             action_rate_penalty = -torch.sum(torch.square(self.actions - self.prev_actions), dim=1)
 
             # Single Agent
-            rewards = self.cfg.w_track_lin_vel * lin_vel_rewards + \
-                      self.cfg.w_track_ang_vel * ang_vel_rewards + \
-                      self.cfg.w_feet_air_time * gait_reward + \
-                      self.cfg.w_feet_slide * slide_penalty + \
-                      self.cfg.w_limits_ankle * joint_pos_penalty_ankle + \
-                      self.cfg.w_limits_hip * joint_pos_penalty_hip + \
-                      self.cfg.w_limits_arm * joint_pos_penalty_arms + \
+            rewards = self.cfg.w_track_lin_vel  * lin_vel_rewards + \
+                      self.cfg.w_track_ang_vel  * ang_vel_rewards + \
+                      self.cfg.w_feet_air_time  * gait_reward + \
+                      self.cfg.w_feet_slide     * slide_penalty + \
+                      self.cfg.w_lin_vel_z      * lin_vel_z_penalty + \
+                      self.cfg.w_ang_vel_xy     * ang_vel_xy_penalty + \
+                      self.cfg.w_flat           * flat_penalty + \
+                      self.cfg.w_limits_ankle   * joint_pos_penalty_ankle + \
+                      self.cfg.w_limits_hip     * joint_pos_penalty_hip + \
+                      self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
                       self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
-                      self.cfg.w_limits_torso  * joint_pos_penalty_torso + \
-                      self.cfg.w_termination   * terminate_penalty + \
-                      self.cfg.w_lin_vel_z     * lin_vel_z_penalty + \
-                      self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
-                      self.cfg.w_joint_torque  * joint_torque_penalty + \
-                      self.cfg.w_joint_acc     * joint_acc_penalty + \
-                      self.cfg.w_action_rate   * action_rate_penalty
+                      self.cfg.w_limits_torso   * joint_pos_penalty_torso + \
+                      self.cfg.w_termination    * terminate_penalty + \
+                      self.cfg.w_joint_torque   * joint_torque_penalty + \
+                      self.cfg.w_joint_acc      * joint_acc_penalty + \
+                      self.cfg.w_action_rate    * action_rate_penalty
             
         # Update Prev actions
         self.prev_actions = copy.deepcopy(self.actions)
@@ -353,7 +361,6 @@ class G1BasicLocomotionEnv(G1BaseEnv):
 
         torso_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.torso_contact_link_ids]
         died = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
-        # died = self.torso_pos_w[:, 2] < self.cfg.termination_height
         return died, time_out
 
 
@@ -402,12 +409,12 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         # self.height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - 0.5).clip(min=-1.0, max=1.0)
         # Information related to Commands Tracking
         self.command_inputs = self.commands.command
-        self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w)
+        self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3])
         # Information related to Gait Phase
-        self.air_time = self.contact_sensors.data.current_air_time[:, self.ankle_roll_link_ids]
-        self.contact_time = self.contact_sensors.data.current_contact_time[:, self.ankle_roll_link_ids]
+        self.air_time = self.contact_sensors.data.current_air_time[:, self.ankle_contact_roll_link_ids]
+        self.contact_time = self.contact_sensors.data.current_contact_time[:, self.ankle_contact_roll_link_ids]
         # Feet Slide
-        self.is_contacts = self.contact_sensors.data.net_forces_w_history[:, :, self.ankle_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+        self.is_contacts = self.contact_sensors.data.net_forces_w_history[:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
         # Joint Limits
         self.out_of_limits_ankle = -(self.joint_pos[:, self.ankle_joint_ids] - self._robot.data.soft_joint_pos_limits[:, self.ankle_joint_ids, 0]).clip(max=0.0) + \
                                     (self.joint_pos[:, self.ankle_joint_ids] - self._robot.data.soft_joint_pos_limits[:, self.ankle_joint_ids, 1]).clip(min=0.0)
