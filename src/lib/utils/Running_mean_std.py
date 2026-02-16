@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class RunningMeanStd(nn.Module):
-    def __init__(self, epsilon: float = 1e-4, shape: tuple[int, ...] = (), device: str = "cuda:0"):
+    def __init__(self, epsilon: float = 1e-4, shape: tuple[int, ...]|None = (), device: str = "cuda:0"):
         """
         Calculates the running mean and std of a data stream using PyTorch
         https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -14,10 +14,12 @@ class RunningMeanStd(nn.Module):
         super().__init__()
         self.device = device
         self.epsilon = epsilon
-        
-        self.register_buffer("mean", torch.zeros(shape, dtype=torch.float32, device=device))
-        self.register_buffer("var", torch.ones(shape, dtype=torch.float32, device=device))
-        self.register_buffer("count", torch.tensor(epsilon, dtype=torch.float32, device=device))
+        self.shape = shape
+
+        if shape is not None:
+            self.register_buffer("mean", torch.zeros(self.shape, dtype=torch.float32, device=self.device))
+            self.register_buffer("var", torch.ones(self.shape, dtype=torch.float32, device=self.device))
+            self.register_buffer("count", torch.tensor(self.epsilon, dtype=torch.float32, device=self.device))
 
     def standardize(self, x: torch.Tensor, update: bool = False) -> None:
         """
@@ -34,6 +36,13 @@ class RunningMeanStd(nn.Module):
             x = torch.tensor(x, dtype=torch.float32, device=self.device)
         else:
             x = x.to(self.device)
+
+        # Count shape if it's not declared
+        if self.shape is None:
+            self.shape = x.shape[1:]
+            self.register_buffer("mean", torch.zeros(self.shape, dtype=torch.float32, device=self.device))
+            self.register_buffer("var", torch.ones(self.shape, dtype=torch.float32, device=self.device))
+            self.register_buffer("count", torch.tensor(self.epsilon, dtype=torch.float32, device=self.device))
 
         # if len(x.shape) > 2:
         #     # dims > 1 : batch + component-wise mean
