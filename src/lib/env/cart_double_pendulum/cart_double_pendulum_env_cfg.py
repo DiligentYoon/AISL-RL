@@ -22,8 +22,10 @@ class CartDoublePendulumEnvCfg(EnvCfg):
     possible_agents = ["cart", "pendulum"]
     action_space = {"cart": 1, "pendulum": 1}
     observation_space = {"cart": 4, "pendulum": 3}
-    state_space = 0
+    state_space = {"cart": 7, "pendulum": 7}
     num_agents = 2
+    proactive_id = possible_agents[0]
+    reactive_id = possible_agents[1]
 
     # simulation
     sim: SimulationCfg = SimulationCfg(dt=1 / 120, render_interval=decimation)

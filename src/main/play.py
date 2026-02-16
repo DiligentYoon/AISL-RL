@@ -14,12 +14,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="Humanoid-GNN", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -66,16 +66,6 @@ def main():
     except ValueError as e:
         print(e)
         return
-
-    # # specify directory for logging experiments (load checkpoint)
-    # log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
-    # log_root_path = os.path.abspath(log_root_path)
-    # log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
-    # print(f"[INFO] Loading experiment from directory: {log_root_path}")
-    # print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
-    # if cfg["agent"]["experiment"]["experiment_name"]:
-    #     log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
-    # log_dir = os.path.join(log_root_path, log_dir)
 
     # ============================================================================================================================
     # =========================================== Env Spawn & Wrapper Test =======================================================
@@ -160,15 +150,26 @@ def main():
     from lib.model.BodyTransformer.transformer_components import BodyTransformer
     from lib.agent.ppo import PPO
     from lib.agent.mappo import MAPPO
+    from lib.agent.cooperative_mappo import CooperativeMAPPO
     
     # 1. Initialization
     # Model initialization
-    is_shared = False
+    # Model initialization
+    is_shared = cfg["models"].get("shared", False)
+    is_squashed = cfg["models"].get("squashed", False)
+    is_cooperative = cfg["models"].get("cooperative", None)
     model_type = cfg["models"]["policy"].get("type", None)
+    model = {}
     if multi_agent:
-        model = {}
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
+
+        if is_cooperative is not None:
+            cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
+            cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
+            # For proactive action processing 
+            obs_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]] 
+            state_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]]
 
         for uid in possible_agents:
             # Per-Agent Network
@@ -176,8 +177,8 @@ def main():
                           num_actions=act_size[uid],
                           min_log_std=cfg["models"]["policy"]["min_log_std"],
                           max_log_std=cfg["models"]["policy"]["max_log_std"],
+                          squash=is_squashed,
                           device=env.device)
-            
             critic = Critic(num_states=state_size[uid],
                             device=env.device)
             
@@ -185,15 +186,26 @@ def main():
                 'actor': actor,
                 'critic': critic
             }
+
+        if is_cooperative is not None:
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                     state_space=env.state_space,
+                                     action_space=env.action_space,
+                                     possible_agents=possible_agents,
+                                     model=model,
+                                     buffer=buffers,
+                                     device=env.device,
+                                     cfg=cfg["agent"])
         
-        agent = MAPPO(observation_space=env.observation_space,
-                      state_space=env.state_space,
-                      action_space=env.action_space,
-                      possible_agents=possible_agents,
-                      model=model,
-                      buffer=buffers,
-                      device=env.device,
-                      cfg=cfg["agent"])
+        else:
+            agent = MAPPO(observation_space=env.observation_space,
+                        state_space=env.state_space,
+                        action_space=env.action_space,
+                        possible_agents=possible_agents,
+                        model=model,
+                        buffer=buffers,
+                        device=env.device,
+                        cfg=cfg["agent"])
 
     else:
         if model_type is None:
@@ -201,6 +213,7 @@ def main():
                               num_actions=act_size,
                               min_log_std=cfg["models"]["policy"]["min_log_std"],
                               max_log_std=cfg["models"]["policy"]["max_log_std"],
+                              squash=is_squashed,
                               device=env.device)
                 
                 critic = Critic(num_states=state_size,
@@ -221,11 +234,10 @@ def main():
                 )
 
                 critic = Critic(num_states=state_size,
-                        device=env.device)
+                                device=env.device)
                 
             elif model_type_lower == "bodytransformer":
                 mapping = Mapping(env._unwrapped.cfg.map_info)
-                is_shared = cfg["models"].get("shared", False)
                 use_mlp = cfg["models"].get("use_mlp", False)
                 action_detokenizer = ActionDetokenizer(mapping=mapping,
                                                     action_dim=action_space.shape[0], 

@@ -6,7 +6,7 @@ from lib.utils.Running_mean_std import RunningMeanStd
 from lib.model.model import Model
 
 class Actor(Model):
-    def __init__(self, num_observations, num_actions, min_log_std, max_log_std, device):
+    def __init__(self, num_observations, num_actions, min_log_std, max_log_std, squash, device):
         super().__init__()
 
         self.min_log_std = min_log_std
@@ -16,21 +16,32 @@ class Actor(Model):
         self.device = device
         self.num_observations = num_observations
         self.num_actions = num_actions
+        
+        # Action Squashing
+        self.squash = squash
 
         # Running mean, standard deviation standardizer
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Backbone
+        # self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
+        #                          nn.ELU(),
+        #                          nn.Linear(256, 128),
+        #                          nn.ELU(),
+        #                          nn.Linear(128, 64),
+        #                          nn.ELU(),
+        #                          nn.Linear(64, self.num_actions),
+        #                          nn.Tanh())
+        
         self.net = nn.Sequential(nn.Linear(self.num_observations, 256),
-                                 nn.ReLU(),
+                                 nn.ELU(),
                                  nn.Linear(256, 128),
-                                 nn.ReLU(),
+                                 nn.ELU(),
                                  nn.Linear(128, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, self.num_actions),
-                                 nn.Tanh())
+                                 nn.ELU(),
+                                 nn.Linear(64, self.num_actions))
 
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device))            # State independent log std
+        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions, device=device), requires_grad=True) # State independent log std
 
         # Initialize parameters
         self.init_weights()
@@ -49,6 +60,8 @@ class Actor(Model):
         :param update_rms: Update a Runningmeanstd distrubution
         :type update_rms: bool 
         """
+        # eps
+        eps = 1e-6
         # Input standardization
         standardized_input = self.actor_standardizer.standardize(observations, update=update_rms)
 
@@ -62,16 +75,29 @@ class Actor(Model):
         self.action_distribution = Normal(mean_actions, log_std.exp())
 
         if deterministic:
-            actions = mean_actions
+            raw_actions = mean_actions
         else:
             # Sample using the reparameterization trick
-            actions = self.action_distribution.rsample()
+            raw_actions = self.action_distribution.rsample()
 
         # Log of the probability density function
-        if taken_actions is not None:
-            log_prob = self.action_distribution.log_prob(taken_actions)
+        if self.squash:
+            # tanh squasing with log probability dorrection
+            actions = torch.tanh(raw_actions)
+            if taken_actions is not None:
+                taken_actions = torch.clip(taken_actions, -1.0 + eps, 1.0 - eps)
+                raw_taken_actions = torch.atanh(taken_actions)
+                log_prob = self.action_distribution.log_prob(raw_taken_actions) - torch.log(1 - taken_actions.pow(2) + eps)
+            else:
+                log_prob = self.action_distribution.log_prob(raw_actions) - torch.log(1 - actions.pow(2) + eps)
+
         else:
-            log_prob = self.action_distribution.log_prob(actions)
+            # no squasing without correction
+            actions = raw_actions
+            if taken_actions is not None:
+                log_prob = self.action_distribution.log_prob(taken_actions)
+            else:
+                log_prob = self.action_distribution.log_prob(actions)
 
         log_prob = log_prob.sum(dim=-1)
 
@@ -84,7 +110,7 @@ class Actor(Model):
         """
         Random act for RL's beginning
         """
-        
+        eps = 1e-6
         batch_size = observations.shape[0]
 
         # Create a standard normal distribution for random actions (mean=0, std=1)
@@ -94,11 +120,16 @@ class Actor(Model):
 
         # Sample raw actions and squash them to [-1, 1] using tanh
         raw_actions = action_distribution.rsample()
-        actions = torch.tanh(raw_actions)
+        if self.squash:
+            # tanh squasing with log probability dorrection
+            actions = torch.tanh(raw_actions)
+            log_prob = action_distribution.log_prob(raw_actions) - torch.log(1 - actions.pow(2) + eps)
 
-        # Calculate log probability, correcting for the tanh transformation
-        log_prob = action_distribution.log_prob(raw_actions)
-        log_prob -= torch.log(1 - actions.pow(2) + 1e-6)
+        else:
+            # no squasing without correction
+            actions = raw_actions
+            log_prob = action_distribution.log_prob(actions)
+
         log_prob = log_prob.sum(dim=-1)
 
         # Entropy of the base (Normal) distribution
@@ -119,11 +150,11 @@ class Critic(Model):
 
         # Backbone
         self.net = nn.Sequential(nn.Linear(self.num_states, 256),
-                                 nn.ReLU(),
+                                 nn.ELU(),
                                  nn.Linear(256, 128),
-                                 nn.ReLU(),
+                                 nn.ELU(),
                                  nn.Linear(128, 64),
-                                 nn.ReLU(),
+                                 nn.ELU(),
                                  nn.Linear(64, 1))
 
         # Initialize parameters

@@ -80,7 +80,8 @@ class PPO(Agent):
             else:
                 self.optimizer = torch.optim.Adam(
                         itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
-                self.checkpoint_modules["optimizer"] = self.optimizer
+                
+            self.checkpoint_modules["optimizer"] = self.optimizer
 
         self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
                               "value_preds", "rewards", "truncated", "terminated",
@@ -173,6 +174,7 @@ class PPO(Agent):
 
         with torch.no_grad():
             value_preds, _, _ = self.critic(critic_inputs)
+            value_preds = self.value_standardizer.destandardize(value_preds)
             
         # time-limit (truncation) bootstrapping
         if self.time_limit_bootstrap:
@@ -207,15 +209,16 @@ class PPO(Agent):
         with torch.no_grad():
             critic_input = self.buffer.get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer.get_tensor_by_name("next_observations")[-1]
             last_values, _, _ = self.critic(critic_input)
+            last_values = self.value_standardizer.destandardize(last_values)
         
         # GAE Calculation
         self.buffer.compute_gae(last_values, self.discount_factor, self.gae_lambda)
 
         # Value Standardization
+        value_preds = self.value_standardizer.standardize(self.buffer.get_tensor_by_name("value_preds").reshape(-1, 1), update=True)
         returns = self.value_standardizer.standardize(self.buffer.get_tensor_by_name("returns").reshape(-1, 1), update=True)
-        value_preds = self.value_standardizer.standardize(self.buffer.get_tensor_by_name("value_preds").reshape(-1, 1))
-        self.buffer.set_tensor_by_name("returns", returns.reshape(self.buffer.buffer_size, -1, 1))
         self.buffer.set_tensor_by_name("value_preds", value_preds.reshape(self.buffer.buffer_size, -1, 1))
+        self.buffer.set_tensor_by_name("returns", returns.reshape(self.buffer.buffer_size, -1, 1))
         
         # Loss initialization
         cumulative_policy_loss = 0
@@ -287,7 +290,7 @@ class PPO(Agent):
 
                 # Compute value loss
                 predicted_values, _, _ = self.critic(critic_input, update_rms=not epoch)
-                predicted_values = self.value_standardizer.standardize(predicted_values)
+                # predicted_values = self.value_standardizer.standardize(predicted_values)
                 if self.clip_predicted_values:
                     predicted_values = sampled_value_preds + torch.clip(
                         predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip

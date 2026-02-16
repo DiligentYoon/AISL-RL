@@ -30,12 +30,14 @@ class MAPPO(MultiAgent):
         https://arxiv.org/abs/2103.01955
 
         Args:
+            observation_space: observation space for each policy network
+            state_space: state space for each value network
+            action_space: action space of each policy network
             possible_agents: Name of all possible agents the environment could generate
             model: Models used by the agent
             buffer: Memory to storage the transitions.
             device: Device on which a tensor/array is or will be allocated (cuda, cpu).
             cfg: Configuration dictionary
-            shared: Whether the actor and critic share the specific model components.
         """
         super().__init__(possible_agents, observation_space, state_space, action_space, cfg, model, device)
 
@@ -134,7 +136,7 @@ class MAPPO(MultiAgent):
         Returns:
             actions : RL actions
             log_prob : Log probability of RL actions
-            values : Value(Return) preidctions
+            entropy : Entropy of RL actions
         """
         # From Tensor to Dict
         observations = unflatten_tensorized_space(self.observation_space, observations)
@@ -190,7 +192,7 @@ class MAPPO(MultiAgent):
         actions = unflatten_tensorized_space(self.action_space, actions)
         if states is not None:
             states = unflatten_tensorized_space(self.state_space, states)
-            next_states = unflatten_tensorized_space(self.state_space, states)
+            next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
         action_log_probs = action_log_probs.view(-1, self.num_agents)
         rewards = rewards.view(-1, self.num_agents)
@@ -201,6 +203,7 @@ class MAPPO(MultiAgent):
         for i, uid in enumerate(self.possible_agents):
             with torch.no_grad():
                 value_preds, _, _ = self.critics[uid](critic_inputs[uid]) # [E, 1]
+                value_preds, _, _ = self.value_standardizers[uid].destandardize(value_preds)
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
@@ -236,15 +239,16 @@ class MAPPO(MultiAgent):
             with torch.no_grad():
                 critic_input = self.buffer[uid].get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer[uid].get_tensor_by_name("next_observations")[-1]
                 last_values, _, _ = self.critics[uid](critic_input)
+                last_values, _, _ = self.value_standardizers[uid].destandardize(last_values)
         
             # GAE Calculation
             self.buffer[uid].compute_gae(last_values, self.discount_factor, self.gae_lambda)
 
             # Value Standardization
+            value_preds = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("value_preds").reshape(-1, 1), update=True)
             returns = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("returns").reshape(-1, 1), update=True)
-            value_preds = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("value_preds").reshape(-1, 1))
-            self.buffer[uid].set_tensor_by_name("returns", returns.reshape(self.buffer[uid].buffer_size, -1, 1))
             self.buffer[uid].set_tensor_by_name("value_preds", value_preds.reshape(self.buffer[uid].buffer_size, -1, 1))
+            self.buffer[uid].set_tensor_by_name("returns", returns.reshape(self.buffer[uid].buffer_size, -1, 1))
             
             # Loss initialization
             cumulative_policy_loss = 0
@@ -316,7 +320,6 @@ class MAPPO(MultiAgent):
 
                     # Compute value loss
                     predicted_values, _, _ = self.critics[uid](critic_input, update_rms=not epoch)
-                    predicted_values = self.value_standardizers[uid].standardize(predicted_values)
                     if self.clip_predicted_values:
                         predicted_values = sampled_value_preds + torch.clip(
                             predicted_values - sampled_value_preds, min=-self.value_clip, max=self.value_clip
