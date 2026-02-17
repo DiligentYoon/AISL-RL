@@ -14,7 +14,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
+parser.add_argument("--task", type=str, default="GOAT-stand-no-dr", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -31,7 +31,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
-args_cli.headless = True
+args_cli.headless = True                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -55,11 +55,13 @@ import lib
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
-from lib.agent.ppo import PPO
+# from lib.agent.ppo import PPO
+from lib.agent.ppo_new import PPO
 from lib.agent.mappo import MAPPO
 from lib.agent.cooperative_mappo import CooperativeMAPPO
 
-from lib.model.MLP import Actor, Critic
+# from lib.model.MLP import Actor, Critic
+from lib.model.MLP_new import Actor, Critic
 
 from lib.model.NerveNet import NerveNetPolicy
 
@@ -359,7 +361,7 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
+            actions, action_log_probs, _, nonscaled_actions = agent.act(obs, timestep=timestep, deterministic=False)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number
@@ -368,7 +370,7 @@ def main():
             # Insert data to the buffer
             agent.insert_data(observations=obs,
                               states=states,
-                              actions=actions,
+                              actions=nonscaled_actions,
                               action_log_probs=action_log_probs.reshape(-1, 1),
                               rewards=rewards,
                               next_observations=next_obs,
