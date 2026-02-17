@@ -60,8 +60,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     wheel_ki = torch.tensor([[1.0]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    joint_action_weight = 0.3
-    wheel_action_weight = 1.0
+    # joint_action_weight = 0.3
+    # wheel_action_weight = 1.0
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
@@ -160,6 +160,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
         "mean": 0.0,
-        "std": 0.05,
+        "std": 0.08,
         "operation": "add",
     }

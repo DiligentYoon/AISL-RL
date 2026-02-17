@@ -30,6 +30,10 @@ agent:
   clip_predicted_values: False
   async_actor_critic: False
 
+  # Action scaling
+  joint_action_weight: 0.3
+  wheel_action_weight: 1.0
+
   # Logging and checkpoint
   experiment:
     directory: "GOAT_Stand_DR_PP"
