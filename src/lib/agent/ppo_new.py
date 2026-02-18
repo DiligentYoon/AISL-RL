@@ -71,8 +71,8 @@ class PPO(Agent):
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
-        self.joint_action_weight = self.cfg["joint_action_weight"]
-        self.wheel_action_weight = self.cfg["wheel_action_weight"]
+        self.joint_action_weight = self.cfg["scale_factor"]["joint_action_weight"]
+        self.wheel_action_weight = self.cfg["scale_factor"]["wheel_action_weight"]
 
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
@@ -135,9 +135,6 @@ class PPO(Agent):
             log_prob : Log probability of RL actions
             values : Value(Return) preidctions
         """
-        # # Standardization               TODO: 이거 필요없을거 같음 지우기 ㄱㄱㄱㄱ
-        # standardized_observations = self.actor_standardizer.standardize(observations, update=update_rms)
-
         if timestep < self.random_timesteps:
             # Random act
             nonscaled_actions, log_prob, entropy = self.actor.random_act(observations)
@@ -153,7 +150,7 @@ class PPO(Agent):
         actions[:, :-2] *= self.joint_action_weight
         actions[:, -2:] *= self.wheel_action_weight
 
-        return actions, log_prob, entropy, nonscaled_actions                        # Add raw action which is inserted into buffer
+        return actions, nonscaled_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
 
     def insert_data(self,
                     observations: torch.Tensor,

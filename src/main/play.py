@@ -302,6 +302,14 @@ def main():
 
         model = {"actor": actor, "critic": critic}
 
+        # Scale Factor
+        if hasattr(cfg["agent"], "scale_factor") or cfg["agent"].get("scale_factor", None) is not None:
+            scaled = True
+            from lib.agent.ppo_new import PPO
+        else:
+            scaled = False
+            from lib.agent.ppo import PPO
+
         # Agent initialization
         agent = PPO(model=model,
                     buffer=buffer, 
@@ -336,7 +344,10 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            actions, action_log_probs, _, _ = agent.act(obs, timestep=timestep, deterministic=True)
+            if scaled:
+                actions, _,  _, _ = agent.act(obs, timestep=timestep, deterministic=True)
+            else:
+                actions, _, _ = agent.act(obs, timestep=timestep, deterministic=False)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number

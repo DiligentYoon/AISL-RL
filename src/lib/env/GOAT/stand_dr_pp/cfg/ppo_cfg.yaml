@@ -31,8 +31,9 @@ agent:
   async_actor_critic: False
 
   # Action scaling
-  joint_action_weight: 0.3
-  wheel_action_weight: 1.0
+  scale_factor:
+    joint_action_weight: 0.3
+    wheel_action_weight: 1.0
 
   # Logging and checkpoint
   experiment:

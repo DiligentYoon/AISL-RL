@@ -61,7 +61,7 @@ from lib.agent.mappo import MAPPO
 from lib.agent.cooperative_mappo import CooperativeMAPPO
 
 # from lib.model.MLP import Actor, Critic
-from lib.model.MLP_new import Actor, Critic
+from lib.model.MLP import Actor, Critic
 
 from lib.model.NerveNet import NerveNetPolicy
 
@@ -315,6 +315,14 @@ def main():
                 raise ValueError(f"Unknown model type specified in cfg: {model_type}")
 
         model = {"actor": actor, "critic": critic}
+        
+        # Scale Factor
+        if hasattr(cfg["agent"], "scale_factor") or cfg["agent"].get("scale_factor", None) is not None:
+            scaled = True
+            from lib.agent.ppo_new import PPO
+        else:
+            scaled = False
+            from lib.agent.ppo import PPO
 
         # Agent initialization
         agent = PPO(model=model,
@@ -361,7 +369,12 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, action_log_probs, _, nonscaled_actions = agent.act(obs, timestep=timestep, deterministic=False)
+            if scaled:
+                actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
+            else:
+                actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
+                nonscaled_actions = actions.clone()
+            
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number
