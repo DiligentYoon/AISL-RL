@@ -203,7 +203,7 @@ class MAPPO(MultiAgent):
         for i, uid in enumerate(self.possible_agents):
             with torch.no_grad():
                 value_preds, _, _ = self.critics[uid](critic_inputs[uid]) # [E, 1]
-                value_preds, _, _ = self.value_standardizers[uid].destandardize(value_preds)
+                value_preds = self.value_standardizers[uid].destandardize(value_preds)
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
@@ -239,7 +239,7 @@ class MAPPO(MultiAgent):
             with torch.no_grad():
                 critic_input = self.buffer[uid].get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer[uid].get_tensor_by_name("next_observations")[-1]
                 last_values, _, _ = self.critics[uid](critic_input)
-                last_values, _, _ = self.value_standardizers[uid].destandardize(last_values)
+                last_values = self.value_standardizers[uid].destandardize(last_values)
         
             # GAE Calculation
             self.buffer[uid].compute_gae(last_values, self.discount_factor, self.gae_lambda)

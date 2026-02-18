@@ -161,6 +161,7 @@ def main():
     model_type = cfg["models"]["policy"].get("type", None)
     model = {}
     if multi_agent:
+        scaled = False
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
 
@@ -347,7 +348,7 @@ def main():
             if scaled:
                 actions, _,  _, _ = agent.act(obs, timestep=timestep, deterministic=True)
             else:
-                actions, _, _ = agent.act(obs, timestep=timestep, deterministic=False)
+                actions, _, _ = agent.act(obs, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number

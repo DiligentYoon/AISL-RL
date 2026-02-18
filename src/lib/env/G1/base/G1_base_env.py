@@ -19,6 +19,16 @@ class G1BaseEnv(Env):
         # Joint & Link Limits
         self.joint_pos_limits = self._robot.data.joint_pos_limits
         self.joint_vel_limits = self._robot.data.joint_vel_limits
+
+        # Joint Ids
+        self.total_leg_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint",
+                                                               r".*_knee_joint",
+                                                               r".*_ankle_(pitch|roll)_joint"])
+        
+        self.total_arm_joint_ids, _ = self._robot.find_joints([r"torso_joint", 
+                                                               r".*_shoulder_(pitch|roll|yaw)_joint",
+                                                               r".*_elbow_(pitch|roll)_joint",
+                                                               r".*_(zero|one|two|three|four|five|six)_joint"])
         
     # Create scene
     def _setup_scene(self):
