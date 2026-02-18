@@ -1,6 +1,7 @@
 seed: 42
 
 models:
+  squashed: Ture
   policy:  
     min_log_std: -20.0
     max_log_std: 2.0
@@ -29,6 +30,10 @@ agent:
   time_limit_bootstrap: True
   clip_predicted_values: False
   async_actor_critic: False
+  
+  # Action scaling
+  joint_action_weight: 0.5
+  wheel_action_weight: 1.0
 
   # Logging and checkpoint
   experiment:

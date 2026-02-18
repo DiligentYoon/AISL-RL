@@ -19,7 +19,7 @@ parser.add_argument("--checkpoint", type=str, default=None, help="Path to model 
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -148,12 +148,12 @@ def main():
     from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
     from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
     from lib.model.BodyTransformer.transformer_components import BodyTransformer
-    from lib.agent.ppo import PPO
+    # from lib.agent.ppo import PPO
+    from lib.agent.ppo_new import PPO
     from lib.agent.mappo import MAPPO
     from lib.agent.cooperative_mappo import CooperativeMAPPO
     
     # 1. Initialization
-    # Model initialization
     # Model initialization
     is_shared = cfg["models"].get("shared", False)
     is_squashed = cfg["models"].get("squashed", False)
@@ -336,7 +336,7 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=True)
+            actions, action_log_probs, _, _ = agent.act(obs, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number

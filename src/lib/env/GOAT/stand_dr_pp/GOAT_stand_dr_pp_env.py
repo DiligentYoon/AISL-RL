@@ -109,8 +109,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         
         # Refine command
         self.actions = actions.clone()
-        self.joint_pos_delta_cmd = self.actions[:, :-2] * self.cfg.joint_action_weight
-        self.wheel_vel_cmd = self.actions[:, -2:] * self.cfg.wheel_action_weight
+        self.joint_pos_delta_cmd = self.actions[:, :-2]# * self.cfg.joint_action_weight
+        self.wheel_vel_cmd = self.actions[:, -2:]# * self.cfg.wheel_action_weight
         
     def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
         # Current state
