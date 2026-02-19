@@ -157,7 +157,7 @@ def main():
     # Model initialization
     is_shared = cfg["models"].get("shared", False)
     is_squashed = cfg["models"].get("squashed", False)
-    is_cooperative = cfg["models"].get("cooperative", None)
+    is_cooperative = cfg["models"].get("cooperative", False)
     model_type = cfg["models"]["policy"].get("type", None)
     model = {}
     if multi_agent:
@@ -165,7 +165,7 @@ def main():
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
 
-        if is_cooperative is not None:
+        if is_cooperative:
             cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
             cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
             # For proactive action processing 
@@ -188,7 +188,7 @@ def main():
                 'critic': critic
             }
 
-        if is_cooperative is not None:
+        if is_cooperative:
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,
                                      action_space=env.action_space,
