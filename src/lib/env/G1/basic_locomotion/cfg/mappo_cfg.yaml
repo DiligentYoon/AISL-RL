@@ -42,6 +42,8 @@ agent:
 
   # Action scaling (Env-specific)
   action_scale_factor:
+    arm: null
+    leg: null
 
   # logging and checkpoint
   experiment:
