@@ -81,6 +81,10 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
         self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
 
+        # Action scale factor
+        self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
+        self.cfg.action_scale_factor["leg"][1] = self.total_leg_joint_ids
+
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
 
@@ -149,8 +153,8 @@ class G1BasicLocomotionEnv(G1BaseEnv):
     def _apply_action(self):
         if self.cfg.num_agents > 1:
             # Multi Agent
-            leg_actions = self.action_scale * self.actions["leg"]
-            arm_actions = self.action_scale * self.actions["arm"]
+            leg_actions = self.actions["leg"]
+            arm_actions = self.actions["arm"]
 
             self._robot.set_joint_position_target(
                 target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
@@ -166,7 +170,7 @@ class G1BasicLocomotionEnv(G1BaseEnv):
             )
         else:
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.action_scale * self.actions,
+                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
                                    min=self._robot.data.joint_pos_limits[:, self._joint_dof_ids, 0],
                                    max=self._robot.data.joint_pos_limits[:, self._joint_dof_ids, 1]),
                 joint_ids=self._joint_dof_ids

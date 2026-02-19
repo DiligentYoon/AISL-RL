@@ -14,9 +14,14 @@ class ModelFactory:
     def __init__(self,
                  cfg: dict[str, Union[dict, Any]],
                  device: Union[torch.device, str]):
+        """
+        ModelFactor class for generating nn Model of actor and critic agent.
 
-        self.model_cfg = cfg["models"]
-        self.agent_cfg = cfg["agent"]
+        :param cfg: configuration dictionary of model and agent
+        :param device: torch device
+        """
+
+        self.model_cfg = cfg
         self.is_shared = self.model_cfg.get("shared", False)
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_cooperative = self.model_cfg.get("cooperative", False)
@@ -33,7 +38,7 @@ class ModelFactory:
                             action_size: Union[dict[str, int], int],
                             possible_agents: list[str] = None):
         
-        if (possible_agents is None) and (not self.is_multi_agent):
+        if (possible_agents is None) and (self.is_multi_agent):
             raise RuntimeError("Please confirm the cfg file whether multi_agent is assigned true or false")
 
         if self.model_type is not None:
@@ -95,7 +100,7 @@ class ModelFactory:
                     max_log_std=self.model_cfg['policy']['max_log_std'],
                 )
 
-            if state_size is not None:
+            if state_size is None:
                 raise RuntimeError("Nervenet should have state space for asyncronous actor critic")
             state_size = state_space.shape[-1]
 

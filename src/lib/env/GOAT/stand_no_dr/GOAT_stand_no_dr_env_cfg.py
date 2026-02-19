@@ -30,8 +30,8 @@ class GOATStandNoDREnvCfg(GOATBaseEnvCfg):
     wheel_ki = torch.tensor([[1.0]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    # joint_action_weight = 0.5
-    # wheel_action_weight = 1.0
+    action_scale_factor = {"joint" : [0.5, ()],
+                           "wheel" : [1.0, ()]}
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee

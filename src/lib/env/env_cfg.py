@@ -175,6 +175,9 @@ class EnvCfg:
     which means no noise is added.
     """
 
+    action_scale_factor : dict | float = 1.0
+    """The Scale factor for action pre-processing. Default is 1.0, which means non-scaled action."""
+
     rerender_on_reset: bool = False
     """Whether a render step is performed again after at least one environment has been reset.
     Defaults to False, which means no render step will be performed after reset.

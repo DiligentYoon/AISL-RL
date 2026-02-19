@@ -21,6 +21,9 @@ class GOATBaseEnv(Env):
         # Joint & Link Limits
         self.joint_pos_limits = self._robot.data.joint_pos_limits
         self.joint_vel_limits = self._robot.data.joint_vel_limits
+        # Joint Ids
+        self.joint_ids, _ = self._robot.find_joints(["hip_.*", "thigh_.*", "knee_.*"])
+        self.wheel_ids, _ = self._robot.find_joints(["wheel_.*"])
         
     # Create scene
     def _setup_scene(self):

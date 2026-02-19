@@ -114,6 +114,8 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
     observation_space = {"leg": 48, "arm": 87}                    
     state_space = {"leg": 123, "arm": 123}
     num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
     # proactive_id = possible_agents[0]
     # reactive_id = possible_agents[1]  
 
@@ -122,6 +124,7 @@ class G1BasicLocomotionEnvCfg(G1BaseEnvCfg):
     # observation_space = 123                  
     # state_space = 0
     # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 1.0

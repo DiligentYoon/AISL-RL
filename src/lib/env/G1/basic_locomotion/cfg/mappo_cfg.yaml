@@ -18,8 +18,8 @@ buffer:
   buffer_size: -1
 
 agent:
-  proactive:
-  reactive:
+  proactive: null
+  reactive: null
   
   class: PPO
   rollouts: 24
@@ -39,6 +39,10 @@ agent:
   time_limit_bootstrap: True
   clip_predicted_values: False
   async_actor_critic: False
+
+  # Action scaling (Env-specific)
+  action_scale_factor:
+
   # logging and checkpoint
   experiment:
     directory: "g1_locomotion"
