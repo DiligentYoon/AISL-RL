@@ -297,6 +297,10 @@ class G1BasicLocomotionEnv(G1BaseEnv):
                              self.cfg.w_limits_torso  * joint_pos_penalty_torso + \
                              self.cfg.w_termination   * terminate_penalty
 
+            arm_rewards = self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
+                          self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
+                          self.cfg.w_action_rate    * action_rate_penalty_arm 
+            
             leg_rewards = common_rewards + \
                           self.cfg.w_feet_air_time * gait_reward + \
                           self.cfg.w_feet_slide    * slide_penalty + \
@@ -306,11 +310,6 @@ class G1BasicLocomotionEnv(G1BaseEnv):
                           self.cfg.w_joint_acc     * joint_acc_penalty + \
                           self.cfg.w_action_rate   * action_rate_penalty_leg 
                           
-
-            arm_rewards = self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
-                          self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
-                          self.cfg.w_action_rate    * action_rate_penalty_arm 
-
             # Dictionary key order (alphabetical order)
             rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
         else:

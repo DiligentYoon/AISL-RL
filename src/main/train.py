@@ -55,12 +55,6 @@ import lib
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
-# from lib.agent.ppo import PPO
-from lib.agent.ppo_new import PPO
-from lib.agent.mappo import MAPPO
-from lib.agent.cooperative_mappo import CooperativeMAPPO
-
-# from lib.model.MLP import Actor, Critic
 from lib.model.MLP import Actor, Critic
 
 from lib.model.NerveNet import NerveNetPolicy
@@ -171,15 +165,16 @@ def main():
     # Model initialization
     is_shared = cfg["models"].get("shared", False)
     is_squashed = cfg["models"].get("squashed", False)
-    is_cooperative = cfg["models"].get("cooperative", None)
+    is_cooperative = cfg["models"].get("cooperative", False) # multi agent
     model_type = cfg["models"]["policy"].get("type", None)
     model = {}
     if multi_agent:
+        # Multi Agent
         scaled = False
         if model_type is not None:
             raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
 
-        if is_cooperative is not None:
+        if is_cooperative:
             cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
             cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
             # For proactive action processing 
@@ -202,7 +197,8 @@ def main():
                 'critic': critic
             }
 
-        if is_cooperative is not None:
+        if is_cooperative:
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,
                                      action_space=env.action_space,
@@ -213,16 +209,18 @@ def main():
                                      cfg=cfg["agent"])
         
         else:
+            from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,
-                        state_space=env.state_space,
-                        action_space=env.action_space,
-                        possible_agents=possible_agents,
-                        model=model,
-                        buffer=buffers,
-                        device=env.device,
-                        cfg=cfg["agent"])
+                          state_space=env.state_space,
+                          action_space=env.action_space,
+                          possible_agents=possible_agents,
+                          model=model,
+                          buffer=buffers,
+                          device=env.device,
+                          cfg=cfg["agent"])
 
     else:
+        # Single Agent
         if model_type is None:
                 actor = Actor(num_observations=obs_size,
                               num_actions=act_size,
@@ -236,7 +234,7 @@ def main():
             
         else:
             model_type_lower = model_type.lower()
-            if model_type_lower == "gnn":
+            if model_type_lower == "nervenet":
                 actor = NerveNetPolicy(
                     observation_space=observation_space,
                     action_space=action_space,
@@ -255,11 +253,11 @@ def main():
                 mapping = Mapping(env._unwrapped.cfg.map_info)
                 use_mlp = cfg["models"].get("use_mlp", False)
                 action_detokenizer = ActionDetokenizer(mapping=mapping,
-                                                    action_dim=action_space.shape[0], 
-                                                    device=env.device)
+                                                       action_dim=action_space.shape[0], 
+                                                       device=env.device)
                 value_detokenizer = ValueDetokenizer(mapping=mapping,
-                                                    use_mlp=use_mlp, 
-                                                    device=env.device)
+                                                     use_mlp=use_mlp, 
+                                                     device=env.device)
                 if is_shared:
                     if state_space is not None:
                         raise RuntimeError("Shared structure should not use state space different from observation sapce.")
@@ -320,7 +318,7 @@ def main():
         # Scale Factor
         if hasattr(cfg["agent"], "scale_factor") or cfg["agent"].get("scale_factor", None) is not None:
             scaled = True
-            from lib.agent.ppo_new import PPO
+            from lib.agent.ppo_scaled import PPO
         else:
             scaled = False
             from lib.agent.ppo import PPO

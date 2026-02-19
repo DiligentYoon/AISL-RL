@@ -149,7 +149,7 @@ def main():
     from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
     from lib.model.BodyTransformer.transformer_components import BodyTransformer
     # from lib.agent.ppo import PPO
-    from lib.agent.ppo_new import PPO
+    from lib.agent.ppo_scaled import PPO
     from lib.agent.mappo import MAPPO
     from lib.agent.cooperative_mappo import CooperativeMAPPO
     
@@ -306,7 +306,7 @@ def main():
         # Scale Factor
         if hasattr(cfg["agent"], "scale_factor") or cfg["agent"].get("scale_factor", None) is not None:
             scaled = True
-            from lib.agent.ppo_new import PPO
+            from lib.agent.ppo_scaled import PPO
         else:
             scaled = False
             from lib.agent.ppo import PPO
