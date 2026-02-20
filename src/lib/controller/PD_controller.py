@@ -100,13 +100,13 @@ class PD_Controller():
         joint_limits_right = torch.index_select(joint_pos_limits, 1, right_leg_indices)
 
         # Left foot PD control
-        joint_pos_cmd_left = torch.clamp(joint_pos_cmd_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1])            # Clipping joint position command
+        joint_pos_cmd_left = torch.clamp(joint_pos_cmd_left + joint_pos_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1]) # Clipping joint position command
         joint_pos_left_error = joint_pos_cmd_left - joint_pos_left
-        joint_vel_left_error = - joint_vel_left                                                                                 # reference joint velocity = 0
+        joint_vel_left_error = - joint_vel_left                                                                                       # reference joint velocity = 0
         torque_left = self.kp * joint_pos_left_error + self.kd * joint_vel_left_error
 
         # Right foot PD control
-        joint_pos_cmd_right = torch.clamp(joint_pos_cmd_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1])        # Clipping joint position command
+        joint_pos_cmd_right = torch.clamp(joint_pos_cmd_right + joint_pos_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1])        # Clipping joint position command
         joint_pos_right_error = joint_pos_cmd_right - joint_pos_right
         joint_vel_right_error = - joint_vel_right                                                                               # reference joint velocity = 0
         torque_right = self.kp * joint_pos_right_error + self.kd * joint_vel_right_error

@@ -7,6 +7,10 @@ models:
   value: 
     clip_actions: False
 
+  model_type: null
+  shared: False
+  squashed: True
+  
 buffer:
   buffer_size: -1
 
@@ -29,11 +33,11 @@ agent:
   time_limit_bootstrap: True
   clip_predicted_values: False
   async_actor_critic: False
-
-  # Action scaling
-  scale_factor:
-    joint_action_weight: 0.3
-    wheel_action_weight: 1.0
+  
+  # Action scaling (Env-specific)
+  action_scale_factor:
+    joint: null 
+    wheel: null
 
   # Logging and checkpoint
   experiment:
@@ -43,4 +47,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 32000
+  timesteps: 36000

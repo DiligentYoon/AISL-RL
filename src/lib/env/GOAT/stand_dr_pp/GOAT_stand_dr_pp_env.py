@@ -225,7 +225,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Energy / Action Smoothness
         r_effort = -torch.sum(torch.abs(self.torque_cmd), dim=1)     
         
-        r_terminated = - self.reset_terminated.float()
+        r_terminated = -self.reset_terminated.float()
 
         r_alive = self.cfg.r_alive_weight * current_time/(self.cfg.max_episode_length)
 

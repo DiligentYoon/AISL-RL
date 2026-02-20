@@ -51,7 +51,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 26                      # Observation space
     state_space = 41                            # State space including privilege information
-    max_episode_length = episode_length_s/sim_dt 
+    max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
     joint_kp = torch.tensor([[0.330, 4.270, 0.40]])
@@ -60,7 +60,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     wheel_ki = torch.tensor([[0.3]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    action_scale_factor = {"joint" : [0.3, ()],
+    action_scale_factor = {"joint" : [0.2, ()],
                            "wheel" : [1.0, ()]}
     
     ## ==================== Robot configuration ==================== ##
