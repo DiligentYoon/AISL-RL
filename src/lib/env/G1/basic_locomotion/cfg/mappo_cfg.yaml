@@ -10,7 +10,6 @@ models:
     clip_actions: False
 
   model_type: null
-  cooperative: False
   shared: False
   squashed: False
 
@@ -18,8 +17,6 @@ buffer:
   buffer_size: -1
 
 agent:
-  proactive: null
-  reactive: null
   
   class: PPO
   rollouts: 24

@@ -14,12 +14,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-no-dr", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -192,7 +192,7 @@ def main():
     # Scale Factor
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
-        if model_manager.is_cooperative:
+        if model_manager.is_shared:
             from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,

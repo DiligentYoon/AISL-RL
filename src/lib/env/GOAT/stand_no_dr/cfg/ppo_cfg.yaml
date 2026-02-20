@@ -9,7 +9,7 @@ models:
 
   model_type: null
   shared: False
-  squashed: False
+  squashed: True
   
 buffer:
   buffer_size: -1

@@ -54,6 +54,10 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.extras["Curriculum"] = {}
         self.extras["Curriculum"]["step_progress"] = 0
     
+        # Index Mapping for external action scaling
+        self.cfg.action_scale_factor["joint"][1] = self.joint_ids
+        self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
+    
     def _setup_scene(self):
         super()._setup_scene()
 
@@ -109,8 +113,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         
         # Refine command
         self.actions = actions.clone()
-        self.joint_pos_delta_cmd = self.actions[:, :-2]# * self.cfg.joint_action_weight
-        self.wheel_vel_cmd = self.actions[:, -2:]# * self.cfg.wheel_action_weight
+        self.joint_pos_delta_cmd = self.actions[:, self.joint_ids]
+        self.wheel_vel_cmd = self.actions[:, self.wheel_ids]
         
     def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
         # Current state
@@ -142,7 +146,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         """
         observation = torch.cat((self.base_acceleration,
                                  self.base_angular_vel,
-                                 self.gravity_vector,
                                  self.base_quaternion,
                                  self.joint_pos,
                                  self.joint_vel), dim=1)
@@ -242,6 +245,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
     
     def _get_dones(self):
         self._compute_intermediate_values() # planning state calculation
+        
         tilt_threshold_rad = torch.tensor(self.cfg.base_tilt_reset_condition, device=self.device) * torch.pi / 180.0
         cos_threshold = torch.cos(tilt_threshold_rad)
 

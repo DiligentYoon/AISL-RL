@@ -91,13 +91,6 @@ class MAPPO(MultiAgent):
                 self.optimizers[uid] = torch.optim.Adam(itertools.chain(actor.parameters(), critic.parameters()), lr=self.learning_rate)
                 self.checkpoint_modules[uid]["optimizer"] = self.optimizers[uid]
 
-        self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
-                              "value_preds", "rewards", "truncated", "terminated",
-                              "returns", "advantages"]
-        
-        self.tensors_name_for_update = ["observations", "actions", "action_log_probs",
-                                        "value_preds", "returns", "advantages"]
-
         # Default Mode : Evaluation for disconnecting gradient flow
         self.set_running_mode("eval")
 

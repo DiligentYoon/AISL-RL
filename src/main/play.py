@@ -176,7 +176,7 @@ def main():
     # Scale Factor
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
-        if model_manager.is_cooperative:
+        if model_manager.is_shared:
             from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,
