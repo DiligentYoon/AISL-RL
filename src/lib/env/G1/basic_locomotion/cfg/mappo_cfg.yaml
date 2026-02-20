@@ -1,8 +1,6 @@
 seed: 42
 
 models:
-  cooperative: True
-
   policy:
     clip_actions: False
     clip_log_std: True
@@ -11,30 +9,39 @@ models:
   value: 
     clip_actions: False
 
+  model_type: null
+  shared: False
+  squashed: False
+
 buffer:
   buffer_size: -1
 
 agent:
-  proactive:
-  reactive:
   
   class: PPO
-  rollouts: 16
-  learning_epochs: 4
-  mini_batches: 2
+  rollouts: 24
+  learning_epochs: 5
+  mini_batches: 4
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 3.0e-04
+  learning_rate: 1.0e-03
   random_timesteps: 0
   learning_starts: 0
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  entropy_loss_scale: 0.0
-  value_loss_scale: 2.0
+  entropy_loss_scale: 0.008
+  value_loss_scale: 1.0
   kl_threshold: 0.0
   time_limit_bootstrap: True
   clip_predicted_values: False
+  async_actor_critic: False
+
+  # Action scaling (Env-specific)
+  action_scale_factor:
+    arm: null
+    leg: null
+
   # logging and checkpoint
   experiment:
     directory: "g1_locomotion"
@@ -43,4 +50,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 12800
+  timesteps: 19200

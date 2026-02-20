@@ -48,8 +48,12 @@ class GOATStandNoDREnv(GOATBaseEnv):
                                               dt=self.cfg.sim_dt)
         # HW limits
         self.joint_input_limits = self.cfg.joint_input_limits.unsqueeze(0).expand(self.num_envs, -1, -1).to(device=self.device)         # Currently not used
-        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
-    
+        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                      # Isaac sim cannot bring torque limits from urdf
+
+        # Index Mapping for external action scaling
+        self.cfg.action_scale_factor["joint"][1] = self.joint_ids
+        self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
+
     def _setup_scene(self):
         super()._setup_scene()
 
@@ -105,8 +109,8 @@ class GOATStandNoDREnv(GOATBaseEnv):
         
         # Refine command
         self.actions = actions.clone()
-        self.joint_pos_delta_cmd = self.actions[:, :-2]# * self.cfg.joint_action_weight
-        self.wheel_vel_cmd = self.actions[:, -2:]# * self.cfg.wheel_action_weight
+        self.joint_pos_delta_cmd = self.actions[:, self.joint_ids]
+        self.wheel_vel_cmd = self.actions[:, self.wheel_ids]
         
     def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
         # Current state

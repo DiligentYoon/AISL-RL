@@ -80,6 +80,8 @@ class MAPPO(MultiAgent):
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
+        self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
+
         # Set up Adam optimizers
         self.optimizers = {}
         for uid in self.possible_agents:
@@ -88,13 +90,6 @@ class MAPPO(MultiAgent):
             if actor is not None and critic is not None:
                 self.optimizers[uid] = torch.optim.Adam(itertools.chain(actor.parameters(), critic.parameters()), lr=self.learning_rate)
                 self.checkpoint_modules[uid]["optimizer"] = self.optimizers[uid]
-
-        self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
-                              "value_preds", "rewards", "truncated", "terminated",
-                              "returns", "advantages"]
-        
-        self.tensors_name_for_update = ["observations", "actions", "action_log_probs",
-                                        "value_preds", "returns", "advantages"]
 
         # Default Mode : Evaluation for disconnecting gradient flow
         self.set_running_mode("eval")
@@ -140,25 +135,37 @@ class MAPPO(MultiAgent):
         """
         # From Tensor to Dict
         observations = unflatten_tensorized_space(self.observation_space, observations)
+
+        data = []
         if timestep < self.random_timesteps:
             # Random act
-            data = [
-                self.actors[uid].random_act(observations[uid]) for uid in self.possible_agents
-            ]
+            for uid in self.possible_agents:
+                scale_factor = self.action_scale_factor[uid][0]
+                
+                nonscaled_action, log_prob, entropy = self.actors[uid].random_act(observations[uid])
+                action = nonscaled_action.clone() * scale_factor
+
+                data.append((action, nonscaled_action, log_prob, entropy))
         else:
             # Normal act list[(action, log_prob, entropy), (...), ()]
-            data = [
-                self.actors[uid](observations=observations[uid],
-                                 taken_actions=None,
-                                 deterministic=deterministic, 
-                                 update_rms=update_rms) for uid in self.possible_agents
-            ]
+            for uid in self.possible_agents:
+                scale_factor = self.action_scale_factor[uid][0]
+
+                nonscaled_action, log_prob, entropy = self.actors[uid](observations=observations[uid],
+                                                                       taken_actions=None,
+                                                                       deterministic=deterministic, 
+                                                                       update_rms=update_rms)
+                action = nonscaled_action.clone() * scale_factor
+
+                data.append((action, nonscaled_action, log_prob, entropy))
+
         
         actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
-        log_prob = torch.stack([d[1] for d in data], dim=-1) # [B, A]
-        entropy  = torch.stack([d[2] for d in data], dim=-1) # [A]
+        nonscaled_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
+        log_probs = torch.stack([d[2] for d in data], dim=-1) # [B, A]
+        entropy  = torch.stack([d[3] for d in data], dim=-1) # [A]
         
-        return actions, log_prob, entropy
+        return actions, nonscaled_actions, log_probs, entropy
     
 
     def insert_data(self,
@@ -203,7 +210,7 @@ class MAPPO(MultiAgent):
         for i, uid in enumerate(self.possible_agents):
             with torch.no_grad():
                 value_preds, _, _ = self.critics[uid](critic_inputs[uid]) # [E, 1]
-                value_preds, _, _ = self.value_standardizers[uid].destandardize(value_preds)
+                value_preds = self.value_standardizers[uid].destandardize(value_preds)
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
@@ -239,7 +246,7 @@ class MAPPO(MultiAgent):
             with torch.no_grad():
                 critic_input = self.buffer[uid].get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer[uid].get_tensor_by_name("next_observations")[-1]
                 last_values, _, _ = self.critics[uid](critic_input)
-                last_values, _, _ = self.value_standardizers[uid].destandardize(last_values)
+                last_values = self.value_standardizers[uid].destandardize(last_values)
         
             # GAE Calculation
             self.buffer[uid].compute_gae(last_values, self.discount_factor, self.gae_lambda)

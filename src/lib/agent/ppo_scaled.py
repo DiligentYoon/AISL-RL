@@ -64,15 +64,14 @@ class PPO(Agent):
         self.value_clip = self.cfg["value_clip"]
 
         self.entropy_loss_scale = self.cfg["entropy_loss_scale"]
-        self.value_loss_scale = self.cfg["value_loss_scale"]
+        self.value_loss_scale   = self.cfg["value_loss_scale"]
 
-        self.time_limit_bootstrap = self.cfg["time_limit_bootstrap"]
+        self.time_limit_bootstrap  = self.cfg["time_limit_bootstrap"]
         self.clip_predicted_values = self.cfg["clip_predicted_values"]
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
-        self.joint_action_weight = self.cfg["joint_action_weight"]
-        self.wheel_action_weight = self.cfg["wheel_action_weight"]
+        self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
 
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
@@ -135,9 +134,6 @@ class PPO(Agent):
             log_prob : Log probability of RL actions
             values : Value(Return) preidctions
         """
-        # # Standardization               TODO: 이거 필요없을거 같음 지우기 ㄱㄱㄱㄱ
-        # standardized_observations = self.actor_standardizer.standardize(observations, update=update_rms)
-
         if timestep < self.random_timesteps:
             # Random act
             nonscaled_actions, log_prob, entropy = self.actor.random_act(observations)
@@ -150,10 +146,18 @@ class PPO(Agent):
         
         # Action scaling
         actions = nonscaled_actions.clone()
-        actions[:, :-2] *= self.joint_action_weight
-        actions[:, -2:] *= self.wheel_action_weight
+        if isinstance(self.action_scale_factor, dict):
+            # Per-action dictionary
+            # Action Scale Factor : [k_1 : [0.5, (0, 1, ...)], k_2 : [1.5, (5, 6, ...)], ...]
+            for k, v in self.action_scale_factor.items():
+                scale_factor = v[0]
+                mapping_ids = v[1]
+                actions[:, mapping_ids] *= scale_factor
+        else:
+            # Single scalar
+            actions *= self.action_scale_factor 
 
-        return actions, log_prob, entropy, nonscaled_actions                        # Add raw action which is inserted into buffer
+        return actions, nonscaled_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
 
     def insert_data(self,
                     observations: torch.Tensor,

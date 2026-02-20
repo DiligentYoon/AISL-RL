@@ -14,12 +14,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-no-dr", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -55,16 +55,10 @@ import lib
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
-# from lib.agent.ppo import PPO
-from lib.agent.ppo_new import PPO
-from lib.agent.mappo import MAPPO
-from lib.agent.cooperative_mappo import CooperativeMAPPO
+from lib.model.model_factory import ModelFactory
 
-# from lib.model.MLP import Actor, Critic
-from lib.model.MLP_new import Actor, Critic
-
+from lib.model.MLP import Actor, Critic
 from lib.model.NerveNet import NerveNetPolicy
-
 from lib.utils.graph_utils import Mapping
 from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
 from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
@@ -119,14 +113,15 @@ def main():
 
 
     # ======================= Buffer =========================
-
     multi_agent = algorithm == "mappo"
+    cfg["models"]["multi_agent"] = multi_agent
     # Initialization
     if cfg["buffer"]["buffer_size"] == -1:
         cfg["buffer"]["buffer_size"] = cfg["agent"]["rollouts"]
     else:
         raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
     
+    possible_agents = None
     if multi_agent:
         obs_size = {}
         state_size = {}
@@ -166,162 +161,65 @@ def main():
         state_size = buffer.tensors["states"].shape[-1] if env.state_space else obs_size
         act_size = buffer.tensors["actions"].shape[-1]
 
-    # =================== Model & Agent Spawn Test ==========================
-    
-    # Model initialization
-    is_shared = cfg["models"].get("shared", False)
-    is_squashed = cfg["models"].get("squashed", False)
-    is_cooperative = cfg["models"].get("cooperative", None)
-    model_type = cfg["models"]["policy"].get("type", None)
-    model = {}
-    if multi_agent:
-        if model_type is not None:
-            raise RuntimeError("MARL With CTDE structure only supports a MLP network.")
-
-        if is_cooperative is not None:
-            cfg["agent"]["proactive"] = env._unwrapped.cfg.proactive_id
-            cfg["agent"]["reactive"] = env._unwrapped.cfg.reactive_id
-            # For proactive action processing 
-            obs_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]] 
-            state_size[cfg["agent"]["reactive"]] += act_size[cfg["agent"]["proactive"]]
-
-        for uid in possible_agents:
-            # Per-Agent Network
-            actor = Actor(num_observations=obs_size[uid],
-                          num_actions=act_size[uid],
-                          min_log_std=cfg["models"]["policy"]["min_log_std"],
-                          max_log_std=cfg["models"]["policy"]["max_log_std"],
-                          squash=is_squashed,
-                          device=env.device)
-            critic = Critic(num_states=state_size[uid],
-                            device=env.device)
+    # ====================== Model Spawn  ==========================
+    model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
+    if model_manager.model_type is None:
+        models = model_manager.generate_mlp_models(observation_size=obs_size,
+                                                   state_size=state_size,
+                                                   action_size=act_size,
+                                                   possible_agents=possible_agents)
+    else:
+        node_cfg = None
+        mapping_cfg = None
+        if model_manager.model_type.lower() == "nervenet":
+            node_cfg = {'node_info': env._unwrapped.cfg.node_info,
+                        'num_nodes': env._unwrapped.cfg.num_nodes,
+                        'num_actuated_nodes': env._unwrapped.cfg.num_actuated_nodes}
             
-            model[uid] = {
-                'actor': actor,
-                'critic': critic
-            }
+        elif model_manager.model_type.lower() == "bodytransformer":
+            mapping_cfg = env._unwrapped.cfg.map_info
 
-        if is_cooperative is not None:
+        else:
+            raise RuntimeError("Not supported type")
+        
+        models = model_manager.generate_gnn_models(observation_space=observation_space,
+                                                   state_space=state_space,
+                                                   action_space=action_space,
+                                                   node_cfg=node_cfg,
+                                                   mapping_cfg=mapping_cfg)
+
+    # ====================== Agent Spawn  ==========================
+    # Scale Factor
+    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
+    if multi_agent:
+        if model_manager.is_shared:
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                      state_space=env.state_space,
                                      action_space=env.action_space,
                                      possible_agents=possible_agents,
-                                     model=model,
+                                     model=models,
                                      buffer=buffers,
                                      device=env.device,
                                      cfg=cfg["agent"])
-        
         else:
+            from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,
-                        state_space=env.state_space,
-                        action_space=env.action_space,
-                        possible_agents=possible_agents,
-                        model=model,
-                        buffer=buffers,
-                        device=env.device,
-                        cfg=cfg["agent"])
-
+                          state_space=env.state_space,
+                          action_space=env.action_space,
+                          possible_agents=possible_agents,
+                          model=models,
+                          buffer=buffers,
+                          device=env.device,
+                          cfg=cfg["agent"])
     else:
-        if model_type is None:
-                actor = Actor(num_observations=obs_size,
-                              num_actions=act_size,
-                              min_log_std=cfg["models"]["policy"]["min_log_std"],
-                              max_log_std=cfg["models"]["policy"]["max_log_std"],
-                              squash=is_squashed,
-                              device=env.device)
-                
-                critic = Critic(num_states=state_size,
-                                device=env.device)
-            
-        else:
-            model_type_lower = model_type.lower()
-            if model_type_lower == "gnn":
-                actor = NerveNetPolicy(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    node_info=env._unwrapped.cfg.node_info,
-                    device=env.device,
-                    num_nodes=env._unwrapped.cfg.num_nodes,
-                    num_actuated_nodes=env._unwrapped.cfg.num_actuated_nodes,
-                    min_log_std=cfg['models']['policy']['min_log_std'],
-                    max_log_std=cfg['models']['policy']['max_log_std'],
-                )
-
-                critic = Critic(num_states=state_size,
-                                device=env.device)
-                
-            elif model_type_lower == "bodytransformer":
-                mapping = Mapping(env._unwrapped.cfg.map_info)
-                use_mlp = cfg["models"].get("use_mlp", False)
-                action_detokenizer = ActionDetokenizer(mapping=mapping,
-                                                    action_dim=action_space.shape[0], 
-                                                    device=env.device)
-                value_detokenizer = ValueDetokenizer(mapping=mapping,
-                                                    use_mlp=use_mlp, 
-                                                    device=env.device)
-                if is_shared:
-                    if state_space is not None:
-                        raise RuntimeError("Shared structure should not use state space different from observation sapce.")
-                    
-                    tokenizer = ObsTokenizer(mapping=mapping,
-                                            device=env.device)
-                    trunk = BodyTransformer(mapping=mapping,
-                                            device=env.device)
-
-                    actor = BodyLevelActor(
-                        observation_space=observation_space,
-                        action_space=action_space,
-                        mapping=mapping,
-                        tokenizer=tokenizer,
-                        trunk=trunk,
-                        detokenizer=action_detokenizer,
-                        device=env.device,
-                        min_log_std=cfg['models']['policy']['min_log_std'],
-                        max_log_std=cfg['models']['policy']['max_log_std'],)
-                    
-                    critic = BodyLevelCritic(
-                        state_space=observation_space,
-                        mapping=mapping,
-                        tokenizer=tokenizer,
-                        trunk=trunk,
-                        detokenizer=value_detokenizer,
-                        device=env.device)
-                    
-                else:
-                    actor = BodyLevelActor(
-                        observation_space=observation_space,
-                        action_space=action_space,
-                        mapping=mapping,
-                        tokenizer=ObsTokenizer(mapping=mapping,
-                                            device=env.device),
-                        trunk=BodyTransformer(mapping=mapping,
-                                            device=env.device),
-                        detokenizer=action_detokenizer,
-                        device=env.device,
-                        min_log_std=cfg['models']['policy']['min_log_std'],
-                        max_log_std=cfg['models']['policy']['max_log_std'],)
-                    
-                    critic = BodyLevelCritic(
-                        state_space=observation_space if state_space is None else state_space,
-                        mapping=mapping,
-                        tokenizer=ObsTokenizer(mapping=mapping,
-                                            device=env.device),
-                        trunk=BodyTransformer(mapping=mapping,
-                                            device=env.device),
-                        detokenizer=value_detokenizer,
-                        device=env.device)
-
-            else:
-                raise ValueError(f"Unknown model type specified in cfg: {model_type}")
-
-        model = {"actor": actor, "critic": critic}
-
+        from lib.agent.ppo_scaled import PPO
         # Agent initialization
-        agent = PPO(model=model,
+        agent = PPO(model=models,
                     buffer=buffer, 
                     device=env.device,
                     cfg=cfg["agent"],
-                    shared=is_shared)
+                    shared=model_manager.is_shared)
     
     # Checkpoint
     if args_cli.checkpoint is not None:
@@ -361,7 +259,7 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, action_log_probs, _, nonscaled_actions = agent.act(obs, timestep=timestep, deterministic=False)
+            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
             # update rollout number

@@ -1,13 +1,16 @@
 seed: 42
 
 models:
-  squashed: Ture
   policy:  
     min_log_std: -20.0
     max_log_std: 2.0
   value: 
     clip_actions: False
 
+  model_type: null
+  shared: False
+  squashed: True
+  
 buffer:
   buffer_size: -1
 
@@ -31,9 +34,10 @@ agent:
   clip_predicted_values: False
   async_actor_critic: False
   
-  # Action scaling
-  joint_action_weight: 0.5
-  wheel_action_weight: 1.0
+  # Action scaling (Env-specific)
+  action_scale_factor:
+    joint: null 
+    wheel: null
 
   # Logging and checkpoint
   experiment:
