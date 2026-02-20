@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lib.agent.mutli_agent import MultiAgent
+from lib.agent.multi_agent import MultiAgent
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
 
@@ -118,7 +118,7 @@ class MAPPO(MultiAgent):
                                             "value_preds", "returns", "advantages"]
         
     
-    def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
+    def act(self, observations: torch.Tensor, infos: dict[str, torch.Tensor], timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
         """
         Process the environment's observations to make a decision (actions) using the main policy
 

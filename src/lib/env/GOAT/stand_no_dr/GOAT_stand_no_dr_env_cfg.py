@@ -24,13 +24,13 @@ class GOATStandNoDREnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[3.3, 2.7, 14.0]])
-    joint_kd = torch.tensor([[0.1, 0.1, 0.01]])
-    wheel_kp = torch.tensor([[1.0]])
-    wheel_ki = torch.tensor([[1.0]])
+    joint_kp = torch.tensor([[0.330, 4.270, 0.40]])
+    joint_kd = torch.tensor([[0.015, 0.010, 0.018]])
+    wheel_kp = torch.tensor([[0.3]])
+    wheel_ki = torch.tensor([[0.3]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    action_scale_factor = {"joint" : [0.2, ()],
+    action_scale_factor = {"joint" : [1.5, ()],
                            "wheel" : [1.0, ()]}
     
     ## ==================== Robot configuration ==================== ##
@@ -62,7 +62,7 @@ class GOATStandNoDREnvCfg(GOATBaseEnvCfg):
     default_terrain_restitution = 0.4
 
     ## ==================== Terminal condition ==================== ##
-    height_reset_condition = 0.35               # meter (m)
+    height_reset_condition = 0.4                # meter (m)
     base_tilt_reset_condition = 28              # degree
 
     ## ==================== Reward Shaping ==================== ##

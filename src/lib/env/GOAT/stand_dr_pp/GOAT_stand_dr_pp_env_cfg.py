@@ -60,8 +60,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     wheel_ki = torch.tensor([[0.3]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    action_scale_factor = {"joint" : [0.2, ()],
-                           "wheel" : [1.0, ()]}
+    action_scale_factor = {"joint" : [5.0, ()],
+                           "wheel" : [3.0, ()]}
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
@@ -92,7 +92,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     default_terrain_restitution = 0.4
 
     ## ==================== Terminal condition ==================== ##
-    height_reset_condition = 0.35               # meter (m)
+    height_reset_condition = 0.4                # meter (m)
     base_tilt_reset_condition = 28              # degree
 
     ## ==================== Reward Shaping ==================== ##
@@ -102,10 +102,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     curriculum_level_up_threshold = 0.8         # success rate
     curriculum_level_down_threshold = 0.2
 
-    r_upright_weight = 0.5
+    r_upright_weight = 1.5
     r_height_weight = 0.0
-    r_vel_lin_weight = 0.01
-    r_vel_ang_weight = 0.01
+    r_vel_lin_weight = 0.005
+    r_vel_ang_weight = 0.005
     r_vel_joint_weight = 0.0
     r_effort_weight = 0.0
     r_terminated_weight = 0.0
