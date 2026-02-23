@@ -18,7 +18,7 @@ from isaaclab.assets import Articulation
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from lib.env.env import Env
+from isaaclab.utils.math import quat_apply
 
 # import logger
 logger = logging.getLogger(__name__)
@@ -120,6 +120,7 @@ class UniformVelocityCommand():
             raise ValueError("heading_command=True but cfg.ranges.heading is None")
 
         # buffers
+        self.vel_command_w = torch.zeros(self.num_envs, 3, device=self.device)
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
@@ -141,6 +142,16 @@ class UniformVelocityCommand():
     def command(self) -> torch.Tensor:
         """(num_envs, 3): [vx, vy, yaw_rate] in base frame."""
         return self.vel_command_b
+    
+    @property
+    def command_w(self) -> torch.Tensor:
+        """(num_envs, 3): [vx, vy, yaw_rate] in world frame."""
+        return self.vel_command_w
+    
+    @property
+    def heading(self) -> torch.Tensor:
+        """(num_envs, 1): yaw angle"""
+        return torch.atan2(self.command_w[:, 1], self.command_w[:, 0])
 
     def reset(self, env_ids: Sequence[int] | torch.Tensor | None = None) -> dict[str, float]:
         """Call this when those envs are reset."""
@@ -188,11 +199,17 @@ class UniformVelocityCommand():
         # duration
         self.time_left[env_ids] = r.uniform_(*self.cfg.resampling_time_range)
 
-        # linear vel
+        # linear vel in body frame
         self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
         self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
         # yaw rate (may be overridden by heading post-process)
         self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
+
+        # commadns in world frame
+        vel_b_3d = torch.cat([self.vel_command_b[env_ids, :2], torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
+        self.vel_command_w[env_ids, :2] = quat_apply(self.robot.data.root_quat_w[env_ids], vel_b_3d)[:, :2]
+        self.vel_command_w[env_ids, 2] = self.vel_command_b[env_ids, 2]
+
 
         # heading env selection (probabilistic)
         if self.cfg.heading_command:
