@@ -117,7 +117,7 @@ class PPO(Agent):
                                             "value_preds", "returns", "advantages"]
         
     
-    def act(self, observations: torch.Tensor, timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
+    def act(self, observations: torch.Tensor, infos: dict[str, torch.Tensor], timestep: int, deterministic: bool = False, update_rms: bool = False) -> torch.Tensor:
         """
         Process the environment's observations to make a decision (actions) using the main policy
 

@@ -15,11 +15,11 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_locomotion/2026-02-21_00-27-37_mappo/agent_3840.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -221,7 +221,7 @@ def main():
     # ======================================================================================================================
 
     # reset environment
-    obs, states, _ = env.reset()
+    obs, states, infos = env.reset()
     rollout = 0
     timestep = 0
     test_checkpoint_step = 100
@@ -232,9 +232,9 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            actions, _,  _, _ = agent.act(obs, timestep=timestep, deterministic=True)
+            actions, _,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
-            next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
+            next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             rollout += 1
 
@@ -249,6 +249,7 @@ def main():
         # simulation_app.update()
         obs = next_obs
         states = next_states
+        infos = next_infos
 
 
     # close the simulator

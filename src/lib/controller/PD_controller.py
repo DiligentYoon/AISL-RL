@@ -1,4 +1,5 @@
 import torch
+import math
 
 class PD_Controller():
     """
@@ -7,7 +8,7 @@ class PD_Controller():
     τ = Kp*e + Kd*ė
     """
     
-    def __init__(self, kp, kd, alpha: float, num_envs: int, num_dof: int, num_leg: int, device: str, dt: float):
+    def __init__(self, kp, kd, alpha: float, num_envs: int, num_dof: int, num_leg: int, device: str, dt: float, limits: float, safe_margin: float = 5.0):
         """
         Controller initialization for position control
 
@@ -28,6 +29,8 @@ class PD_Controller():
         self.num_leg = num_leg
         self.dt = dt
         self.alpha = alpha
+        self.joint_limits = limits
+        self.safe_margin = safe_margin
         self.old_torque = torch.zeros(self.num_envs, num_dof * num_leg, device=self.device)
 
         # kp gain
@@ -55,7 +58,6 @@ class PD_Controller():
         joint_pos: torch.Tensor,
         joint_vel: torch.Tensor,
         joint_pos_cmd: torch.Tensor,
-        joint_pos_limits: torch.Tensor,
         torque_limits: torch.Tensor
     ) -> torch.Tensor:
         """
@@ -76,39 +78,42 @@ class PD_Controller():
         leg_dof = self.num_dof                          # hip, thigh, knee joints
         num_joint = leg_dof * self.num_leg
 
-        if joint_pos_limits is None:
-            joint_pos_limits = torch.tensor([-1e9, 1e9], device=self.device).unsqueeze(0).unsqueeze(0).expand(self.num_envs, num_joint, -1)
-
         # Define joint indices for each leg
         # Isaac sim's Joint order: ['hip_L_Joint', 'hip_R_Joint', 'thigh_L_Joint', 'thigh_R_Joint', 'knee_L_Joint', 'knee_R_Joint', 'wheel_L_Joint', 'wheel_R_Joint']
         left_leg_indices = torch.tensor([0, 2, 4], device=self.device, dtype=torch.long)                                        # Hard coded
         right_leg_indices = torch.tensor([1, 3, 5], device=self.device, dtype=torch.long)                                       # Hard coded
 
         joint_torque_limits = torque_limits[:, :num_joint]    # Extract joint torque limits
-        joint_pos_limits = joint_pos_limits[:, :num_joint]
+        joint_pos_limits = self.joint_limits[:, :num_joint]
 
         # --- Left Leg slicing ---
         joint_pos_left = torch.index_select(joint_pos, 1, left_leg_indices)
         joint_vel_left = torch.index_select(joint_vel, 1, left_leg_indices)
         joint_pos_cmd_left = torch.index_select(joint_pos_cmd, 1, left_leg_indices)
         joint_limits_left = torch.index_select(joint_pos_limits, 1, left_leg_indices)
+        # saturated_ids_left = torch.where(abs(joint_limits_left - joint_pos_left) <= math.radians(self.safe_margin), 0, 1)
 
         # --- Right Leg slicing ---
         joint_pos_right = torch.index_select(joint_pos, 1, right_leg_indices)
         joint_vel_right = torch.index_select(joint_vel, 1, right_leg_indices)
         joint_pos_cmd_right = torch.index_select(joint_pos_cmd, 1, right_leg_indices)
         joint_limits_right = torch.index_select(joint_pos_limits, 1, right_leg_indices)
+        # saturated_ids_right = torch.where(abs(joint_limits_right - joint_pos_right) <= math.radians(self.safe_margin), 0, 1)        
 
         # Left foot PD control
-        joint_pos_cmd_left = torch.clamp(joint_pos_cmd_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1])            # Clipping joint position command
+        # joint_pos_cmd_left = joint_pos_left + (joint_pos_cmd_left * saturated_ids_left)    # Joint position Saturation Logic
+        # joint_pos_cmd_left = torch.clamp(joint_pos_left + joint_pos_cmd_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1])    # Joint position Saturation Logic
+        joint_pos_cmd_left = joint_pos_left + joint_pos_cmd_left 
         joint_pos_left_error = joint_pos_cmd_left - joint_pos_left
-        joint_vel_left_error = - joint_vel_left                                                                                 # reference joint velocity = 0
+        joint_vel_left_error = - joint_vel_left                                            # reference joint velocity = 0
         torque_left = self.kp * joint_pos_left_error + self.kd * joint_vel_left_error
 
         # Right foot PD control
-        joint_pos_cmd_right = torch.clamp(joint_pos_cmd_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1])        # Clipping joint position command
+        # joint_pos_cmd_right = joint_pos_right + (joint_pos_cmd_right * saturated_ids_right) # Joint position Saturation Logic
+        # joint_pos_cmd_right = torch.clamp(joint_pos_right + joint_pos_cmd_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1]) # Joint position Saturation Logic
+        joint_pos_cmd_right = joint_pos_right + joint_pos_cmd_right
         joint_pos_right_error = joint_pos_cmd_right - joint_pos_right
-        joint_vel_right_error = - joint_vel_right                                                                               # reference joint velocity = 0
+        joint_vel_right_error = - joint_vel_right                                           # reference joint velocity = 0
         torque_right = self.kp * joint_pos_right_error + self.kd * joint_vel_right_error
         
         # Combine torque inputs

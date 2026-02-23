@@ -21,6 +21,8 @@ class G1BaseEnv(Env):
         self.joint_vel_limits = self._robot.data.joint_vel_limits
 
         # Joint Ids
+        self._joint_dof_ids, _ = self._robot.find_joints(".*")
+        
         self.total_leg_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint",
                                                                r".*_knee_joint",
                                                                r".*_ankle_(pitch|roll)_joint"])

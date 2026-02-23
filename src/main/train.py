@@ -13,8 +13,8 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -56,13 +56,6 @@ from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
-
-from lib.model.MLP import Actor, Critic
-from lib.model.NerveNet import NerveNetPolicy
-from lib.utils.graph_utils import Mapping
-from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
-from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
-from lib.model.BodyTransformer.transformer_components import BodyTransformer
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -237,18 +230,18 @@ def main():
     cumulative_rewards = None
     cumulative_timesteps = None
     tracking_data = collections.defaultdict(list)
-    track_rewards = collections.deque(maxlen=100)
-    track_timesteps = collections.deque(maxlen=100)
-    CLI_track_rewards = collections.deque(maxlen=100)
-    CLI_track_timesteps = collections.deque(maxlen=100)
-    CLI_step_reward_means = collections.deque(maxlen=100)
+    track_rewards = collections.deque(maxlen=500)
+    track_timesteps = collections.deque(maxlen=500)
+    CLI_track_rewards = collections.deque(maxlen=500)
+    CLI_track_timesteps = collections.deque(maxlen=500)
+    CLI_step_reward_means = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
     t2_update = 0
 
     # Reset environment
-    obs, states, _ = env.reset()
+    obs, states, infos = env.reset()
     timestep = 0
     rollout = 0
     elapsed_time = 0
@@ -259,9 +252,9 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, timestep=timestep, deterministic=False)
+            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
             # env stepping
-            next_obs, next_states, rewards, terminated, truncated, infos = env.step(actions)
+            next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
         
@@ -408,6 +401,7 @@ def main():
         # update
         obs = next_obs
         states = next_states
+        infos = next_infos
 
     # close the simulator
     env.close()

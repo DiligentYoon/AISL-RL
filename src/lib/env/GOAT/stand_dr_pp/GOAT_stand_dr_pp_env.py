@@ -36,7 +36,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                             num_dof=self.cfg.leg_dof,
                                             num_leg=self.cfg.num_leg,
                                             device=self.device,
-                                            dt=self.cfg.sim_dt)
+                                            dt=self.cfg.sim_dt,
+                                            limits=self._robot.data.joint_limits)
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
@@ -124,7 +125,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.joint_torque_cmd = self.leg_controller.compute_torque(joint_pos=joint_pos,
                                                                    joint_vel=joint_vel,
                                                                    joint_pos_cmd=self.joint_pos_delta_cmd,
-                                                                   joint_pos_limits=None,
                                                                    torque_limits=self.torque_limits)
         
         self.wheel_torque_cmd = self.wheel_controller.compute_torque(joint_vel=joint_vel,
@@ -225,7 +225,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Energy / Action Smoothness
         r_effort = -torch.sum(torch.abs(self.torque_cmd), dim=1)     
         
-        r_terminated = - self.reset_terminated.float()
+        r_terminated = -self.reset_terminated.float()
 
         r_alive = self.cfg.r_alive_weight * current_time/(self.cfg.max_episode_length)
 

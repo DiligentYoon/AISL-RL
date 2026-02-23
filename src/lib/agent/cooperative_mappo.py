@@ -3,7 +3,7 @@ from typing import Any, Union, Dict, Sequence, Mapping
 import copy
 import itertools
 import gymnasium as gym
-from packaging import version
+import os
 
 import torch
 import torch.nn as nn
@@ -39,20 +39,28 @@ class CooperativeMAPPO(MAPPO):
             cfg: Configuration dictionary
         """
         super().__init__(observation_space, state_space, action_space, possible_agents, model, buffer, device, cfg)
+        # Shared
         self.shared_actor = self.actors["arm"]
+
+        # Checkpoint Module
+        self.checkpoint_modules = {}
 
         # Optimizers
         self.optimizers = {}
+        self.optimizers["actor"] = {}
+        self.optimizers["critic"] = {}
+
+        self.is_rma = self.shared_actor.is_rma
         
         arm_params = []
         arm_params += list(self.shared_actor.encoder["arm"].parameters())
         arm_params += list(self.shared_actor.head["arm"].parameters())
-        arm_params += list(self.shared_actor.log_std_parameter["arm"].parameters())
+        arm_params += [self.shared_actor.log_std_parameter["arm"]]
 
         leg_params = []
         leg_params += list(self.shared_actor.encoder["leg"].parameters())
         leg_params += list(self.shared_actor.head["leg"].parameters())
-        leg_params += list(self.shared_actor.log_std_parameter["leg"].parameters())
+        leg_params += [self.shared_actor.log_std_parameter["leg"]]
 
         shared_params = list(self.shared_actor.shared_backbone.parameters())
 
@@ -63,6 +71,20 @@ class CooperativeMAPPO(MAPPO):
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
 
+        # Checkpoint Modules
+        self.checkpoint_modules["shared"] = {
+            "actor": self.shared_actor,
+            "actor_optimizer": self.optimizers["actor"]["shared"]
+        }
+
+        for uid in self.possible_agents:
+            self.checkpoint_modules[uid] = {
+                "critic": self.critics[uid],
+                "value_standardizer": self.value_standardizers[uid],
+                "actor_optimizer": self.optimizers["actor"][uid],
+                "critic_optimizer": self.optimizers["critic"][uid]
+            }
+
         # State Space for previled learning & Asyncronous Actor Critic
         if self.is_async_actor_critic:
             self.tensors_names = ["observations", "next_observations",
@@ -70,21 +92,68 @@ class CooperativeMAPPO(MAPPO):
                                   "actions", "action_log_probs", 
                                   "value_preds", "rewards", 
                                   "truncated", "terminated",
-                                  "returns", "advantages", "infos"]
+                                  "returns", "advantages"]
             
             self.tensors_name_for_update = ["observations", "states",
                                             "actions", "action_log_probs",
-                                            "value_preds", "returns", "advantages", "infos"]
+                                            "value_preds", "returns", "advantages"]
         else:
             self.tensors_names = ["observations", "next_observations",
                                   "actions", "action_log_probs", 
                                   "value_preds", "rewards", 
                                   "truncated", "terminated",
-                                  "returns", "advantages", "infos"]
+                                  "returns", "advantages"]
 
             self.tensors_name_for_update = ["observations", 
                                             "actions", "action_log_probs",
-                                            "value_preds", "returns", "advantages", "infos"]
+                                            "value_preds", "returns", "advantages"]
+            
+        if self.is_rma:
+            self.tensors_names.append("infos")
+            self.tensors_name_for_update.append("infos")
+
+
+    def save(self, path):
+        modules = {}
+        # Shared module
+        shared_module = {}
+        for name, module in self.checkpoint_modules["shared"].items():
+            shared_module[name] = module.state_dict()
+        modules["shared"] = shared_module
+
+        # Independent modules
+        for uid in self.possible_agents:
+            uid_module = {}
+            for name, module in self.checkpoint_modules[uid].items():
+                uid_module[name] = module.state_dict()
+
+            modules[uid] = uid_module
+            
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save(modules, path)
+
+
+    def load(self, path):
+        modules = torch.load(path, map_location=self.device)
+        # Shared module
+        for name, data in modules["shared"].items():
+            module = self.checkpoint_modules["shared"].get(name, None)
+            if module is not None:
+                module.load_state_dict(data)
+            else:
+                print(f"Cannot load the {name} module. The agent doesn't have such an instance")
+
+        # Independent modules
+        if type(modules) is dict:
+            for uid in self.possible_agents:
+                for name, data in modules[uid].items():
+                    module = self.checkpoint_modules[uid].get(name, None)
+                    if module is not None:
+                        module.load_state_dict(data)
+                    else:
+                        print(f"Cannot load the {name} module. The agent doesn't have such an instance")
+        else:
+            raise RuntimeError(f"Cannot load the module at {path}. It is not a dictionary")
 
     
     def act(self, observations, infos, timestep, deterministic = False, update_rms = False):
@@ -108,7 +177,7 @@ class CooperativeMAPPO(MAPPO):
 
         # Shared Action Processing
         non_scaled_actions, log_probs, entropies = self.shared_actor(observations=observations,
-                                                                     shared_info=infos,
+                                                                     shared_infos=infos,
                                                                      taken_actions=None,
                                                                      deterministic=deterministic,
                                                                      update_rms=update_rms)
@@ -116,7 +185,7 @@ class CooperativeMAPPO(MAPPO):
         data = []
         for uid in self.possible_agents:
             actions = non_scaled_actions[uid].clone() * self.action_scale_factor[uid][0]
-            data.append((actions[uid], non_scaled_actions, log_probs[uid], entropies[uid]))
+            data.append((actions, non_scaled_actions[uid], log_probs[uid], entropies[uid]))
 
         
         actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
@@ -162,8 +231,6 @@ class CooperativeMAPPO(MAPPO):
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
         action_log_probs = action_log_probs.view(-1, self.num_agents)
         rewards = rewards.view(-1, self.num_agents)
-        # Additional Info Extraction
-        rma_infos = infos["rma"]
         
         critic_inputs = states if states is not None else observations
 
@@ -178,8 +245,11 @@ class CooperativeMAPPO(MAPPO):
                 rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
             # Additional Info check
-            if "infos" in self.buffer[uid].tensors:
+            if self.is_rma:
+                # Additional Info Extraction
+                rma_infos = infos.get("rma", None)
                 self.buffer[uid].create_tensor("infos", rma_infos.shape[-1])
+                self.buffer[uid].add_samples(infos=rma_infos)
 
             if self.is_async_actor_critic:
                 self.buffer[uid].add_samples(observations=observations[uid],
@@ -191,8 +261,7 @@ class CooperativeMAPPO(MAPPO):
                                              truncated=truncated,
                                              terminated=terminated,
                                              action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds=value_preds,
-                                             infos=rma_infos)
+                                             value_preds=value_preds)
             else:
                 self.buffer[uid].add_samples(observations=observations[uid],
                                              actions=actions[uid],
@@ -201,8 +270,7 @@ class CooperativeMAPPO(MAPPO):
                                              truncated=truncated,
                                              terminated=terminated,
                                              action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds = value_preds,
-                                             infos=rma_infos)
+                                             value_preds = value_preds)
 
 
     def update(self) -> float:
@@ -220,10 +288,10 @@ class CooperativeMAPPO(MAPPO):
             self.buffer[uid].compute_gae(last_values, self.discount_factor, self.gae_lambda)
 
             # Value Standardization
+            value_preds = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("value_preds").reshape(-1, 1), update=True)
             returns = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("returns").reshape(-1, 1), update=True)
-            value_preds = self.value_standardizers[uid].standardize(self.buffer[uid].get_tensor_by_name("value_preds").reshape(-1, 1))
-            self.buffer[uid].set_tensor_by_name("returns", returns.reshape(self.buffer[uid].buffer_size, -1, 1))
             self.buffer[uid].set_tensor_by_name("value_preds", value_preds.reshape(self.buffer[uid].buffer_size, -1, 1))
+            self.buffer[uid].set_tensor_by_name("returns", returns.reshape(self.buffer[uid].buffer_size, -1, 1))
 
             self.set_running_mode(mode="train", uid=uid)
         
@@ -235,8 +303,11 @@ class CooperativeMAPPO(MAPPO):
         cumulative_value_loss = 0
 
         # Parameter Update
-        kl_divergences = []
-
+        kl_divergences = {
+            "arm": [],
+            "leg": []
+        }
+        
         # Sample mini batch (Indexing Sharing)
         indexes = torch.randperm(len(self.buffer["arm"]), dtype=torch.long)
 
@@ -257,81 +328,229 @@ class CooperativeMAPPO(MAPPO):
             for mb_a, mb_l in zip(mini_batches_a, mini_batches_l):
                 # (mini batch size, Data-specific)
                 if self.is_async_actor_critic:
-                    (sampled_observations_a,
-                     sampled_states_a,
-                     sampled_actions_a,
-                     sampled_action_log_probs_a,
-                     sampled_value_preds_a,
-                     sampled_returns_a,
-                     sampled_advantages_a,
-                     sampled_infos_a) = mb_a
+                    if self.is_rma:
+                        (sampled_observations_a,
+                        sampled_states_a,
+                        sampled_actions_a,
+                        sampled_action_log_probs_a,
+                        sampled_value_preds_a,
+                        sampled_returns_a,
+                        sampled_advantages_a,
+                        sampled_infos_a) = mb_a
+                        
+                        (sampled_observations_l,
+                        sampled_states_l,
+                        sampled_actions_l,
+                        sampled_action_log_probs_l,
+                        sampled_value_preds_l,
+                        sampled_returns_l,
+                        sampled_advantages_l,
+                        sampled_infos_l) = mb_l
+
+                        shared_info = sampled_infos_a 
+
+                    else:
+                        (sampled_observations_a,
+                        sampled_states_a,
+                        sampled_actions_a,
+                        sampled_action_log_probs_a,
+                        sampled_value_preds_a,
+                        sampled_returns_a,
+                        sampled_advantages_a) = mb_a
+                        
+                        (sampled_observations_l,
+                        sampled_states_l,
+                        sampled_actions_l,
+                        sampled_action_log_probs_l,
+                        sampled_value_preds_l,
+                        sampled_returns_l,
+                        sampled_advantages_l) = mb_l
+
+                        shared_info = {}
+
+                    actor_input = {
+                        "arm": sampled_observations_a,
+                        "leg": sampled_observations_l
+                    }
                     
-                    (sampled_observations_l,
-                     sampled_states_l,
-                     sampled_actions_l,
-                     sampled_action_log_probs_l,
-                     sampled_value_preds_l,
-                     sampled_returns_l,
-                     sampled_advantages_l,
-                     sampled_infos_l) = mb_l
-
-                    actor_input_a = sampled_observations_a
-                    critic_input_a = sampled_states_a       
-
-                    actor_input_l = sampled_observations_l
-                    critic_input_l = sampled_states_l   
-
-                    shared_info = sampled_infos_a     
+                    critic_input = {
+                        "arm": sampled_states_a,
+                        "leg": sampled_states_l
+                    }  
                 
                 else:
-                    (sampled_observations_a,
-                    sampled_actions_a,
-                    sampled_action_log_probs_a,
-                    sampled_value_preds_a,
-                    sampled_returns_a,
-                    sampled_advantages_a,
-                    sampled_infos_a) = mb_a
+                    if self.is_rma:
+                        (sampled_observations_a,
+                        sampled_actions_a,
+                        sampled_action_log_probs_a,
+                        sampled_value_preds_a,
+                        sampled_returns_a,
+                        sampled_advantages_a,
+                        sampled_infos_a) = mb_a
 
+                        (sampled_observations_l,
+                        sampled_actions_l,
+                        sampled_action_log_probs_l,
+                        sampled_value_preds_l,
+                        sampled_returns_l,
+                        sampled_advantages_l,
+                        sampled_infos_l) = mb_l
 
-                    (sampled_observations_l,
-                    sampled_actions_l,
-                    sampled_action_log_probs_l,
-                    sampled_value_preds_l,
-                    sampled_returns_l,
-                    sampled_advantages_l,
-                    sampled_infos_l) = mb_l
-                    
-                    actor_input_a = sampled_observations_a
-                    critic_input_a = sampled_observations_a
+                        shared_info = sampled_infos_a
+
+                    else:
+                        (sampled_observations_a,
+                        sampled_actions_a,
+                        sampled_action_log_probs_a,
+                        sampled_value_preds_a,
+                        sampled_returns_a,
+                        sampled_advantages_a) = mb_a
+
+                        (sampled_observations_l,
+                        sampled_actions_l,
+                        sampled_action_log_probs_l,
+                        sampled_value_preds_l,
+                        sampled_returns_l,
+                        sampled_advantages_l) = mb_l
+
+                        shared_info = {}
             
-                    actor_input_l = sampled_observations_l
-                    critic_input_l = sampled_observations_l
+                    actor_input = {
+                        "arm": sampled_observations_a,
+                        "leg": sampled_observations_l
+                    }
+                    
+                    critic_input = {
+                        "arm": sampled_observations_a,
+                        "leg": sampled_observations_l
+                    }
 
-                    shared_info = sampled_infos_a
-
-                # Policy
-                observations = {
-                    "arm": actor_input_a,
-                    "leg": actor_input_l}
-                actions = {
+                sampled_actions = {
                     "arm": sampled_actions_a,
-                    "leg": sampled_actions_l}
-                
-                _, new_log_probs, new_entropy = self.shared_actor(observations=observations,
+                    "leg": sampled_actions_l
+                }
+            
+                sampled_action_log_probs = {
+                    "arm": sampled_action_log_probs_a,
+                    "leg": sampled_action_log_probs_l
+                }
+            
+                sampled_value_preds = {
+                    "arm": sampled_value_preds_a,
+                    "leg": sampled_value_preds_l,
+                }
+
+                sampled_returns = {
+                    "arm": sampled_returns_a,
+                    "leg": sampled_returns_l
+                }
+
+                sampled_advantages = {
+                    "arm": sampled_advantages_a,
+                    "leg": sampled_advantages_l
+                }
+
+
+                _, new_log_probs, new_entropy = self.shared_actor(observations=actor_input,
                                                                   shared_infos=shared_info,
-                                                                  taken_actions=actions,
+                                                                  taken_actions=sampled_actions,
                                                                   deterministic=False,
-                                                                  update = not epoch)
-                # Shape syncronization
+                                                                  update_rms = not epoch)
+                # Loss calculation
+                policy_losses = {}
+                value_losses = {}
+                entropy_losses = {}
                 for uid in self.possible_agents:
+                    # Shape syncronization
                     if len(new_log_probs[uid].shape) == 1:
                         new_log_probs[uid] = new_log_probs[uid].unsqueeze(-1)
 
-        
+                    # Compute approximate KL divergence
+                    with torch.no_grad():
+                        ratio = new_log_probs[uid] - sampled_action_log_probs[uid]
+                        kl_divergence = ((torch.exp(ratio) - 1) - ratio).mean()
+                        kl_divergences[uid].append(kl_divergence)
+                    
+                    # Compute entropy loss
+                    if self.entropy_loss_scale:
+                        entropy_losses[uid] = -self.entropy_loss_scale * new_entropy[uid]
+                    else:
+                        entropy_losses[uid] = 0
+
+                    # Compute Policy loss
+                    ratio = torch.exp(new_log_probs[uid] - sampled_action_log_probs[uid])
+                    surrogate = sampled_advantages[uid] * ratio
+                    surrogate_clipped = sampled_advantages[uid] * torch.clip(
+                        ratio, 1.0 - self.ratio_clip, 1.0 + self.ratio_clip)
+                    policy_loss = -torch.min(surrogate, surrogate_clipped).mean()
+
+                    # Compute value loss
+                    predicted_values, _, _ = self.critics[uid](critic_input[uid], update_rms=not epoch)
+                    if self.clip_predicted_values:
+                        predicted_values = sampled_value_preds[uid] + torch.clip(
+                            predicted_values - sampled_value_preds[uid], min=-self.value_clip, max=self.value_clip
+                        )
+                    value_loss = self.value_loss_scale * F.mse_loss(sampled_returns[uid], predicted_values)
+
+                    # Store Loss Info
+                    policy_losses[uid] = policy_loss
+                    value_losses[uid] = value_loss
+
+                # Parameter setting
+                arm_params = []
+                arm_params += list(self.shared_actor.encoder["arm"].parameters())
+                arm_params += list(self.shared_actor.head["arm"].parameters())
+                arm_params += [self.shared_actor.log_std_parameter["arm"]]
+
+                leg_params = []
+                leg_params += list(self.shared_actor.encoder["leg"].parameters())
+                leg_params += list(self.shared_actor.head["leg"].parameters())
+                leg_params += [self.shared_actor.log_std_parameter["leg"]]
+
+                shared_params = list(self.shared_actor.shared_backbone.parameters())
+
+                # Total Loss
+                policy_total = (policy_losses["arm"] + entropy_losses["arm"]) + \
+                               (policy_losses["leg"] + entropy_losses["leg"])
+
+                value_total  = value_losses["arm"] + value_losses["leg"]
+
+                # Optimizer Step
+                self.optimizers["actor"]["arm"].zero_grad(set_to_none=True)
+                self.optimizers["actor"]["leg"].zero_grad(set_to_none=True)
+                self.optimizers["actor"]["shared"].zero_grad(set_to_none=True)
+                self.optimizers["critic"]["arm"].zero_grad(set_to_none=True)
+                self.optimizers["critic"]["leg"].zero_grad(set_to_none=True)
+
+                # Back propagation
+                policy_total.backward()
+                value_total.backward()
+
+                # Grad Clipping
+                if self.grad_norm_clip > 0:
+                    nn.utils.clip_grad_norm_(arm_params, self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(leg_params, self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(shared_params, self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(self.critics["arm"].parameters(), self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(self.critics["leg"].parameters(), self.grad_norm_clip)
+
+                # Step
+                self.optimizers["actor"]["arm"].step()
+                self.optimizers["actor"]["leg"].step()
+                self.optimizers["actor"]["shared"].step()
+                self.optimizers["critic"]["arm"].step()
+                self.optimizers["critic"]["leg"].step()
+
+                # Update cumulative losses
+                cumulative_policy_loss += policy_total.item()
+                cumulative_value_loss += value_total.item()
+                if self.entropy_loss_scale:
+                    cumulative_entropy_loss += (entropy_losses["arm"] + entropy_losses["leg"]).item()
+
         self.set_running_mode("eval")
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
         mean_value_loss = cumulative_value_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
-        mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches * self.num_agents)
+        mean_kl_divergence = (sum(kl_divergences["arm"]) + sum(kl_divergences["leg"])).item() / (self.learning_epochs * self.mini_batches * self.num_agents)
                 
         return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence

@@ -61,7 +61,7 @@ class SharedActor(Model):
         self.num_actions = num_actions
 
         # Running mean, standard deviation standardizer
-        self.actor_standardizer = {}
+        self.actor_standardizer = nn.ModuleDict()
         self.actor_standardizer["arm"] = RunningMeanStd(shape=self.num_observations["arm"], device=device)
         self.actor_standardizer["leg"] = RunningMeanStd(shape=self.num_observations["leg"], device=device)
         
