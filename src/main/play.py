@@ -13,13 +13,13 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_locomotion/2026-02-21_00-27-37_mappo/agent_3840.pt", help="Path to model checkpoint.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -47,6 +47,7 @@ from datetime import datetime
 
 import lib
 
+from lib.utils.plot_utils import LivePlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 
@@ -221,10 +222,15 @@ def main():
     # ======================================================================================================================
 
     # reset environment
+    if hasattr(env._unwrapped.cfg, "viz_data"):
+        plot_cfg = env._unwrapped.cfg.viz_data
+        plot = LivePlotter(env, plot_cfg)
+    else:
+        plot = None
+
     obs, states, infos = env.reset()
     rollout = 0
     timestep = 0
-    test_checkpoint_step = 100
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -237,6 +243,16 @@ def main():
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             rollout += 1
+
+            # Plot Phase
+            if plot is not None:
+                # Plotter Update
+                if "viz_data" in next_infos:
+                    plot.update(next_infos["viz_data"])
+
+                # Plotter should be resetted in accordance with env reset (Assume single env (index = 0))
+                if terminated[0] | truncated[0]:
+                    plot.reset()
 
         # Video update
         if args_cli.video:

@@ -111,6 +111,17 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     r_terminated_weight = 0.0
     r_alive_weight = 1.0
 
+    ## ==================== Plot variables ==================== ##
+    viz_data: dict = {
+        "left_hip_torque": 0.0,
+        "right_hip_torque": 0.0,
+        "left_thigh_torque": 0.0,
+        "right_thigh_torque": 0.0,
+        "left_knee_torque": 0.0,
+        "right_knee_torque": 0.0,
+        "left_wheel_torque": 0.0,
+        "right_wheel_torque": 0.0,}
+
     # Simulation
     sim: SimulationCfg = SimulationCfg(
         dt=sim_dt,

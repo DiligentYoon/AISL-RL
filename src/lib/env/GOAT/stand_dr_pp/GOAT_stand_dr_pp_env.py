@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import torch
-import os
+import copy
 import numpy as np
 
 from isaaclab.utils.math import normalize, quat_from_angle_axis
@@ -58,6 +58,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
         self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
+
+        # Plotting boolean
+        self.is_plot = (self.num_envs == 1)
     
     def _setup_scene(self):
         super()._setup_scene()
@@ -279,6 +282,20 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Extra Information data
         self.extras["Curriculum"]["step_progress"] = self.common_step_counter
+
+    def _update_viz_data(self):
+        applied_torque = self._robot.data.applied_torque
+        extras = copy.deepcopy(self.extras)
+        extras["viz_data"]["left_hip_torque"]    = applied_torque[:, 0]
+        extras["viz_data"]["right_hip_torque"]   = applied_torque[:, 1]
+        extras["viz_data"]["left_thigh_torque"]  = applied_torque[:, 2]
+        extras["viz_data"]["right_thigh_torque"] = applied_torque[:, 3]
+        extras["viz_data"]["left_knee_torque"]   = applied_torque[:, 4]
+        extras["viz_data"]["right_knee_torque"]  = applied_torque[:, 5]
+        extras["viz_data"]["left_wheel_torque"]  = applied_torque[:, 6]
+        extras["viz_data"]["right_wheel_torque"] = applied_torque[:, 7]
+
+        return extras
 
     # ============== Auxilary Functions ================
     def set_curriculum(self):
