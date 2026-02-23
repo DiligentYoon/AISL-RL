@@ -130,11 +130,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 self.target_foot_rotation_visalizer = VisualizationMarkers(self.cfg.target_foot_rotation_visualizer_cfg)
             if not hasattr(self, "foot_rotation_visualizer"):
                 self.foot_rotation_visalizer = VisualizationMarkers(self.cfg.target_foot_rotation_visualizer_cfg)
+            if not hasattr(self, "torso_rotation_visualizer"):
+                self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
             self.goal_vel_visualizer.set_visibility(True)
             self.current_vel_visualizer.set_visibility(True)
             self.target_foot_visualizer.set_visibility(True)
             self.target_foot_rotation_visalizer.set_visibility(True)
             self.foot_rotation_visalizer.set_visibility(True)
+            self.torso_rotation_visalizer.set_visibility(True)
         else:
             if hasattr(self, "goal_vel_visualizer"):
                 self.goal_vel_visualizer.set_visibility(False)
@@ -147,6 +150,9 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 self.target_foot_visualizer.set_visibility(False)
             if hasattr(self, "foot_rotation_visualizer"):
                 self.foot_rotation_visalizer.set_visibility(False)
+            if hasattr(self, "torso_rotation_visualizer"):
+                self.torso_rotation_visalizer.set_visibility(False)
+
     
 
     def _debug_vis_callback(self, event):
@@ -172,7 +178,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                                           torch.zeros_like(target_yaw), # [E*2, 1]
                                           target_yaw)                   # [E*2, 1]
         
-        # Color difference between support and swing foot
+        # Color difference between support (green) and swing (red) foot
         marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
 
         
@@ -180,6 +186,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         foot_pos = self.foot_pos_w.clone().view(-1, 3)
         foot_rot = self.foot_rot_w.clone().view(-1, 4)
         foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
+
+        # =============== Torso ================
+        torso_pos = self.torso_pos_w
+        torso_rot = self.torso_rot_w
         
 
         # display markers
@@ -189,10 +199,13 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                                               orientations=target_quat, 
                                               marker_indices=marker_indices)
         self.target_foot_rotation_visalizer.visualize(translations=target_pos,
-                                                      orientations=target_quat)
+                                                      orientations=target_quat,
+                                                      marker_indices=foot_marker_indices)
         self.foot_rotation_visalizer.visualize(translations=foot_pos,
                                                orientations=foot_rot,
                                                marker_indices=foot_marker_indices)
+        self.torso_rotation_visalizer.visualize(translations=torso_pos,
+                                                orientations=torso_rot)
 
 
     def _setup_scene(self):
@@ -483,7 +496,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Gait Phase Parameters
         self.z_c[env_ids] = self.cfg.z_c_min + (self.cfg.z_c_max - self.cfg.z_c_min) * torch.rand(env_ids.shape[0], device=self.device)# TODO: Randomizer에 기능 추가
         self.foot_on_swing[env_ids] = 0
-        self.foot_on_swing[env_ids, 0] = 1 # Initial swing feet is the left feet 
+        self.foot_on_swing[env_ids, 0] = 1 # Initial swing feet is the left feet
         self.update_phase_ids[env_ids] = True
         self.phase_count[env_ids] = 0
         self.phase[env_ids] = 0
@@ -541,8 +554,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 # self.foot_on_swing[mask] = self.in_swing[mask].clone()
                 # self.foot_on_swing[mask, 1] = ~self.foot_on_swing[mask, 0] # NOTE: Assume single stance (double stance -> guide left swing, right stand)
                 self.support_foot_pos[mask] = torch.where((self.foot_on_swing[mask, 0] == 0).unsqueeze(-1), 
-                                                          self.foot_pos_w[mask, 0, :3],
-                                                          self.foot_pos_w[mask, 1, :3])
+                                                           self.foot_pos_w[mask, 0, :3],
+                                                           self.foot_pos_w[mask, 1, :3])
                 # Phase and command update signal
                 self.update_phase_ids[mask] = (self.phase_count[mask] >= self.full_step_period[mask])
                 self.update_command_ids[mask] = (self.update_count[mask] >= self.step_period[mask])
@@ -595,9 +608,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                                                                                         self.cfg.self_collision_threshold)
             self.target_footstep_w[self.update_command_ids] = update_commands_mask
 
-        if env_ids is not None:
-            self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # NOTE: Right foot is support foot at initial state
-
         # Contact schedule
         self.contact_schedule = smooth_sqr_wave(self.phase)
         self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
@@ -609,20 +619,29 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Foot states (Body Frame)
         foot_forward_w_left = quat_apply(self.foot_rot_w[:, 0], self.forward_vec)
         foot_forward_w_right = quat_apply(self.foot_rot_w[:, 1], self.forward_vec)
+        foot_forward_w = torch.cat([foot_forward_w_left.unsqueeze(1), foot_forward_w_right.unsqueeze(1)], dim=1)
         foot_forward_b_left = quat_apply_inverse(self.torso_rot_w, foot_forward_w_left) # [E, 3]
         foot_forward_b_right = quat_apply_inverse(self.torso_rot_w, foot_forward_w_right) # [E, 3]
         foot_forward_b = torch.cat([foot_forward_b_left.unsqueeze(1), foot_forward_b_right.unsqueeze(1)], dim=1) # [E, 2, 3]
+        self.foot_rot_yaw_w = torch.atan2(foot_forward_w[..., 1], foot_forward_w[..., 0])
         self.foot_rot_yaw_b = torch.atan2(foot_forward_b[..., 1], foot_forward_b[..., 0])
 
         left_foot_pos_b = quat_apply_inverse(self.torso_rot_w, self.foot_pos_w[:, 0, :3] - self.torso_pos_w) # [E, 3]
         right_foot_pos_b = quat_apply_inverse(self.torso_rot_w, self.foot_pos_w[:, 1, :3] - self.torso_pos_w) # [E, 3]
         self.foot_pos_b = torch.cat([left_foot_pos_b.unsqueeze(1), right_foot_pos_b.unsqueeze(1)], dim=1)
+
+        if env_ids is not None:
+            self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # NOTE: Right foot is support foot at initial state
+            self.target_footstep_w[env_ids, 1, 2]  = self.foot_rot_yaw_w[env_ids, 1] # Right foot
+
+
         # Command pos (Body Frame)
         target_left_footstep_b  = quat_apply_inverse(self.torso_rot_w, 
                                                      torch.cat([self.target_footstep_w[:, 0, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.torso_pos_w)
         target_right_footstep_b = quat_apply_inverse(self.torso_rot_w,
                                                      torch.cat([self.target_footstep_w[:, 1, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.torso_pos_w)
         self.target_footstep_b = torch.cat([target_left_footstep_b.unsqueeze(1), target_right_footstep_b.unsqueeze(1)], dim=1)
+
         # Command yaw (Body Frame)
         target_yaw_w = self.target_footstep_w[:, :, 2]
         target_forward_w = torch.stack([torch.cos(target_yaw_w), torch.sin(target_yaw_w), torch.zeros_like(target_yaw_w)], dim=-1)
@@ -651,22 +670,26 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         z_c = CoM[:, 2]
 
         w0 = torch.sqrt(9.81 / z_c)
-        dstep_length = torch.norm(command[:,:2], dim=1, keepdim=True).squeeze(-1) * T
+        dstep_length = torch.norm(command[:, :2], dim=1, keepdim=True).squeeze(-1) * T
         dstep_width = self.dstep_width[update_ids]
-        theta = torch.atan2(command[:,1:2], command[:,0:1]).squeeze(-1)
+        theta = torch.atan2(command[:, 1:2], command[:, 0:1]).squeeze(-1)
         
+        # Support Foot pos
         support_foot_pos = self.support_foot_pos[update_ids]
 
-        # Relative COM pos
+        # Relative CoM pos
         x_com_rel = CoM[:, 0] - support_foot_pos[:, 0]
         y_com_rel = CoM[:, 1] - support_foot_pos[:, 1]
+        
+        # Linear CoM velocity in world frame
+        vel_x_com = self.torso_lin_vel_w[update_ids, 0]
+        vel_y_com = self.torso_lin_vel_w[update_ids, 1]
 
         # Final step COM pos
-        x_com_f  = x_com_rel * torch.cosh(w0 * T) + (self.torso_lin_vel_w[update_ids, 0] / w0) * torch.sinh(w0 * T)
-        vx_com_f = x_com_rel * w0 * torch.sinh(w0 * T) + self.torso_lin_vel_w[update_ids, 0] * torch.cosh(w0 * T)
-
-        y_com_f  = y_com_rel * torch.cosh(w0 * T) + (self.torso_lin_vel_w[update_ids, 1] / w0) * torch.sinh(w0 * T)
-        vy_com_f = y_com_rel * w0 * torch.sinh(w0 * T) + self.torso_lin_vel_w[update_ids, 1] * torch.cosh(w0 * T)
+        x_com_f  = x_com_rel * torch.cosh(w0 * T) + (vel_x_com / w0) * torch.sinh(w0 * T)
+        vx_com_f = x_com_rel * w0 * torch.sinh(w0 * T) + vel_x_com * torch.cosh(w0 * T)
+        y_com_f  = y_com_rel * torch.cosh(w0 * T) + (vel_y_com / w0) * torch.sinh(w0 * T)
+        vy_com_f = y_com_rel * w0 * torch.sinh(w0 * T) + vel_y_com * torch.cosh(w0 * T)
 
         # Final ICP
         xi_f_x = (x_com_f + support_foot_pos[:, 0]) + vx_com_f / w0
@@ -680,13 +703,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         b_x = s_d / (torch.exp(w0 * T) - 1)
         b_y = w_d / (torch.exp(w0 * T) + 1)
 
-        offset_x = torch.cos(theta) * b_x - torch.sin(theta) * b_y
-        offset_y = torch.sin(theta) * b_x + torch.cos(theta) * b_y
-        offset_y = torch.where(self.foot_on_swing[update_ids, 0] == 1, -offset_y, offset_y) # [left, right] = [0 or 1, 0 or 1], 0: stand, 1: swing
+        original_offset_x = -b_x
+        original_offset_y = -torch.where(self.foot_on_swing[update_ids, 0] == 1, -b_y, b_y)
+
+        offset_x = torch.cos(theta) * original_offset_x - torch.sin(theta) * original_offset_y
+        offset_y = torch.sin(theta) * original_offset_x + torch.cos(theta) * original_offset_y
 
         # Target Foot Positions (World Frame)
-        p_x = (xi_f_x - offset_x).reshape(-1, 1)
-        p_y = (xi_f_y - offset_y).reshape(-1, 1)
+        p_x = (xi_f_x + offset_x).reshape(-1, 1)
+        p_y = (xi_f_y + offset_y).reshape(-1, 1)
         theta = theta.reshape(-1, 1)
 
         return torch.cat([p_x, p_y, theta], dim=-1)

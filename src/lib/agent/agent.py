@@ -4,6 +4,7 @@ import datetime
 
 from typing import Dict
 from torch.nn import Module
+from lib.model.MLP import ActorInference
 
 class Agent:
     """
@@ -39,7 +40,8 @@ class Agent:
             experiment_name = "{}_{}".format(
                 datetime.datetime.now().strftime("%y-%m-%d_%H-%M-%S-%f"), self.__class__.__name__
             )
-        self.experiment_dir = os.path.join(directory, experiment_name)   
+        self.experiment_dir = os.path.join(directory, experiment_name)
+        self.num_action = self.model["actor"].num_actions
 
 
     def set_running_mode(self, mode: str) -> None:
@@ -62,7 +64,7 @@ class Agent:
             raise ValueError("Not supported running mode. Please choose 'train' or 'eval'.")
 
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, path_jit: str | None = None) -> None:
         """
         Save the agent to the specified path
 
@@ -74,6 +76,13 @@ class Agent:
             modules[name] = module.state_dict()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(modules, path)
+
+        if path_jit is not None:
+            # Jit file save only policy network
+            actor = self.model["actor"].eval()
+            actor_jit = ActorInference(actor, squash=actor.squash, action_scale_factor=self.mapped_action_scale_factor).eval()
+            scripted = torch.jit.script(actor_jit)
+            torch.jit.save(scripted, path_jit)
     
 
     def load(self, path: str) -> None:

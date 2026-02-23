@@ -396,7 +396,8 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            agent.save(checkpoint_path)
+            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt")
+            agent.save(checkpoint_path, checkpoint_path_jit)
 
         # update
         obs = next_obs

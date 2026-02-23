@@ -154,8 +154,8 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     time_period_max = 0.5
     dstep_min = 0.3
     dstep_max = 0.4
-    z_c_min = 0.8
-    z_c_max = 1.0
+    z_c_min = 0.6
+    z_c_max = 0.8
 
 
     # Simulation
@@ -173,7 +173,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -236,8 +236,13 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         prim_path="/Visuals/Foot_rotation"
     )
 
+    torso_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Torso_rotation"
+    )
+
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     target_foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
     foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    torso_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)

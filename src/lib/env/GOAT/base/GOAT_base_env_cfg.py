@@ -48,6 +48,7 @@ else:
 GOAT_Cfg: ArticulationCfg = ArticulationCfg(
     # prim_path="{ENV_REGEX_NS}/Robot",               # Path for Interactivescene's clone_environemnts
     prim_path="/World/envs/env_.*/Robot",               # Path for DirectRLEnv
+    soft_joint_pos_limit_factor=0.85,
     spawn=sim_utils.UsdFileCfg(
         usd_path=urdf_converter.usd_path,
         scale=(1.0, 1.0, 1.0),

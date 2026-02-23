@@ -86,12 +86,13 @@ class MultiAgent:
                 raise ValueError("Not supported running mode. Please choose 'train' or 'eval'.")
 
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, path_jit: str | None = None) -> None:
         """
         Save the agent to the specified path
 
         Args:
             path: Path to save the model to
+            path_jit: Path to save jit scriptModule to (TODO: Multi-agent is not supported yet.)
         """
         modules = {}
         for uid in self.possible_agents:
@@ -102,6 +103,7 @@ class MultiAgent:
             modules[uid] = uid_module
             os.makedirs(os.path.dirname(path), exist_ok=True)
             torch.save(modules, path)
+        
     
 
     def load(self, path: str) -> None:

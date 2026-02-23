@@ -106,10 +106,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     r_height_weight = 0.0
     r_vel_lin_weight = 0.005
     r_vel_ang_weight = 0.005
-    r_vel_joint_weight = 0.0
-    r_effort_weight = 0.0
-    r_terminated_weight = 0.0
     r_alive_weight = 1.0
+    p_torque_weight = 0.05
+    p_joint_limit_weight = 1.0
+    p_terminated_weight = 100.0
 
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {

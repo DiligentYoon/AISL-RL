@@ -208,29 +208,22 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Base Height Reward
         height_error = torch.norm(self.base_height - self.cfg.target_height, dim=1)
         r_height = torch.exp(-torch.square(height_error) / 0.3)
-        
-        # vel_penalty_scale = torch.clamp(upright_rate, 0.0, 1.0)                                     # Clamp the rate
-        # vel_penalty_scale = torch.pow(vel_penalty_scale, 4)                                         # Make it sharper (only active when really it's upright)
 
-        # r_vel_lin = -torch.sum(torch.abs(self.base_vel), dim=1) * vel_penalty_scale                 # Penalty
-        # r_vel_ang = -torch.sum(torch.abs(self.base_angular_vel), dim=1) * vel_penalty_scale         # Penalty
-        # r_vel_joint = -torch.sum(torch.abs(self.joint_vel[:, :-2]), dim=1) * vel_penalty_scale      # Penalty
-
+        # Stop Reward
         vel_lin_error = torch.norm(-self.base_vel, dim=1)
         r_vel_lin = torch.exp(-torch.square(vel_lin_error) / 0.5)
 
         vel_ang_error = torch.norm(-self.base_angular_vel, dim=1)
         r_vel_ang = torch.exp(-torch.square(vel_ang_error) / 0.5)
 
-        vel_joint_error = torch.norm(-self.joint_vel, dim=1)
-        r_vel_joint = torch.exp(-torch.square(vel_joint_error) / 1)
+        # Alive Reward
+        r_alive = self.cfg.r_alive_weight * current_time / (self.cfg.max_episode_length)
+ 
+        # Energy / Action Penalty
+        p_torque = -torch.sum(torch.square(self.applied_torque), dim=1)
+        p_joint_limit = -torch.sum(self.offset_limits_joint, dim=1) 
+        p_terminated = -self.reset_terminated.float()
 
-        # Energy / Action Smoothness
-        r_effort = -torch.sum(torch.abs(self.torque_cmd), dim=1)     
-        
-        r_terminated = -self.reset_terminated.float()
-
-        r_alive = self.cfg.r_alive_weight * current_time/(self.cfg.max_episode_length)
 
         # Total Reward Summation
         total_reward = (
@@ -238,10 +231,10 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             self.cfg.r_height_weight * r_height +
             self.cfg.r_vel_lin_weight * r_vel_lin +
             self.cfg.r_vel_ang_weight * r_vel_ang +
-            self.cfg.r_vel_joint_weight * r_vel_joint +
-            self.cfg.r_effort_weight * r_effort +
-            self.cfg.r_terminated_weight * r_terminated +
-            self.cfg.r_alive_weight * r_alive
+            self.cfg.r_alive_weight * r_alive +
+            self.cfg.p_torque_weight * p_torque +
+            self.cfg.p_joint_limit_weight * p_joint_limit +
+            self.cfg.p_terminated_weight * p_terminated
         )
 
         return total_reward
@@ -279,6 +272,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.contact_force = self._contact_sensor.data.net_forces_w.view(self.num_envs, -1)
         material_property = self._robot.root_physx_view.get_material_properties()                   # device is "cpu" not "cuda" 
         self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
+
+        # Action regularization
+        self.offset_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
+                                    (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
+        self.applied_torque = self._robot.data.applied_torque
+        
 
         # Extra Information data
         self.extras["Curriculum"]["step_progress"] = self.common_step_counter

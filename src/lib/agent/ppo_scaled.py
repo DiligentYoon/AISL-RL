@@ -72,6 +72,17 @@ class PPO(Agent):
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
         self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
+        self.mapped_action_scale_factor = torch.zeros(self.num_action, device=self.device)
+        if isinstance(self.action_scale_factor, dict):
+            # Per-action dictionary
+            # Action Scale Factor : [k_1 : [0.5, (0, 1, ...)], k_2 : [1.5, (5, 6, ...)], ...]
+            for k, v in self.action_scale_factor.items():
+                scale_factor = v[0]
+                mapping_ids = v[1]
+                self.mapped_action_scale_factor[mapping_ids] = scale_factor
+        else:
+            # Single scalar
+            self.mapped_action_scale_factor[:] = self.action_scale_factor
 
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
@@ -145,17 +156,8 @@ class PPO(Agent):
                                                               update_rms=update_rms)
         
         # Action scaling
-        actions = nonscaled_actions.clone()
-        if isinstance(self.action_scale_factor, dict):
-            # Per-action dictionary
-            # Action Scale Factor : [k_1 : [0.5, (0, 1, ...)], k_2 : [1.5, (5, 6, ...)], ...]
-            for k, v in self.action_scale_factor.items():
-                scale_factor = v[0]
-                mapping_ids = v[1]
-                actions[:, mapping_ids] *= scale_factor
-        else:
-            # Single scalar
-            actions *= self.action_scale_factor 
+        n_batch = nonscaled_actions.shape[0]
+        actions = nonscaled_actions.clone() * self.mapped_action_scale_factor.repeat(n_batch, 1) # [E, A]
 
         return actions, nonscaled_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
 

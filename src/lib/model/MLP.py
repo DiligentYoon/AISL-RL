@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from typing import Optional
 from torch.distributions import Normal
 from lib.utils.Running_mean_std import RunningMeanStd
 from lib.model.model import Model
@@ -266,13 +267,13 @@ class Actor(Model):
         log_std = torch.clamp(log_std, self.min_log_std, self.max_log_std)
 
         # Action distribution
-        self.action_distribution = Normal(mean_actions, log_std.exp())
+        action_distribution = Normal(mean_actions, log_std.exp())
 
         if deterministic:
             raw_actions = mean_actions
         else:
             # Sample using the reparameterization trick
-            raw_actions = self.action_distribution.rsample()
+            raw_actions = action_distribution.rsample()
 
         # Log of the probability density function
         if self.squash:
@@ -281,22 +282,22 @@ class Actor(Model):
             if taken_actions is not None:
                 taken_actions = torch.clip(taken_actions, -1.0 + eps, 1.0 - eps)
                 raw_taken_actions = torch.atanh(taken_actions)
-                log_prob = self.action_distribution.log_prob(raw_taken_actions) - torch.log(1 - taken_actions.pow(2) + eps)
+                log_prob = action_distribution.log_prob(raw_taken_actions) - torch.log(1 - taken_actions.pow(2) + eps)
             else:
-                log_prob = self.action_distribution.log_prob(raw_actions) - torch.log(1 - actions.pow(2) + eps)
+                log_prob = action_distribution.log_prob(raw_actions) - torch.log(1 - actions.pow(2) + eps)
 
         else:
             # no squasing without correction
             actions = raw_actions
             if taken_actions is not None:
-                log_prob = self.action_distribution.log_prob(taken_actions)
+                log_prob = action_distribution.log_prob(taken_actions)
             else:
-                log_prob = self.action_distribution.log_prob(actions)
+                log_prob = action_distribution.log_prob(actions)
 
         log_prob = log_prob.sum(dim=-1)
 
         # Entropy : mean of (Batch, Action) dimension
-        entropy = self.action_distribution.entropy().mean()
+        entropy = action_distribution.entropy().mean()
 
         return actions, log_prob, entropy
     
@@ -369,3 +370,36 @@ class Critic(Model):
         expected_return = self.net(standardized_input)
 
         return expected_return, None, None
+
+
+class ActorInference(nn.Module):
+    def __init__(self, actor: nn.Module, squash: bool = True, action_scale_factor: Optional[torch.Tensor] = None):
+        super().__init__()
+        self.net = actor.net
+        self.log_std_parameter = actor.log_std_parameter
+        self.min_log_std = float(actor.min_log_std)
+        self.max_log_std = float(actor.max_log_std)
+        self.squash = bool(squash)
+        self.actor_standardizer = actor.actor_standardizer
+
+        # action_scale_factor: shape (num_actions,)
+        if action_scale_factor is None:
+            action_scale_factor = torch.ones_like(self.log_std_parameter)  # (num_actions,)
+        self.register_buffer("action_scale_factor", action_scale_factor)
+
+    def forward(self, observations: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
+        x = self.actor_standardizer.standardize(observations, update=False)
+        mean = self.net(x)
+
+        if deterministic:
+            a = mean
+        else:
+            log_std = torch.clamp(self.log_std_parameter, self.min_log_std, self.max_log_std)
+            std = torch.exp(log_std)
+            a = mean + std * torch.randn_like(mean)
+
+        if self.squash:
+            a = torch.tanh(a)
+
+        a = a * self.action_scale_factor
+        return a

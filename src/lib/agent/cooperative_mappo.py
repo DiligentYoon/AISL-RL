@@ -113,7 +113,7 @@ class CooperativeMAPPO(MAPPO):
             self.tensors_name_for_update.append("infos")
 
 
-    def save(self, path):
+    def save(self, path: str, path_jit: str | None = None):
         modules = {}
         # Shared module
         shared_module = {}
