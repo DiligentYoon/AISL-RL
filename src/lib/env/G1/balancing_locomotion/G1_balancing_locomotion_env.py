@@ -126,9 +126,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
             if not hasattr(self, "target_foot_visualizer"):
                 self.target_foot_visualizer = VisualizationMarkers(self.cfg.target_foot_visualizer_cfg)
+            if not hasattr(self, "target_foot_rotation_visualizer"):
+                self.target_foot_rotation_visalizer = VisualizationMarkers(self.cfg.target_foot_rotation_visualizer_cfg)
+            if not hasattr(self, "foot_rotation_visualizer"):
+                self.foot_rotation_visalizer = VisualizationMarkers(self.cfg.target_foot_rotation_visualizer_cfg)
             self.goal_vel_visualizer.set_visibility(True)
             self.current_vel_visualizer.set_visibility(True)
             self.target_foot_visualizer.set_visibility(True)
+            self.target_foot_rotation_visalizer.set_visibility(True)
+            self.foot_rotation_visalizer.set_visibility(True)
         else:
             if hasattr(self, "goal_vel_visualizer"):
                 self.goal_vel_visualizer.set_visibility(False)
@@ -136,11 +142,17 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 self.current_vel_visualizer.set_visibility(False)
             if hasattr(self, "target_foot_visualizer"):
                 self.target_foot_visualizer.set_visibility(False)
+            if hasattr(self, "target_foot_rotation_visualizer"):
+                self.target_foot_rotation_visalizer.set_visibility(False)
+                self.target_foot_visualizer.set_visibility(False)
+            if hasattr(self, "foot_rotation_visualizer"):
+                self.foot_rotation_visalizer.set_visibility(False)
     
 
     def _debug_vis_callback(self, event):
         if not self._robot.is_initialized:
             return
+        # ============== Arrow ================ # 
         # Arrow: get marker location
         base_pos_w = self._robot.data.root_pos_w.clone()
         base_pos_w[:, 2] += 0.5
@@ -150,7 +162,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         
-        # Foot Cube: get marker location
+        # ============== Target Foot Cube and Rotation Frame ================ # 
         pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
         z_height = 0.01 * torch.ones_like(pos[..., :1])                   # [E, 2, 1]
         target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
@@ -162,13 +174,25 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         
         # Color difference between support and swing foot
         marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
+
         
+        # =============== Foot Rotation Frame =============== #
+        foot_pos = self.foot_pos_w.clone().view(-1, 3)
+        foot_rot = self.foot_rot_w.clone().view(-1, 4)
+        foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
+        
+
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
         self.target_foot_visualizer.visualize(translations=target_pos, 
                                               orientations=target_quat, 
                                               marker_indices=marker_indices)
+        self.target_foot_rotation_visalizer.visualize(translations=target_pos,
+                                                      orientations=target_quat)
+        self.foot_rotation_visalizer.visualize(translations=foot_pos,
+                                               orientations=foot_rot,
+                                               marker_indices=foot_marker_indices)
 
 
     def _setup_scene(self):
@@ -507,14 +531,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             # Update without reset env
             mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
             mask[env_ids] = False
+            combined_mask = self.update_command_ids & mask
             if torch.any(mask):
                 # Counting update
                 self.phase[mask] += 1 / self.full_step_period[mask]
                 self.phase_count[mask] += 1
                 self.update_count[mask] += 1
                 # Support foot pos update
-                self.foot_on_swing[mask] = self.in_swing[mask].clone()
-                self.foot_on_swing[mask, 1] = ~self.foot_on_swing[mask, 0] # NOTE: Assume single stance (double stance -> guide left swing, right stand)
+                # self.foot_on_swing[mask] = self.in_swing[mask].clone()
+                # self.foot_on_swing[mask, 1] = ~self.foot_on_swing[mask, 0] # NOTE: Assume single stance (double stance -> guide left swing, right stand)
                 self.support_foot_pos[mask] = torch.where((self.foot_on_swing[mask, 0] == 0).unsqueeze(-1), 
                                                           self.foot_pos_w[mask, 0, :3],
                                                           self.foot_pos_w[mask, 1, :3])
@@ -522,7 +547,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 self.update_phase_ids[mask] = (self.phase_count[mask] >= self.full_step_period[mask])
                 self.update_command_ids[mask] = (self.update_count[mask] >= self.step_period[mask])
                 # Prev commands
-                combined_mask = self.update_command_ids & mask
                 self.prev_target_footstep_w[combined_mask] = self.target_footstep_w[combined_mask].clone()
                 self.prev_target_footstep_b[combined_mask] = self.target_footstep_b[combined_mask].clone()
             # Update only reset env
@@ -556,8 +580,12 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Target foot pos update
         if torch.any(self.update_command_ids):
             update_commands_mask = self.target_footstep_w[self.update_command_ids]
-            self.foot_on_swing = self.in_swing.clone()
-            self.foot_on_swing[:, 1] = ~self.foot_on_swing[:, 0] # NOTE: Assume single stance (double stance -> guide left single, right stand)
+            # Switch the swing foot
+            if env_ids is not None:
+                combined_mask = self.update_command_ids & mask
+                self.foot_on_swing[combined_mask] = ~self.foot_on_swing[combined_mask] # NOTE: Assume single stance (double stance -> guide left single, right stand)
+            # self.foot_on_swing = self.in_swing.clone()
+            # self.foot_on_swing[:, 1] = ~self.foot_on_swing[:, 0] # NOTE: Assume single stance (double stance -> guide left single, right stand)
             update_commands_mask[self.foot_on_swing[self.update_command_ids]] = self.compute_target_footstep()
 
             foot_collision_ids = (update_commands_mask[:, 0,:2] - update_commands_mask[:, 1,:2]).norm(dim=1) < self.cfg.self_collision_threshold

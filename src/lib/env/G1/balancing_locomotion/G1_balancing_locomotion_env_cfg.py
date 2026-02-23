@@ -10,7 +10,7 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
@@ -152,8 +152,8 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     self_collision_threshold = 0.2
     time_period_min = 0.3
     time_period_max = 0.5
-    dstep_min = 0.5
-    dstep_max = 0.6
+    dstep_min = 0.3
+    dstep_max = 0.4
     z_c_min = 0.8
     z_c_max = 1.0
 
@@ -228,6 +228,16 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         }
     )
 
+    target_foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Target_foot_rotation"
+    )
+
+    foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Foot_rotation"
+    )
+
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    target_foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
