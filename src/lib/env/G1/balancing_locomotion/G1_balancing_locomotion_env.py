@@ -165,7 +165,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         base_pos_w[:, 2] += 0.5
         # Arrow: resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
-                                                                                              xy_velocity=self.command_inputs[:, :2])
+                                                                                              xy_velocity=self.command_inputs_b[:, :2])
         vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         
@@ -273,7 +273,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                         self.torso_lin_vel_b,                            # [E, 3]
                         self.torso_ang_vel_b,                            # [E, 3]
                         self.projected_gravity,                          # [E, 3]
-                        self.command_inputs,                             # [E, 3]
+                        self.command_inputs_b,                           # [E, 3]
                         self.joint_pos[:, self.total_arm_joint_ids],     # [E, 25]
                         self.joint_vel[:, self.total_arm_joint_ids],     # [E, 25]
                         self.actions["arm"]                              # [E, 25]
@@ -285,7 +285,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                         self.torso_lin_vel_b,                               # [E, 3]
                         self.torso_ang_vel_b,                               # [E, 3]    
                         self.projected_gravity,                             # [E, 3]
-                        self.command_inputs,                                # [E, 3]
+                        self.command_inputs_b,                              # [E, 3]
                         self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
                         self.z_c.unsqueeze(-1),                             # [E, 1]
                         self.phase_sin.unsqueeze(-1),                       # [E, 1]
@@ -311,7 +311,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
                     self.projected_gravity,                             # [E, 3]
-                    self.command_inputs,                                # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
                     self.z_c.unsqueeze(-1),                             # [E, 1]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
@@ -341,7 +341,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
                     self.projected_gravity,                             # [E, 3]
-                    self.command_inputs,                                # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
                     self.z_c.unsqueeze(-1),                             # [E, 1]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
@@ -370,8 +370,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs[:, :2] - self.vel_yaw[:, :2]), dim=1)
-        ang_vel_error = torch.square(self.command_inputs[:, 2] - self.torso_ang_vel_w[:, 2])
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_w[:, :2] - self.torso_lin_vel_w[:, :2]), dim=1)
+        ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error)
@@ -536,7 +536,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Height (For rough terrain)
         # self.height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - 0.5).clip(min=-1.0, max=1.0)
         # Information related to Commands Tracking
-        self.command_inputs = self.commands.command
+        self.command_inputs_b = self.commands.command_b
         self.command_inputs_w = self.commands.command_w
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
         # Information related to Contact

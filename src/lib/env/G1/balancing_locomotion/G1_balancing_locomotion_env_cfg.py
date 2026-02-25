@@ -173,8 +173,9 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 2.0), lin_vel_y=(-0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 2.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
+        is_body_frame=False,
     )
 
     # Terrain
