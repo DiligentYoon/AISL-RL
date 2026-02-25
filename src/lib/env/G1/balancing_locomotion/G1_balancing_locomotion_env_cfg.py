@@ -103,7 +103,7 @@ class EventCfg:
 @configclass
 class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 20.0
+    episode_length_s = 10.0
     sim_dt = 1/200
     decimation = 2                       
 
@@ -124,12 +124,12 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 5.0
-    w_track_ang_vel: float = 5.0
-    w_track_heading: float = 5.0
-    w_track_height : float = 5.0
+    w_track_lin_vel: float = 2.0
+    w_track_ang_vel: float = 2.0
+    w_track_heading: float = 2.0
+    w_track_height : float = 2.0
 
-    w_feet_gait: float = 2.0
+    w_feet_gait: float = 1.0
     w_feet_slide: float = 0.1
 
     w_lin_vel_z: float  = 0.2
@@ -137,7 +137,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
     w_action_rate: float = 0.0
-    w_flat: float = 5.0
+    w_flat: float = 2.0
 
     w_limits_ankle: float = 1.0
     w_limits_hip: float = 0.1
@@ -148,6 +148,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_termination: float = 300
     termination_height: float = 0.4
     termination_gravity: float = 0.7
+    termination_target_foot: float = 1.5
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2

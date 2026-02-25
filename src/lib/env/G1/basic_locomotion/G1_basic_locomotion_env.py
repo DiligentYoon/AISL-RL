@@ -400,7 +400,7 @@ class G1BasicLocomotionEnv(G1BaseEnv):
         # Height (For rough terrain)
         # self.height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - 0.5).clip(min=-1.0, max=1.0)
         # Information related to Commands Tracking
-        self.command_inputs = self.commands.command
+        self.command_inputs = self.commands.command_b
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3])
         # Information related to Gait Phase
         self.air_time = self.contact_sensors.data.current_air_time[:, self.ankle_contact_roll_link_ids]

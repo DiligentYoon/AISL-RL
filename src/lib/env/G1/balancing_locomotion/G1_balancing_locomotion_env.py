@@ -370,7 +370,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_yaw[:, :2] - self.vel_yaw[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
@@ -383,6 +383,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         flat_penalty = -torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
 
         # Control Penalty (Torso)
+        ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
         joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
         joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
 
@@ -419,6 +420,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                              self.cfg.w_track_ang_vel * ang_vel_rewards + \
                              self.cfg.w_track_heading * heading_rewards + \
                              self.cfg.w_track_height  * height_rewards + \
+                             self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
                              self.cfg.w_flat          * flat_penalty + \
                              self.cfg.w_termination   * terminate_penalty
 
@@ -476,6 +478,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
         died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
+        # died_fall_3 = self.step_location_offset
         died = torch.logical_or(died_fall, died_fall_2)
         return died, time_out
 
