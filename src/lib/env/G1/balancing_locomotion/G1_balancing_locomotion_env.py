@@ -420,6 +420,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                              self.cfg.w_track_ang_vel * ang_vel_rewards + \
                              self.cfg.w_track_heading * heading_rewards + \
                              self.cfg.w_track_height  * height_rewards + \
+                             self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
                              self.cfg.w_flat          * flat_penalty + \
                              self.cfg.w_termination   * terminate_penalty
 
