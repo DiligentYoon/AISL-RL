@@ -124,10 +124,10 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 4.0
-    w_track_ang_vel: float = 4.0
-    w_track_heading: float = 4.0
-    w_track_height : float = 4.0
+    w_track_lin_vel: float = 5.0
+    w_track_ang_vel: float = 5.0
+    w_track_heading: float = 5.0
+    w_track_height : float = 5.0
 
     w_feet_gait: float = 2.0
     w_feet_slide: float = 0.1
