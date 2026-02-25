@@ -110,8 +110,8 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 87, "leg": 70}                    
-    state_space = {"arm": 145, "leg": 145}
+    observation_space = {"arm": 87, "leg": 72}                    
+    state_space = {"arm": 147, "leg": 147}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -124,19 +124,19 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 1.0
-    w_track_ang_vel: float = 1.0
-    w_track_heading: float = 1.0
-    w_track_height : float = 1.0
+    w_track_lin_vel: float = 3.0
+    w_track_ang_vel: float = 3.0
+    w_track_heading: float = 3.0
+    w_track_height : float = 3.0
 
-    w_feet_gait: float = 2.0
+    w_feet_gait: float = 5.0
     w_feet_slide: float = 0.1
 
     w_lin_vel_z: float  = 0.2
     w_ang_vel_xy: float = 0.05
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
-    w_action_rate: float = 0.005
+    w_action_rate: float = 0.0
     w_flat: float = 1.0
 
     w_limits_ankle: float = 1.0
@@ -145,17 +145,17 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_limits_fingers: float = 0.05
     w_limits_torso: float = 0.1
 
-    w_termination: float = 200
+    w_termination: float = 300
     termination_height: float = 0.4
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
-    time_period_max = 0.5
-    dstep_min = 0.3
-    dstep_max = 0.4
+    time_period_min = 0.25
+    time_period_max = 0.3
+    dstep_min = 0.25
+    dstep_max = 0.35
     z_c_min = 0.6
-    z_c_max = 0.8
+    z_c_max = 0.7
 
 
     # Simulation
@@ -173,7 +173,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(0.0, 2.0), lin_vel_y=(-0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 

@@ -113,14 +113,22 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
-        "left_hip_torque": 0.0,
-        "right_hip_torque": 0.0,
-        "left_thigh_torque": 0.0,
-        "right_thigh_torque": 0.0,
-        "left_knee_torque": 0.0,
-        "right_knee_torque": 0.0,
-        "left_wheel_torque": 0.0,
-        "right_wheel_torque": 0.0,}
+        "left_hip_torque (Nm)": 0.0,
+        "right_hip_torque (Nm)": 0.0,
+        "left_thigh_torque (Nm)": 0.0,
+        "right_thigh_torque (Nm)": 0.0,
+        "left_knee_torque (Nm)": 0.0,
+        "right_knee_torque (Nm)": 0.0,
+        "left_wheel_torque (Nm)": 0.0,
+        "right_wheel_torque (Nm)": 0.0,
+        "left_hip_target (deg)": 0.0,
+        "right_hip_target (deg)": 0.0,
+        "left_thigh_target (deg)": 0.0,
+        "right_thigh_target (deg)": 0.0,
+        "left_knee_target (deg)": 0.0,
+        "right_knee_target (deg)": 0.0,
+        "left_wheel_target (rpm)": 0.0,
+        "right_wheel_target (rpm)": 0.0,}
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(

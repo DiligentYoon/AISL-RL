@@ -235,6 +235,7 @@ def main():
     CLI_track_rewards = collections.deque(maxlen=500)
     CLI_track_timesteps = collections.deque(maxlen=500)
     CLI_step_reward_means = collections.deque(maxlen=500)
+    # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
@@ -307,6 +308,20 @@ def main():
             cumulative_rewards[finished_episodes] = 0
             cumulative_timesteps[finished_episodes] = 0
 
+            # # Success rate
+            # if next_infos.get("success_rate", None) is not None:
+            #     # Specific success conditions exist
+            #     success_rate = next_infos["success_rate"]
+            # else:
+            #     # Success conditions is not existed
+            #     success_episodes = terminated.nonzero(as_tuple=False)
+            #     success_rate = success_episodes / finished_episodes
+            
+            # if torch.is_tensor(success_rate):
+            #     CLI_episode_success_rate.append(100 * success_rate.item())
+            # else:
+            #     CLI_episode_success_rate.append(100 * success_rate)
+
         # record data
         tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(rewards).item())
         tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(rewards).item())
@@ -345,10 +360,12 @@ def main():
             per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
+            # avg_ep_srate = float(np.mean(CLI_episode_success_rate)) if len(CLI_episode_success_rate) else float ("nan")
 
             ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
+            # ep_srate = "-" if np.isnan(avg_ep_srate) else f"{avg_ep_srate:6.3f} %"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)
@@ -368,10 +385,11 @@ def main():
             line_value_loss = f"Value Loss        : {value_loss:6.3f}"
             line_policy_loss = f"Policy Loss       : {policy_loss:6.3f}"
             line_entropy_loss = f"Entropy Loss      : {entropy_loss:6.3f}"
+            line_approx_kl = f"Approximate KL    : {approx_kl:6.3f}"
             line_episode_step = f"Avg Episode Step  : {ep_step}"
             line_per_step_reward = f"Per-Step Rewards  : {per_r}"
             line_episode_reward = f"Epiode Rewards    : {ep_r}"
-            # line_episode_success = f"Avg Success Rate  : {100 * global_success_rate:6.2f} %"
+            # line_episode_success = f"Success Rate       : {ep_srate}"
 
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
@@ -384,6 +402,7 @@ def main():
             print(f"| {line_value_loss:<{content_width-1}}|")
             print(f"| {line_policy_loss:<{content_width-1}}|")
             print(f"| {line_entropy_loss:<{content_width-1}}|")
+            print(f"| {line_approx_kl:<{content_width-1}}|")
             print(f"| {line_episode_step:<{content_width-1}}|")
             print(f"| {line_per_step_reward:<{content_width-1}}|")
             print(f"| {line_episode_reward:<{content_width-1}}|")
@@ -396,7 +415,7 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt")
+            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
             agent.save(checkpoint_path, checkpoint_path_jit)
 
         # update

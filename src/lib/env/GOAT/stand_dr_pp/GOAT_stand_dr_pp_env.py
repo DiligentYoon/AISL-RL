@@ -4,7 +4,7 @@ import torch
 import copy
 import numpy as np
 
-from isaaclab.utils.math import normalize, quat_from_angle_axis
+from isaaclab.utils.math import normalize, quat_from_angle_axis, quat_from_euler_xyz
 from isaaclab.terrains import TerrainImporter 
 from isaaclab.sensors import ContactSensor
 from isaacsim.core.utils import bounds
@@ -91,12 +91,17 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Reset previous action observation
         self.actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
 
-        # Base link state
+        # ============== Position Adjustment =============== #
         root_state = self._robot.data.default_root_state[env_ids].clone()
         root_state[:, 2] += self.robot_collision_min_z
 
-        # Change to global position
+        # Change to global height
         root_state[:,:3] += self.scene.env_origins[env_ids]
+
+        # ============== Rotation Adjustment (Yawing) =============== #
+        root_yaw = -3.14 + (3.14 - (-3.14)) * torch.rand(len(env_ids), device=self.device) # Uniform distribution [-pi, pi]
+        root_rot_w = quat_from_euler_xyz(torch.zeros_like(root_yaw), torch.zeros_like(root_yaw), root_yaw)
+        root_state[:, 3:7] = root_rot_w
 
         # Apply base settings
         self._robot.write_root_state_to_sim(root_state=root_state,
@@ -136,9 +141,11 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                                                      torque_limits=self.torque_limits)
         # Combine torque commands
         self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
+        # zero_torque = torch.zeros_like(self.torque_cmd)
         
         # Load to sim buffer
         self._robot.set_joint_effort_target(self.torque_cmd)
+        # self._robot.set_joint_effort_target(zero_torque)
 
     def _get_observations(self) -> torch.Tensor:
         """
@@ -260,7 +267,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.base_acceleration = self._robot.root_physx_view.get_link_accelerations()[:, 0, 3:]
         self.base_angular_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
         self.gravity_vector = self._robot.data.projected_gravity_b                                      # Unit vector
-        self.base_quaternion = self._robot.root_physx_view.get_root_transforms()[:, 3:]
+        # self.base_quaternion = self._robot.root_physx_view.get_root_transforms()[:, 3:]
+        self.base_quaternion = self._robot.data.root_com_quat_w
         self.joint_pos = self._robot.data.joint_pos
         self.joint_vel = self._robot.data.joint_vel
         self.previous_action = self.actions.clone()
@@ -283,16 +291,34 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.extras["Curriculum"]["step_progress"] = self.common_step_counter
 
     def _update_viz_data(self):
+        joint_cmd_rad = self.joint_pos_delta_cmd
+        wheel_vel_cmd_rad = self.wheel_vel_cmd
+
+        joint_cmd_deg = joint_cmd_rad * (180 / torch.pi)
+        wheel_vel_cmd_rpm = wheel_vel_cmd_rad * (30 / torch.pi)
+
+        applied_target = torch.cat([joint_cmd_deg, wheel_vel_cmd_rpm], dim=-1)
         applied_torque = self._robot.data.applied_torque
+
+        
         extras = copy.deepcopy(self.extras)
-        extras["viz_data"]["left_hip_torque"]    = applied_torque[:, 0]
-        extras["viz_data"]["right_hip_torque"]   = applied_torque[:, 1]
-        extras["viz_data"]["left_thigh_torque"]  = applied_torque[:, 2]
-        extras["viz_data"]["right_thigh_torque"] = applied_torque[:, 3]
-        extras["viz_data"]["left_knee_torque"]   = applied_torque[:, 4]
-        extras["viz_data"]["right_knee_torque"]  = applied_torque[:, 5]
-        extras["viz_data"]["left_wheel_torque"]  = applied_torque[:, 6]
-        extras["viz_data"]["right_wheel_torque"] = applied_torque[:, 7]
+        extras["viz_data"]["left_hip_torque (Nm)"]    = applied_torque[:, 0]
+        extras["viz_data"]["right_hip_torque (Nm)"]   = applied_torque[:, 1]
+        extras["viz_data"]["left_thigh_torque (Nm)"]  = applied_torque[:, 2]
+        extras["viz_data"]["right_thigh_torque (Nm)"] = applied_torque[:, 3]
+        extras["viz_data"]["left_knee_torque (Nm)"]   = applied_torque[:, 4]
+        extras["viz_data"]["right_knee_torque (Nm)"]  = applied_torque[:, 5]
+        extras["viz_data"]["left_wheel_torque (Nm)"]  = applied_torque[:, 6]
+        extras["viz_data"]["right_wheel_torque (Nm)"] = applied_torque[:, 7]
+
+        extras["viz_data"]["left_hip_target (deg)"]    = applied_target[:, 0]
+        extras["viz_data"]["right_hip_target (deg)"]   = applied_target[:, 1]
+        extras["viz_data"]["left_thigh_target (deg)"]  = applied_target[:, 2]
+        extras["viz_data"]["right_thigh_target (deg)"] = applied_target[:, 3]
+        extras["viz_data"]["left_knee_target (deg)"]   = applied_target[:, 4]
+        extras["viz_data"]["right_knee_target (deg)"]  = applied_target[:, 5]
+        extras["viz_data"]["left_wheel_target (rpm)"]  = applied_target[:, 6]
+        extras["viz_data"]["right_wheel_target (rpm)"] = applied_target[:, 7]
 
         return extras
 

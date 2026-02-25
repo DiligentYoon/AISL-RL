@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from lib.agent.mappo import MAPPO
 from lib.buffer.rolloutbuffer import RolloutBuffer
 
+from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 from lib.utils.wrapper_utils import unflatten_tensorized_space
 
 class CooperativeMAPPO(MAPPO):
@@ -49,6 +50,11 @@ class CooperativeMAPPO(MAPPO):
         self.optimizers = {}
         self.optimizers["actor"] = {}
         self.optimizers["critic"] = {}
+        
+        # Learning Rate Scheduler
+        self.optimizer_schedulers = {}
+        self.optimizer_schedulers["actor"] = {}
+        self.optimizer_schedulers["critic"] = {}
 
         self.is_rma = self.shared_actor.is_rma
         
@@ -70,6 +76,13 @@ class CooperativeMAPPO(MAPPO):
 
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
+
+        # self.optimizer_schedulers["actor"]["arm"] = KLAdaptiveLR(self.optimizers["actor"]["arm"])
+        # self.optimizer_schedulers["actor"]["leg"] = KLAdaptiveLR(self.optimizers["actor"]["leg"])
+        # self.optimizer_schedulers["actor"]["shared"] = KLAdaptiveLR(self.optimizers["actor"]["shared"])
+        # self.optimizer_schedulers["critic"]["arm"] = KLAdaptiveLR(self.optimizers["critic"]["arm"])
+        # self.optimizer_schedulers["critic"]["leg"] = KLAdaptiveLR(self.optimizers["critic"]["leg"])
+
 
         # Checkpoint Modules
         self.checkpoint_modules["shared"] = {

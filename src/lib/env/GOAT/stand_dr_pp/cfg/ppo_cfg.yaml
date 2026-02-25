@@ -27,7 +27,7 @@ agent:
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  entropy_loss_scale: 0.008
+  entropy_loss_scale: 0.01
   value_loss_scale: 1.0
   kl_threshold: 0.0
   time_limit_bootstrap: True
@@ -47,4 +47,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 19200
+  timesteps: 36000

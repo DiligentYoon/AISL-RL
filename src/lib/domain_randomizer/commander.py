@@ -146,6 +146,9 @@ class UniformVelocityCommand():
     @property
     def command_w(self) -> torch.Tensor:
         """(num_envs, 3): [vx, vy, yaw_rate] in world frame."""
+        vel_b_3d = torch.cat([self.vel_command_b[:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
+        self.vel_command_w[:, :2] = quat_apply(self.robot.data.root_quat_w[:], vel_b_3d)[:, :2]
+        self.vel_command_w[:, 2] = self.vel_command_b[:, 2].clone()
         return self.vel_command_w
     
     @property
@@ -208,7 +211,7 @@ class UniformVelocityCommand():
         # commadns in world frame
         vel_b_3d = torch.cat([self.vel_command_b[env_ids, :2], torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
         self.vel_command_w[env_ids, :2] = quat_apply(self.robot.data.root_quat_w[env_ids], vel_b_3d)[:, :2]
-        self.vel_command_w[env_ids, 2] = self.vel_command_b[env_ids, 2]
+        self.vel_command_w[env_ids, 2] = self.vel_command_b[env_ids, 2].clone()
 
 
         # heading env selection (probabilistic)
@@ -263,9 +266,9 @@ class UniformVelocityCommand():
         # arrow-direction
         heading_angle = torch.atan2(xy_velocity[:, 1], xy_velocity[:, 0])
         zeros = torch.zeros_like(heading_angle)
-        arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
+        arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle) # body frame
         # convert everything back from base to world frame
         base_quat_w = self.robot.data.root_quat_w
-        arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
+        arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat) # arrow rot in body frame -> world frame
 
         return arrow_scale, arrow_quat
