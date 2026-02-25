@@ -217,7 +217,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.contact_sensors = self.scene.sensors["contact_forces"]
         # self.height_scanner = self.scene.sensors["height_scanner"]
         # self.height_scanner.update_period = self.cfg.decimation * self.cfg.sim_dt
-        self.contact_sensors.update_period = self.cfg.sim_dt
+        self.contact_sensors.update_period = self.cfg.sim_dt * self.cfg.decimation
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # add ground plane
@@ -370,20 +370,22 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_yaw[:, :2] - self.vel_yaw[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_w[:, :2] - self.torso_lin_vel_w[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
-        lin_vel_rewards = torch.exp(-lin_vel_error)
-        ang_vel_rewards = torch.exp(-ang_vel_error)
-        heading_rewards = torch.exp(-heading_error)
-        height_rewards  = torch.exp(-height_error)
+        lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
+        ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
+        heading_rewards = torch.exp(-heading_error / 0.5**2)
+        height_rewards  = torch.exp(-height_error / 0.5**2)
         
-        # Attitute Penalty (Torso)
-        flat_penalty = -torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+        # Attitute rewards (Torso)
+        tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+        flat_rewards = torch.exp(-tilting / 0.5**2)
 
-        # Control Penalty (Torso)
+        # Control Penalty (Total)
         ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
+        joint_limit_penalty   = -torch.sum(self.out_of_limits_joint, dim=1).clip(0, 1)     
         joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
         joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
 
@@ -391,20 +393,16 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
 
         # Gait Rewards (Leg)
-        footstep_loc_error = torch.sum(self.step_location_offset, dim=-1)
-        footstep_rot_error = torch.sum(self.step_rotation_offset, dim=-1)
+        footstep_loc_error = self.step_location_offset[self.foot_on_swing]
+        footstep_rot_error = self.step_rotation_offset[self.foot_on_swing]
         contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
-        footstep_tracking = torch.exp(-footstep_loc_error) + torch.exp(-footstep_rot_error)
+        footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
         gait_reward = contact_schedule + footstep_tracking
-        # print(f"phase / schedule : {self.phase.item()}, {self.contact_schedule.item()}")
-        # print(f"phase / contact (Left, Right) : {self.contact_schedule} / {self.in_contact}")
-        # print(f"gait reward: {gait_reward}")
+
+        # print(f"contact (left) | contact (right) | contact_schedule | footstep tracking : {self.in_contact[:, 0].int().item()} | {self.in_contact[:, 1].int().item()} | {contact_schedule.item():.2f} | {footstep_tracking.item():.2f}")
 
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
-
-        # Joint Pos Limits Penalty (Leg)
-        joint_pos_penalty_ankle   = -torch.sum(self.out_of_limits_ankle, dim=1)          # Leg
 
         # Joint Deviation Penalty (Arm)
         joint_pos_penalty_arms    = -torch.sum(torch.abs(self.deviation_arms), dim=1)    # Arm
@@ -421,7 +419,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                              self.cfg.w_track_heading * heading_rewards + \
                              self.cfg.w_track_height  * height_rewards + \
                              self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
-                             self.cfg.w_flat          * flat_penalty + \
+                             self.cfg.w_flat          * flat_rewards + \
+                             self.cfg.w_limits        * joint_limit_penalty + \
                              self.cfg.w_termination   * terminate_penalty
 
             arm_rewards = self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
@@ -431,7 +430,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             leg_rewards = common_rewards + \
                           self.cfg.w_feet_gait     * gait_reward + \
                           self.cfg.w_feet_slide    * slide_penalty + \
-                          self.cfg.w_limits_ankle  * joint_pos_penalty_ankle + \
+                          self.cfg.w_limits        * joint_limit_penalty + \
                           self.cfg.w_joint_torque  * joint_torque_penalty + \
                           self.cfg.w_joint_acc     * joint_acc_penalty + \
                           self.cfg.w_action_rate   * action_rate_penalty_leg 
@@ -453,8 +452,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                       self.cfg.w_track_height   * height_rewards + \
                       self.cfg.w_feet_gait      * gait_reward + \
                       self.cfg.w_feet_slide     * slide_penalty + \
-                      self.cfg.w_flat           * flat_penalty + \
-                      self.cfg.w_limits_ankle   * joint_pos_penalty_ankle + \
+                      self.cfg.w_flat           * flat_rewards + \
+                      self.cfg.w_limits         * joint_limit_penalty + \
                       self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
                       self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
                       self.cfg.w_termination    * terminate_penalty + \
@@ -476,10 +475,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
 
+        swing_foot_pos = self.foot_pos_w[self.foot_on_swing]
+        target_foot_pos = self.target_footstep_w[self.foot_on_swing]
+
         died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
         died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
-        # died_fall_3 = self.step_location_offset
-        died = torch.logical_or(died_fall, died_fall_2)
+        died_ang = torch.norm(self.torso_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
+        died_fall_3 = torch.norm(target_foot_pos[:, :2] - swing_foot_pos[:, :2], dim=-1) >= self.cfg.termination_target_foot
+        died = died_fall | died_fall_2 | died_fall_3 | died_ang
         return died, time_out
 
 
@@ -684,8 +687,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Feet Slide
         self.is_contacts = self.contact_sensors.data.net_forces_w_history[:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
         # Joint Limits
-        self.out_of_limits_ankle = -(self.joint_pos[:, self.ankle_joint_ids] - self._robot.data.soft_joint_pos_limits[:, self.ankle_joint_ids, 0]).clip(max=0.0) + \
-                                    (self.joint_pos[:, self.ankle_joint_ids] - self._robot.data.soft_joint_pos_limits[:, self.ankle_joint_ids, 1]).clip(min=0.0)
+        self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
+                                    (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
         self.deviation_hip = self.joint_pos[:, self.hip_joint_ids] - self._robot.data.default_joint_pos[:, self.hip_joint_ids]
         self.deviation_arms = self.joint_pos[:, self.arm_joint_ids] - self._robot.data.default_joint_pos[:, self.arm_joint_ids]
         self.deviation_fingers = self.joint_pos[:, self.finger_joint_ids] - self._robot.data.default_joint_pos[:, self.finger_joint_ids]

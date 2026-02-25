@@ -124,12 +124,12 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 5.0
-    w_track_ang_vel: float = 5.0
-    w_track_heading: float = 0.0
-    w_track_height : float = 5.0
+    w_track_lin_vel: float = 6.0
+    w_track_ang_vel: float = 0.0
+    w_track_heading: float = 3.0
+    w_track_height : float = 2.0
 
-    w_feet_gait: float = 2.0
+    w_feet_gait: float = 4.0
     w_feet_slide: float = 0.1
 
     w_lin_vel_z: float  = 0.2
@@ -137,9 +137,9 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
     w_action_rate: float = 0.0
-    w_flat: float = 5.0
+    w_flat: float = 1.0
 
-    w_limits_ankle: float = 1.0
+    w_limits: float = 1.0
     w_limits_hip: float = 0.1
     w_limits_arm: float = 0.1
     w_limits_fingers: float = 0.05
@@ -148,14 +148,15 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_termination: float = 100
     termination_height: float = 0.4
     termination_gravity: float = 0.6
-    termination_target_foot: float = 1.5
+    termination_ang_vel: float = 10.0
+    termination_target_foot: float = 1.0
 
     # ===== Gait guidance ===== #
-    self_collision_threshold = 0.2
-    time_period_min = 0.25
+    self_collision_threshold = 0.1
+    time_period_min = 0.2
     time_period_max = 0.3
-    dstep_min = 0.25
-    dstep_max = 0.35
+    dstep_min = 0.15
+    dstep_max = 0.25
     z_c_min = 0.6
     z_c_max = 0.7
 
@@ -205,7 +206,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     #     mesh_prim_paths=["/World/ground"],
     # )
     contact_forces = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*", 
-                                      history_length=3, 
+                                      history_length=0, 
                                       track_air_time=True)
 
     # visualization
