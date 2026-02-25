@@ -165,13 +165,13 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         base_pos_w[:, 2] += 0.5
         # Arrow: resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
-                                                                                              xy_velocity=self.command_inputs_b[:, :2])
+                                                                                              xy_velocity=self.commands.command_b)
         vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         
         # ============== Target Foot Cube and Rotation Frame ================ # 
         pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
-        z_height = 0.01 * torch.ones_like(pos[..., :1])                   # [E, 2, 1]
+        z_height = 0.01 * torch.ones_like(pos[..., :1])             # [E, 2, 1]
         target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
 
         target_yaw = self.target_footstep_w[..., 2].view(-1).clone()    # [E*2, 1]
@@ -370,7 +370,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_w[:, :2] - self.torso_lin_vel_w[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_yaw[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
@@ -538,6 +538,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b = self.commands.command_b
         self.command_inputs_w = self.commands.command_w
+        self.command_inputs_yaw = self.commands.command_yaw
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
         # Information related to Contact
         self.air_time = self.contact_sensors.data.current_air_time[:, self.ankle_contact_roll_link_ids] # [Left, Right]

@@ -18,7 +18,7 @@ from isaaclab.assets import Articulation
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from isaaclab.utils.math import quat_apply, quat_apply_inverse
+from isaaclab.utils.math import quat_apply, quat_apply_inverse, yaw_quat
 
 # import logger
 logger = logging.getLogger(__name__)
@@ -157,6 +157,14 @@ class UniformVelocityCommand():
         return self.vel_command_w
     
     @property
+    def command_yaw(self) -> torch.Tensor:
+        """(num_envs, 2): [vx, vy] in yaw of base frame"""
+        command_w = self.command_w[:, :2].clone()
+        body_yaw_rot = yaw_quat(self.robot.data.root_quat_w)
+        command_yaw = quat_apply_inverse(body_yaw_rot, command_w)
+        return command_yaw
+    
+    @property
     def heading(self) -> torch.Tensor:
         """(num_envs, 1): yaw angle"""
         return torch.atan2(self.command_w[:, 1], self.command_w[:, 0])
@@ -208,6 +216,7 @@ class UniformVelocityCommand():
         self.time_left[env_ids] = r.uniform_(*self.cfg.resampling_time_range)
 
         # commands in world frame
+        # forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
         self.vel_command_w[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
         self.vel_command_w[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
         # # yaw rate (may be overridden by heading post-process)
