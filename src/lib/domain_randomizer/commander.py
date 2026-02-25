@@ -160,6 +160,7 @@ class UniformVelocityCommand():
     def command_yaw(self) -> torch.Tensor:
         """(num_envs, 2): [vx, vy] in yaw of base frame"""
         command_w = self.command_w[:, :2].clone()
+        command_w = torch.cat([command_w, torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
         body_yaw_rot = yaw_quat(self.robot.data.root_quat_w)
         command_yaw = quat_apply_inverse(body_yaw_rot, command_w)
         return command_yaw
