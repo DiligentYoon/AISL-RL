@@ -105,7 +105,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 20.0
     sim_dt = 1/200
-    decimation = 4                       
+    decimation = 2                       
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
@@ -137,7 +137,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
     w_action_rate: float = 0.0
-    w_flat: float = 1.0
+    w_flat: float = 5.0
 
     w_limits_ankle: float = 1.0
     w_limits_hip: float = 0.1
@@ -147,6 +147,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
 
     w_termination: float = 300
     termination_height: float = 0.4
+    termination_gravity: float = 0.7
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2

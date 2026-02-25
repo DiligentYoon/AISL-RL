@@ -471,7 +471,12 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         torso_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.torso_contact_link_ids]
-        died = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
+        projected_gravity_x = self.projected_gravity[:, 0]
+        projected_gravity_y = self.projected_gravity[:, 1]
+
+        died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
+        died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
+        died = torch.logical_or(died_fall, died_fall_2)
         return died, time_out
 
 
