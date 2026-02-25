@@ -374,10 +374,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         ang_vel_error = torch.square(self.command_inputs[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
-        lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
-        ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
-        heading_rewards = torch.exp(-heading_error / 0.5**2)
-        height_rewards  = torch.exp(-height_error  / 0.4**2)
+        lin_vel_rewards = torch.exp(-lin_vel_error)
+        ang_vel_rewards = torch.exp(-ang_vel_error)
+        heading_rewards = torch.exp(-heading_error)
+        height_rewards  = torch.exp(-height_error)
         
         # Attitute Penalty (Torso)
         flat_penalty = -torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
@@ -390,9 +390,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
 
         # Gait Rewards (Leg)
-        footstep_error = torch.sum(self.step_location_offset, dim=-1)
+        footstep_loc_error = torch.sum(self.step_location_offset, dim=-1)
+        footstep_rot_error = torch.sum(self.step_rotation_offset, dim=-1)
         contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
-        footstep_tracking = torch.exp(-footstep_error)
+        footstep_tracking = torch.exp(-footstep_loc_error) + torch.exp(-footstep_rot_error)
         gait_reward = contact_schedule + footstep_tracking
         # print(f"phase / schedule : {self.phase.item()}, {self.contact_schedule.item()}")
         # print(f"phase / contact (Left, Right) : {self.contact_schedule} / {self.in_contact}")
@@ -627,10 +628,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                                                                                         self.cfg.self_collision_threshold)
             self.target_footstep_w[self.update_command_ids] = update_commands_mask
 
-        # Contact schedule
-        self.contact_schedule = smooth_sqr_wave(self.phase)
-        self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
-                                               torch.cat([self.target_footstep_w[:, :, :2], torch.zeros((self.num_envs, 2, 1), device=self.device)], dim=-1), dim=-1) # [E, 2]
         # Phase variable
         self.phase_sin = torch.sin(2*torch.pi*self.phase)
         self.phase_cos = torch.cos(2*torch.pi*self.phase)
@@ -653,6 +650,12 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # NOTE: Right foot is support foot at initial state
             self.target_footstep_w[env_ids, 1, 2]  = self.foot_rot_yaw_w[env_ids, 1] # Right foot
 
+        # Contact schedule
+        self.contact_schedule = smooth_sqr_wave(self.phase)
+        self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
+                                               torch.cat([self.target_footstep_w[:, :, :2], torch.zeros((self.num_envs, 2, 1), device=self.device)], dim=-1), dim=-1) # [E, 2]
+        self.step_rotation_offset = torch.abs(
+            wrap_to_pi(self.target_footstep_w[:, :, 2] - self.foot_rot_yaw_w)) # [E, 2]
 
         # Command pos (Body Frame)
         target_left_footstep_b  = quat_apply_inverse(self.torso_rot_w, 
