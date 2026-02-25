@@ -133,7 +133,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_feet_slide: float = 0.1
 
     w_lin_vel_z: float  = 0.2
-    w_ang_vel_xy: float = 0.01
+    w_ang_vel_xy: float = 0.0
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
     w_action_rate: float = 0.0

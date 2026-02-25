@@ -370,7 +370,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_yaw[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
         height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
