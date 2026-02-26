@@ -244,6 +244,16 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             self.cfg.p_terminated_weight * p_terminated
         )
 
+        self.extras["reward"] = {
+            "Task Reward / ": self.cfg.r_upright_weight * r_upright * r_alive,
+            "Task Reward / ": self.cfg.r_height_weight * r_height,
+            "Task Reward / ": self.cfg.r_vel_lin_weight * r_vel_lin,
+            "Task Reward / ": self.cfg.r_vel_ang_weight * r_vel_ang,
+            "Task Reward / ": self.cfg.r_alive_weight * r_alive,
+            "Task Penalty / Joint torque": self.cfg.p_torque_weight * p_torque,
+            "Task Penalty / Joint limit": self.cfg.p_joint_limit_weight * p_joint_limit,
+        }
+
         return total_reward
     
     def _get_dones(self):

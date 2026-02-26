@@ -45,7 +45,7 @@ class EventCfg:
 @configclass
 class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -103,11 +103,11 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     curriculum_level_down_threshold = 0.2
 
     r_upright_weight = 1.5
-    r_height_weight = 0.0
+    r_height_weight = 0.25
     r_vel_lin_weight = 0.005
     r_vel_ang_weight = 0.005
     r_alive_weight = 1.0
-    p_torque_weight = 0.05
+    p_torque_weight = 0.1
     p_joint_limit_weight = 1.0
     p_terminated_weight = 100.0
 

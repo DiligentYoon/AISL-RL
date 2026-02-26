@@ -139,7 +139,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_action_rate: float = 0.0
     w_flat: float = 1.0
 
-    w_limits: float = 1.0
+    w_limits: float = 10.0
     w_limits_hip: float = 0.1
     w_limits_arm: float = 0.1
     w_limits_fingers: float = 0.05
