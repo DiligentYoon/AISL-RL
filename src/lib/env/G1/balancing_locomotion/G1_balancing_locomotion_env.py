@@ -386,10 +386,11 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.square(wrap_to_pi(self.commands.heading - self.torso_heading))
+        heading_error_2 = torch.square(wrap_to_pi(self.commands.heading - self.root_heading))
         height_error  = torch.square(self.CoM[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
         ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
-        heading_rewards = torch.exp(-heading_error / 0.5**2)
+        heading_rewards = torch.exp(-heading_error / 0.5**2) + torch.exp(-heading_error_2 / 0.5**2)
         height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards (Torso)
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
@@ -580,11 +581,16 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.torso_lin_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_lin_vel_w)
         self.torso_ang_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_ang_vel_w)
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
-        # Heading
+        # Heading (Torso)
         forward_torso_w = quat_apply(self.torso_rot_w, self.forward_vec)
         self.torso_heading = torch.atan2(forward_torso_w[:, 1], forward_torso_w[:, 0])
         self.torso_heading_sin = torch.sin(self.torso_heading)
         self.torso_heading_cos = torch.cos(self.torso_heading)
+        # Heading (Root)
+        forward_root_w = quat_apply(self._robot.data.root_quat_w, self.forward_vec)
+        self.root_heading = torch.atan2(forward_root_w[:, 1], forward_root_w[:, 0])
+        self.root_heading_sin = torch.sin(self.root_heading)
+        self.root_heading_cos = torch.cos(self.root_heading)
         # Attitude
         self.projected_gravity = self._robot.data.projected_gravity_b
         # Joint Angle & Velocity
@@ -713,8 +719,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.contact_schedule = smooth_sqr_wave(self.phase)
         self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
                                                torch.cat([self.target_footstep_w[:, :, :2], torch.zeros((self.num_envs, 2, 1), device=self.device)], dim=-1), dim=-1) # [E, 2]
-        self.step_rotation_offset = torch.abs(
-            wrap_to_pi(self.target_footstep_w[:, :, 2] - self.foot_rot_yaw_w)) # [E, 2]
+        self.step_rotation_offset = torch.square(wrap_to_pi(self.target_footstep_w[:, :, 2] - self.foot_rot_yaw_w)) # [E, 2]
 
         # Command pos (Body Frame)
         target_left_footstep_b  = quat_apply_inverse(self.torso_rot_w, 
