@@ -195,8 +195,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
 
         # =============== Torso ================
-        torso_pos = self.torso_pos_w
-        torso_rot = self.torso_rot_w
+        # torso_pos = self.torso_pos_w
+        # torso_rot = self.torso_rot_w
+        torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids]
+        torso_rot = self._robot.data.body_link_quat_w[:, self.torso_link_ids]
         
 
         # display markers
@@ -441,6 +443,16 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             self.extras["reward"]["arm"] = {
                 "Penalty / arm_deviation": torch.mean(joint_pos_penalty_arms).item(),
                 "Penalty / finger_deviation": torch.mean(joint_pos_penalty_fingers).item()}
+
+            self.extras["reward"]["leg"] = {
+                "Reward / ",
+                "Reward / ",
+                "Reward / ",
+                "Reward / ",
+                "Reward / ",
+            }
+
+            self.extras["reward"]["torso"]
                           
             # Dictionary key order (alphabetical order in dictionary)
             rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
@@ -544,9 +556,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
         # Root Pose & Velocity
         self.torso_pos_w, self.torso_rot_w = self._robot.data.root_pos_w, self._robot.data.root_quat_w
-        self.torso_heading = euler_xyz_from_quat(self.torso_rot_w)[2]
         self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.root_lin_vel_w, self._robot.data.root_ang_vel_w
         self.torso_lin_vel_b, self.torso_ang_vel_b = self._robot.data.root_lin_vel_b, self._robot.data.root_ang_vel_b
+        self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
+        # Heading
+        forward_torso_w = quat_apply(self.torso_rot_w, self.forward_vec)
+        self.torso_heading = torch.atan2(forward_torso_w[:, 1], forward_torso_w[:, 0])
+        self.torso_heading_sin = torch.sin(self.torso_heading)
+        self.torso_heading_cos = torch.cos(self.torso_heading)
         # Attitude
         self.projected_gravity = self._robot.data.projected_gravity_b
         # Joint Angle & Velocity
@@ -557,7 +574,9 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.command_inputs_b = self.commands.command_b
         self.command_inputs_w = self.commands.command_w
         self.command_inputs_yaw = self.commands.command_yaw
-        self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
+        self.command_heading = self.commands.heading
+        self.command_heading_sin = torch.sin(self.command_heading)
+        self.command_heading_cos = torch.cos(self.command_heading)
         # Information related to Contact
         self.air_time = self.contact_sensors.data.current_air_time[:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.contact_time = self.contact_sensors.data.current_contact_time[:, self.ankle_contact_roll_link_ids] # [Left, Right]
