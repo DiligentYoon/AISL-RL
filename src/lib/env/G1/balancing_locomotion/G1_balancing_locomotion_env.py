@@ -515,6 +515,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
             env_ids = self._robot._ALL_INDICES
+        # Curriculum
+        self.update_curriculum()
         # Randomization by Event-based randomizer
         self._robot.reset(env_ids)
         self.commands.reset(env_ids)
@@ -786,6 +788,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         theta = theta.reshape(-1, 1)
 
         return torch.cat([p_x, p_y, theta], dim=-1)
+
+    def update_curriculum(self):
+        pass
+
     
 
 @torch.jit.script
