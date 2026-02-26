@@ -103,9 +103,9 @@ class EventCfg:
 @configclass
 class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 5.0
+    episode_length_s = 10.0
     sim_dt = 1/200
-    decimation = 2                       
+    decimation = 4                       
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
