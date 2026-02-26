@@ -475,7 +475,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
-        # Gait Rewards (Leg)
         in_contact = self.contact_time > 0.0
         in_mode_time = torch.where(in_contact, self.contact_time, self.air_time)
         single_stance = torch.sum(in_contact.int(), dim=1) == 1
@@ -660,12 +659,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        # Root Pose & Velocity in World frame
-        self.torso_pos_w, self.torso_rot_w = self._robot.data.body_link_pos_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_quat_w[:, self.torso_link_ids].view(-1, 4)
-        self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.body_link_lin_vel_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_ang_vel_w[:, self.torso_link_ids].view(-1, 3)
-        # Root Velocity in Body frame
-        self.torso_lin_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_lin_vel_w)
-        self.torso_ang_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_ang_vel_w)
+        # Root Pose & Velocity 
+        # self.torso_pos_w, self.torso_rot_w = self._robot.data.body_link_pos_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_quat_w[:, self.torso_link_ids].view(-1, 4)
+        # self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.body_link_lin_vel_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_ang_vel_w[:, self.torso_link_ids].view(-1, 3)
+        # self.torso_lin_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_lin_vel_w)
+        # self.torso_ang_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_ang_vel_w)
+        self.torso_pos_w, self.torso_rot_w = self._robot.data.root_pos_w, self._robot.data.root_quat_w
+        self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.root_lin_vel_w, self._robot.data.root_ang_vel_w
+        self.torso_lin_vel_b, self.torso_ang_vel_b = self._robot.data.root_lin_vel_b, self._robot.data.root_ang_vel_b
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
         # Heading (Torso)
         forward_torso_w = quat_apply(self.torso_rot_w, self.forward_vec)
