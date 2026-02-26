@@ -736,8 +736,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         #     self.prev_target_footstep_w[self.update_command_ids] = self.target_footstep_w[self.update_command_ids].clone()
         #     self.prev_target_footstep_b[self.update_command_ids] = self.target_footstep_b[self.update_command_ids].clone()
 
-        # # Center of Mass (CoM)
-        # self.CoM = (self._robot.data.body_link_pos_w * self.robot_mass.unsqueeze(-1)).sum(dim=1) / self.total_mass.unsqueeze(-1)
+        # Center of Mass (CoM)
+        self.CoM = (self._robot.data.body_link_pos_w * self.robot_mass.unsqueeze(-1)).sum(dim=1) / self.total_mass.unsqueeze(-1)
 
         # # Target foot pos update
         # if torch.any(self.update_command_ids):
