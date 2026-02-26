@@ -211,7 +211,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     #     mesh_prim_paths=["/World/ground"],
     # )
     contact_forces = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*", 
-                                      history_length=0, 
+                                      history_length=3, 
                                       track_air_time=True)
 
     # visualization
