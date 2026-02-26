@@ -563,23 +563,33 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             self.prev_actions = self.actions.clone()
     
 
-        # Reward Info for update
+        # Reward Info for logging
         self.extras["reward"] = {
-            "Task Penalty / Arm_deviation": joint_deviation_penalty_arms,
-            "Task Penalty / Finger_deviation": joint_deviation_penalty_fingers,
-            "Task Penalty / Arm_joint_limit": joint_limit_penalty_arm,
-            "Task Penalty / Arm_torque": self.cfg.w_joint_torque * joint_torque_penalty_arm,
-            "Task Penalty / Arm_acc": self.cfg.w_joint_acc * joint_acc_penalty_arm,
-            "Task Penalty / Leg_joint_limit": joint_limit_penalty_leg,
-            "Task Penalty / Leg_torque": self.cfg.w_joint_torque * joint_torque_penalty_leg,
-            "Task Penalty / Leg_acc": self.cfg.w_joint_acc * joint_acc_penalty_leg,
-            "Task Penalty / Torso_Angular_velocity": ang_vel_xy_penalty,
-            "Task Penalty / Leg_slide":slide_penalty,
-            "Task Reward / Leg_gait": gait_reward,
-            "Task Reward / Torso_linear velocity": lin_vel_rewards,
-            "Task Reward / Torso_heading": heading_rewards,
-            "Task Reward / Torso_height": height_rewards,
-            "Task Reward / Torso_flat": flat_rewards,
+            # ==========================================
+            # Task Reward (+)
+            # ==========================================
+            "Task Reward / Common_Linear_Velocity" : self.cfg.w_track_lin_vel * lin_vel_rewards,
+            "Task Reward / Common_Heading"         : self.cfg.w_track_heading * heading_rewards,
+            "Task Reward / Common_Height"          : self.cfg.w_track_height  * height_rewards,
+            "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
+            "Task Reward / Leg_Gait"               : self.cfg.w_feet_gait     * gait_reward,
+            # ==========================================
+            # Task Penalty (-)
+            # ==========================================
+            "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty,
+            "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso   * joint_deviation_penalty_torso,
+            "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm     * joint_deviation_penalty_arms,
+            "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers * joint_deviation_penalty_fingers,
+            "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits            * joint_limit_penalty_arm,
+            "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque      * joint_torque_penalty_arm,
+            "Task Penalty / Arm_Acc"               : self.cfg.w_joint_acc         * joint_acc_penalty_arm,
+            "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate       * action_rate_penalty_arm,
+            "Task Penalty / Leg_Hip_Deviation"     : self.cfg.w_deviation_hip * joint_deviation_penalty_hip,
+            "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide    * slide_penalty,
+            "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits        * joint_limit_penalty_leg,
+            "Task Penalty / Leg_Torque"            : self.cfg.w_joint_torque  * joint_torque_penalty_leg,
+            "Task Penalty / Leg_Acc"               : self.cfg.w_joint_acc     * joint_acc_penalty_leg,
+            "Task Penalty / Leg_Action_Rate"       : self.cfg.w_action_rate   * action_rate_penalty_leg,
         }
         
         return rewards
