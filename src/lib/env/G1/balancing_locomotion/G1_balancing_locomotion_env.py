@@ -197,9 +197,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # =============== Torso ================
         # torso_pos = self.torso_pos_w
         # torso_rot = self.torso_rot_w
-        torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids]
-        torso_rot = self._robot.data.body_link_quat_w[:, self.torso_link_ids]
+        torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
+        torso_rot = self._robot.data.body_link_quat_w[:, self.torso_link_ids].reshape(-1, 4)
         
+        print(f"Root rot | Torso rot : {self.torso_rot_w.cpu().numpy().tolist()} | {torso_rot.cpu().numpy().tolist()}")
 
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
@@ -452,7 +453,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 "Reward / ",
             }
 
-            self.extras["reward"]["torso"]
+            self.extras["reward"]["torso"] = {}
                           
             # Dictionary key order (alphabetical order in dictionary)
             rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]

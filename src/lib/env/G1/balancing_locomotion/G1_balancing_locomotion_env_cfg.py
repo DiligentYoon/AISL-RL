@@ -249,4 +249,4 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     target_foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
     foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-    torso_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    torso_rotation_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
