@@ -109,9 +109,14 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 94, "leg": 75}                    
+    # state_space = {"arm": 150, "leg": 150}
+
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 92, "leg": 73}                    
-    state_space = {"arm": 148, "leg": 148}
+    observation_space = {"arm": 87, "leg": 48}                    
+    state_space = {"arm": 123, "leg": 123}
+    
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}

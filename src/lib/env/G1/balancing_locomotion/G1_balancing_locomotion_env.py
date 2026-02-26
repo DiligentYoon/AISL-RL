@@ -262,79 +262,45 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 joint_ids=self._joint_dof_ids
             )
 
-
     def _get_observations(self) -> dict[str, torch.Tensor] | torch.Tensor:
         if self.cfg.num_agents > 1:
             # Multi Agent
             observations = {
-                "arm": torch.cat(
+                "leg": torch.cat(
                     [
-                        self.CoM[:, 2:3],                                # [E, 1]
                         self.torso_lin_vel_b,                            # [E, 3]
-                        self.torso_ang_vel_b,                            # [E, 3]
-                        self.torso_heading_cos.unsqueeze(-1),            # [E, 1]
-                        self.torso_heading_sin.unsqueeze(-1),            # [E, 1]
-                        self.command_heading_cos.unsqueeze(-1),          # [E, 1]
-                        self.command_heading_sin.unsqueeze(-1),          # [E, 1]
+                        self.torso_ang_vel_b,                            # [E, 3]    
                         self.projected_gravity,                          # [E, 3]
-                        self.command_inputs_b,                           # [E, 3]
-                        self.joint_pos[:, self.total_arm_joint_ids],     # [E, 25]
-                        self.joint_vel[:, self.total_arm_joint_ids],     # [E, 25]
-                        self.actions["arm"]                              # [E, 25]
+                        self.command_inputs_b,                             # [E, 3]
+                        self.joint_pos[:, self.total_leg_joint_ids], # [E, 12]
+                        self.joint_vel[:, self.total_leg_joint_ids], # [E, 12]
+                        self.actions["leg"]                              # [E, 12]
                     ],
                     dim=-1
                 ),
-                "leg": torch.cat(
+                "arm": torch.cat(
                     [
-                        self.CoM[:, 2:3],                                   # [E, 1]
-                        self.torso_lin_vel_b,                               # [E, 3]
-                        self.torso_ang_vel_b,                               # [E, 3]
-                        self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-                        self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-                        self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-                        self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-                        self.z_c.unsqueeze(-1),                             # [E, 1]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                        self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-                        self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                        self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                        self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.actions["leg"]                                 # [E, 12]
+                        self.torso_lin_vel_b,                            # [E, 3]
+                        self.torso_ang_vel_b,                            # [E, 3]
+                        self.projected_gravity,                          # [E, 3]
+                        self.command_inputs_b,                             # [E, 3]
+                        self.joint_pos[:, self.total_arm_joint_ids], # [E, 25]
+                        self.joint_vel[:, self.total_arm_joint_ids], # [E, 25]
+                        self.actions["arm"]                              # [E, 25]
                     ],
                     dim=-1
                 ),
             }
         else:
-            actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
-            sorted_actions = actions[:, self.mapping_sort_ids]
             observations = torch.cat(
                 [
-                    self.CoM[:, 2:3],                                   # [E, 1]
-                    self.torso_lin_vel_b,                               # [E, 3]
-                    self.torso_ang_vel_b,                               # [E, 3]
-                    self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-                    self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-                    self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-                    self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-                    self.projected_gravity,                             # [E, 3]
-                    self.command_inputs_b,                              # [E, 3]
-                    self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-                    self.z_c.unsqueeze(-1),                             # [E, 1]
-                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                    self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                    self.joint_pos,                                     # [E, 37]
-                    self.joint_vel,                                     # [E, 37]
-                    sorted_actions                                      # [E, 37]  
+                    self.torso_lin_vel_b,           # [E, 3]
+                    self.torso_ang_vel_b,           # [E, 3]
+                    self.projected_gravity,         # [E, 3]
+                    self.command_inputs_b,            # [E, 3]
+                    self.joint_pos,             # [E, 37]
+                    self.joint_vel,             # [E, 37]
+                    self.actions                    # [E, 37]  
                 ],
                 dim=-1
             )
@@ -344,35 +310,22 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
     def _get_states(self) -> dict[str, torch.Tensor] | torch.Tensor:
         if self.cfg.num_agents > 1:
             # Multi Agent
-            actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
+            actions = torch.cat([self.actions["leg"], self.actions["arm"]], dim=-1)
             sorted_actions = actions[:, self.mapping_sort_ids]
             shared_states = torch.cat(
                 [
-                    self.CoM[:, 2:3],                                   # [E, 1]
-                    self.torso_lin_vel_b,                               # [E, 3]
-                    self.torso_ang_vel_b,                               # [E, 3]
-                    self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-                    self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-                    self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-                    self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-                    self.projected_gravity,                             # [E, 3]
-                    self.command_inputs_b,                              # [E, 3]
-                    self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-                    self.z_c.unsqueeze(-1),                             # [E, 1]
-                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                    self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                    self.joint_pos,                                     # [E, 37]
-                    self.joint_vel,                                     # [E, 37]
-                    sorted_actions                                      # [E, 37] 
+                    self.torso_lin_vel_b,           # [E, 3]
+                    self.torso_ang_vel_b,           # [E, 3]
+                    self.projected_gravity,         # [E, 3]
+                    self.command_inputs_b,            # [E, 3]
+                    self.joint_pos,             # [E, 37]
+                    self.joint_vel,             # [E, 37]
+                    sorted_actions,                 # [E, 37]
                 ], dim=-1) 
             
             states = {
-                "arm": shared_states,
                 "leg": shared_states,
+                "arm": shared_states
             }
         else:
             # Single Agent (Syncronous Actor Critic)
@@ -381,13 +334,137 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         return states
 
 
+    # def _get_observations(self) -> dict[str, torch.Tensor] | torch.Tensor:
+    #     if self.cfg.num_agents > 1:
+    #         # Multi Agent
+    #         observations = {
+    #             "arm": torch.cat(
+    #                 [
+    #                     self.CoM[:, 2:3],                                # [E, 1]
+    #                     self.torso_lin_vel_b,                            # [E, 3]
+    #                     self.torso_ang_vel_b,                            # [E, 3]
+    #                     self.torso_heading_cos.unsqueeze(-1),            # [E, 1]
+    #                     self.torso_heading_sin.unsqueeze(-1),            # [E, 1]
+    #                     self.root_heading_cos.unsqueeze(-1),
+    #                     self.root_heading_sin.unsqueeze(-1),
+    #                     self.command_heading_cos.unsqueeze(-1),          # [E, 1]
+    #                     self.command_heading_sin.unsqueeze(-1),          # [E, 1]
+    #                     self.projected_gravity,                          # [E, 3]
+    #                     self.command_inputs_b,                           # [E, 3]
+    #                     self.joint_pos[:, self.total_arm_joint_ids],     # [E, 25]
+    #                     self.joint_vel[:, self.total_arm_joint_ids],     # [E, 25]
+    #                     self.actions["arm"]                              # [E, 25]
+    #                 ],
+    #                 dim=-1
+    #             ),
+    #             "leg": torch.cat(
+    #                 [
+    #                     self.CoM[:, 2:3],                                   # [E, 1]
+    #                     self.torso_lin_vel_b,                               # [E, 3]
+    #                     self.torso_ang_vel_b,                               # [E, 3]
+    #                     self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+    #                     self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+    #                     self.root_heading_cos.unsqueeze(-1),
+    #                     self.root_heading_sin.unsqueeze(-1),
+    #                     self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+    #                     self.command_heading_sin.unsqueeze(-1),             # [E, 1]
+    #                     self.projected_gravity,                             # [E, 3]
+    #                     self.command_inputs_b,                              # [E, 3]
+    #                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
+    #                     self.z_c.unsqueeze(-1),                             # [E, 1]
+    #                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
+    #                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
+    #                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+    #                     self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
+    #                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+    #                     self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+    #                     self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
+    #                     self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
+    #                     self.actions["leg"]                                 # [E, 12]
+    #                 ],
+    #                 dim=-1
+    #             ),
+    #         }
+    #     else:
+    #         actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
+    #         sorted_actions = actions[:, self.mapping_sort_ids]
+    #         observations = torch.cat(
+    #             [
+    #                 self.CoM[:, 2:3],                                   # [E, 1]
+    #                 self.torso_lin_vel_b,                               # [E, 3]
+    #                 self.torso_ang_vel_b,                               # [E, 3]
+    #                 self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+    #                 self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+    #                 self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+    #                 self.command_heading_sin.unsqueeze(-1),             # [E, 1]
+    #                 self.projected_gravity,                             # [E, 3]
+    #                 self.command_inputs_b,                              # [E, 3]
+    #                 self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
+    #                 self.z_c.unsqueeze(-1),                             # [E, 1]
+    #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
+    #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
+    #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+    #                 self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
+    #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+    #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+    #                 self.joint_pos,                                     # [E, 37]
+    #                 self.joint_vel,                                     # [E, 37]
+    #                 sorted_actions                                      # [E, 37]  
+    #             ],
+    #             dim=-1
+    #         )
+
+    #     return observations
+
+    # def _get_states(self) -> dict[str, torch.Tensor] | torch.Tensor:
+    #     if self.cfg.num_agents > 1:
+    #         # Multi Agent
+    #         actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
+    #         sorted_actions = actions[:, self.mapping_sort_ids]
+    #         shared_states = torch.cat(
+    #             [
+    #                 self.CoM[:, 2:3],                                   # [E, 1]
+    #                 self.torso_lin_vel_b,                               # [E, 3]
+    #                 self.torso_ang_vel_b,                               # [E, 3]
+    #                 self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+    #                 self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+    #                 self.root_heading_cos.unsqueeze(-1),
+    #                 self.root_heading_sin.unsqueeze(-1),
+    #                 self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+    #                 self.command_heading_sin.unsqueeze(-1),             # [E, 1]
+    #                 self.projected_gravity,                             # [E, 3]
+    #                 self.command_inputs_b,                              # [E, 3]
+    #                 self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
+    #                 self.z_c.unsqueeze(-1),                             # [E, 1]
+    #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
+    #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
+    #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+    #                 self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
+    #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+    #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+    #                 self.joint_pos,                                     # [E, 37]
+    #                 self.joint_vel,                                     # [E, 37]
+    #                 sorted_actions                                      # [E, 37] 
+    #             ], dim=-1) 
+            
+    #         states = {
+    #             "arm": shared_states,
+    #             "leg": shared_states,
+    #         }
+    #     else:
+    #         # Single Agent (Syncronous Actor Critic)
+    #         states = None
+            
+    #     return states
+
+
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
         heading_error = torch.square(wrap_to_pi(self.commands.heading - self.torso_heading))
         heading_error_2 = torch.square(wrap_to_pi(self.commands.heading - self.root_heading))
-        height_error  = torch.square(self.CoM[:, 2] - self.z_c)
+        height_error    = torch.square(self.CoM[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
         ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
         heading_rewards = torch.exp(-heading_error / 0.5**2) + torch.exp(-heading_error_2 / 0.5**2)
@@ -398,11 +475,20 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
-        footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
-        footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
-        contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
-        footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
-        gait_reward = contact_schedule * footstep_tracking
+        # Gait Rewards (Leg)
+        in_contact = self.contact_time > 0.0
+        in_mode_time = torch.where(in_contact, self.contact_time, self.air_time)
+        single_stance = torch.sum(in_contact.int(), dim=1) == 1
+        gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
+        gait_reward = torch.clamp(gait_reward, max=2.0)
+        # no reward for zero command
+        gait_reward *= torch.norm(self.command_inputs_b[:, :2], dim=1) > 0.1
+        # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
+        # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
+        # contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
+        # footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
+        # gait_reward = contact_schedule * footstep_tracking
+
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Joint Deviation Penalty (Arm)
