@@ -420,7 +420,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
             joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
             joint_acc_penalty_arm = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
-            
+
             action_rate_penalty_leg = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
             action_rate_penalty_arm = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
 
@@ -485,9 +485,9 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.extras["reward"] = {
             "Penalty / Arm_deviation": joint_pos_penalty_arms,
             "Penalty / Finger_deviation": joint_pos_penalty_fingers,
-            "Reward  / Leg_gait": gait_reward,
-            "Reward  / Torso_linear velocity": lin_vel_rewards,
-            "Reward  / Torso_heading": heading_rewards
+            "Reward / Leg_gait": gait_reward,
+            "Reward / Torso_linear velocity": lin_vel_rewards,
+            "Reward / Torso_heading": heading_rewards
         }
         
         return rewards
