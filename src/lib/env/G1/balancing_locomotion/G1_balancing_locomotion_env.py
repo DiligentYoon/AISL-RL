@@ -195,12 +195,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
 
         # =============== Torso ================
-        # torso_pos = self.torso_pos_w
-        # torso_rot = self.torso_rot_w
         torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
         torso_rot = self._robot.data.body_link_quat_w[:, self.torso_link_ids].reshape(-1, 4)
-        
-        print(f"Root rot | Torso rot : {self.torso_rot_w.cpu().numpy().tolist()} | {torso_rot.cpu().numpy().tolist()}")
 
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
@@ -282,6 +278,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                         self.CoM[:, 2:3],                                # [E, 1]
                         self.torso_lin_vel_b,                            # [E, 3]
                         self.torso_ang_vel_b,                            # [E, 3]
+                        self.torso_heading_cos.unsqueeze(-1),            # [E, 1]
+                        self.torso_heading_sin.unsqueeze(-1),            # [E, 1]
+                        self.command_heading_cos.unsqueeze(-1),          # [E, 1]
+                        self.command_heading_sin.unsqueeze(-1),          # [E, 1]
                         self.projected_gravity,                          # [E, 3]
                         self.command_inputs_b,                           # [E, 3]
                         self.joint_pos[:, self.total_arm_joint_ids],     # [E, 25]
@@ -294,7 +294,11 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     [
                         self.CoM[:, 2:3],                                   # [E, 1]
                         self.torso_lin_vel_b,                               # [E, 3]
-                        self.torso_ang_vel_b,                               # [E, 3]    
+                        self.torso_ang_vel_b,                               # [E, 3]
+                        self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+                        self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+                        self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+                        self.command_heading_sin.unsqueeze(-1),             # [E, 1]
                         self.projected_gravity,                             # [E, 3]
                         self.command_inputs_b,                              # [E, 3]
                         self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
@@ -320,6 +324,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.CoM[:, 2:3],                                   # [E, 1]
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
+                    self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+                    self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+                    self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+                    self.command_heading_sin.unsqueeze(-1),             # [E, 1]
                     self.projected_gravity,                             # [E, 3]
                     self.command_inputs_b,                              # [E, 3]
                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
@@ -349,6 +357,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.CoM[:, 2:3],                                   # [E, 1]
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
+                    self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
+                    self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
+                    self.command_heading_cos.unsqueeze(-1),             # [E, 1]
+                    self.command_heading_sin.unsqueeze(-1),             # [E, 1]
                     self.projected_gravity,                             # [E, 3]
                     self.command_inputs_b,                              # [E, 3]
                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
@@ -446,14 +458,11 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 "Penalty / finger_deviation": torch.mean(joint_pos_penalty_fingers).item()}
 
             self.extras["reward"]["leg"] = {
-                "Reward / ",
-                "Reward / ",
-                "Reward / ",
-                "Reward / ",
-                "Reward / ",
-            }
+                "Reward / gait": torch.mean(gait_reward).item()}
 
-            self.extras["reward"]["torso"] = {}
+            self.extras["reward"]["torso"] = {
+                "Reward / linear velocity": torch.mean(lin_vel_rewards),
+                "Reward / heading": torch.mean(heading_rewards)}
                           
             # Dictionary key order (alphabetical order in dictionary)
             rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
@@ -555,10 +564,12 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
-        # Root Pose & Velocity
-        self.torso_pos_w, self.torso_rot_w = self._robot.data.root_pos_w, self._robot.data.root_quat_w
-        self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.root_lin_vel_w, self._robot.data.root_ang_vel_w
-        self.torso_lin_vel_b, self.torso_ang_vel_b = self._robot.data.root_lin_vel_b, self._robot.data.root_ang_vel_b
+        # Root Pose & Velocity in World frame
+        self.torso_pos_w, self.torso_rot_w = self._robot.data.body_link_pos_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_quat_w[:, self.torso_link_ids].view(-1, 4)
+        self.torso_lin_vel_w, self.torso_ang_vel_w = self._robot.data.body_link_lin_vel_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_ang_vel_w[:, self.torso_link_ids].view(-1, 3)
+        # Root Velocity in Body frame
+        self.torso_lin_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_lin_vel_w)
+        self.torso_ang_vel_b = quat_apply_inverse(self.torso_rot_w, self.torso_ang_vel_w)
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.torso_rot_w), self.torso_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
         # Heading
         forward_torso_w = quat_apply(self.torso_rot_w, self.forward_vec)
