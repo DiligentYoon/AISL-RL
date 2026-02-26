@@ -20,6 +20,9 @@ class G1BaseEnv(Env):
         self.joint_pos_limits = self._robot.data.joint_pos_limits
         self.joint_vel_limits = self._robot.data.joint_vel_limits
 
+        # Joint Torque Limits
+        self.soft_joint_torque_limits = 0.9 * self._robot.data.joint_effort_limits
+
         # Joint Ids
         self._joint_dof_ids, _ = self._robot.find_joints(".*")
         

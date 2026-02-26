@@ -394,8 +394,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Attitute rewards (Torso)
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         flat_rewards = torch.exp(-tilting / 0.5**2)
-        # Control Penalty (Total)
-        ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
@@ -406,19 +404,23 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         gait_reward = contact_schedule * footstep_tracking
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
-
         # Joint Deviation Penalty (Arm)
         joint_pos_penalty_arms    = -torch.sum(torch.abs(self.deviation_arms), dim=1)    # Arm
         joint_pos_penalty_fingers = -torch.sum(torch.abs(self.deviation_fingers), dim=1) # Arm
+        # Control Penalty (Total)
+        ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
-            joint_limit_penalty_leg   = -(torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1).clip(0, 1))
-            joint_limit_penalty_arm   = -(torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1).clip(0, 1))
+            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
+            joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
+
             joint_torque_penalty_leg = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
             joint_torque_penalty_arm = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
+
             joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
             joint_acc_penalty_arm = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
+            
             action_rate_penalty_leg = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
             action_rate_penalty_arm = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
 
@@ -454,7 +456,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         else:
             # Control Penalty
-            joint_limit_penalty   = -(torch.sum(self.out_of_limits_joint, dim=1).clip(0, 1))
+            joint_limit_penalty   = -(torch.sum(self.out_of_limits_joint, dim=1))
             joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
             joint_acc_penalty    = -torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
             action_rate_penalty = -torch.sum(torch.square(self.actions - self.prev_actions), dim=1)
