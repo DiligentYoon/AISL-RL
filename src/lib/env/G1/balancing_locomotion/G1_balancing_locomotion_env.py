@@ -461,13 +461,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
-        ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.root_ang_vel_w[:, 2])
-        heading_error = torch.square(wrap_to_pi(self.commands.heading - self.torso_heading))
-        heading_error_2 = torch.square(wrap_to_pi(self.commands.heading - self.root_heading))
+        heading_error = torch.square(wrap_to_pi(self.commands.heading - self.root_heading))
         height_error    = torch.square(self.CoM[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
-        ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
-        heading_rewards = torch.exp(-heading_error / 0.5**2) + torch.exp(-heading_error_2 / 0.5**2)
+        heading_rewards = torch.exp(-heading_error / 0.5**2)
         height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards (Torso)
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
@@ -480,7 +477,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         single_stance = torch.sum(in_contact.int(), dim=1) == 1
         gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
         gait_reward = torch.clamp(gait_reward, max=2.0)
-        # no reward for zero command
         gait_reward *= torch.norm(self.command_inputs_b[:, :2], dim=1) > 0.1
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
@@ -490,48 +486,49 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
-        # Joint Deviation Penalty (Arm)
-        joint_pos_penalty_arms    = -torch.sum(torch.abs(self.deviation_arms), dim=1)    # Arm
-        joint_pos_penalty_fingers = -torch.sum(torch.abs(self.deviation_fingers), dim=1) # Arm
-        # Control Penalty (Total)
-        ang_vel_xy_penalty = -torch.sum(torch.square(self.root_lin_vel_b[:, :2]), dim=1)
+        # Control regularization
+        joint_deviation_penalty_hip     = -torch.sum(torch.abs(self.deviation_hip), dim=-1)
+        joint_deviation_penalty_arms    = -torch.sum(torch.abs(self.deviation_arms), dim=1) 
+        joint_deviation_penalty_fingers = -torch.sum(torch.abs(self.deviation_fingers), dim=1)
+        joint_deviation_penalty_torso   = -torch.sum(torch.abs(self.deviation_torso), dim=1)
+        ang_vel_xy_penalty              = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
             joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
+            joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
+            joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
+            action_rate_penalty_leg   = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
+            
             joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
-
-            joint_torque_penalty_leg = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-            joint_torque_penalty_arm = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
-
-            joint_acc_penalty_leg = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
-            joint_acc_penalty_arm = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
-
-            action_rate_penalty_leg = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
-            action_rate_penalty_arm = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
+            joint_torque_penalty_arm  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
+            joint_acc_penalty_arm     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
+            action_rate_penalty_arm   = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
 
             # Multi Agent
-            common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards + \
-                             self.cfg.w_track_ang_vel * ang_vel_rewards + \
-                             self.cfg.w_track_heading * heading_rewards + \
-                             self.cfg.w_track_height  * height_rewards + \
-                             self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty + \
-                             self.cfg.w_flat          * flat_rewards + \
+            common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
+                             self.cfg.w_track_heading * heading_rewards     + \
+                             self.cfg.w_track_height  * height_rewards      + \
+                             self.cfg.w_flat          * flat_rewards        + \
+                             self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
                              self.cfg.w_termination   * terminate_penalty
-
-            arm_rewards = self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
-                          self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
-                          self.cfg.w_limits         * joint_limit_penalty_arm + \
-                          self.cfg.w_joint_torque   * joint_torque_penalty_arm + \
-                          self.cfg.w_joint_acc      * joint_acc_penalty_arm + \
-                          self.cfg.w_action_rate    * action_rate_penalty_arm 
             
-            leg_rewards = common_rewards + \
-                          self.cfg.w_feet_gait     * gait_reward + \
-                          self.cfg.w_feet_slide    * slide_penalty + \
-                          self.cfg.w_limits        * joint_limit_penalty_leg + \
-                          self.cfg.w_joint_torque  * joint_torque_penalty_leg + \
-                          self.cfg.w_joint_acc     * joint_acc_penalty_leg + \
+            arm_rewards = common_rewards                                                 + \
+                          self.cfg.w_deviation_torso   * joint_deviation_penalty_torso   + \
+                          self.cfg.w_deviation_arm     * joint_deviation_penalty_arms    + \
+                          self.cfg.w_deviation_fingers * joint_deviation_penalty_fingers + \
+                          self.cfg.w_limits            * joint_limit_penalty_arm         + \
+                          self.cfg.w_joint_torque      * joint_torque_penalty_arm        + \
+                          self.cfg.w_joint_acc         * joint_acc_penalty_arm           + \
+                          self.cfg.w_action_rate       * action_rate_penalty_arm
+            
+            leg_rewards = common_rewards                                            + \
+                          self.cfg.w_feet_gait     * gait_reward                    + \
+                          self.cfg.w_feet_slide    * slide_penalty                  + \
+                          self.cfg.w_deviation_hip * joint_deviation_penalty_hip    + \
+                          self.cfg.w_limits        * joint_limit_penalty_leg        + \
+                          self.cfg.w_joint_torque  * joint_torque_penalty_leg       + \
+                          self.cfg.w_joint_acc     * joint_acc_penalty_leg          + \
                           self.cfg.w_action_rate   * action_rate_penalty_leg
 
             # Dictionary key order (alphabetical order in dictionary)
@@ -549,15 +546,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
             # Single Agent
             rewards = self.cfg.w_track_lin_vel  * lin_vel_rewards + \
-                      self.cfg.w_track_ang_vel  * ang_vel_rewards + \
                       self.cfg.w_track_heading  * heading_rewards + \
                       self.cfg.w_track_height   * height_rewards + \
                       self.cfg.w_feet_gait      * gait_reward + \
                       self.cfg.w_feet_slide     * slide_penalty + \
                       self.cfg.w_flat           * flat_rewards + \
                       self.cfg.w_limits         * joint_limit_penalty + \
-                      self.cfg.w_limits_arm     * joint_pos_penalty_arms + \
-                      self.cfg.w_limits_fingers * joint_pos_penalty_fingers + \
+                      self.cfg.w_deviation_arm     * joint_deviation_penalty_arms + \
+                      self.cfg.w_deviation_fingers * joint_deviation_penalty_fingers + \
                       self.cfg.w_termination    * terminate_penalty + \
                       self.cfg.w_joint_torque   * joint_torque_penalty + \
                       self.cfg.w_joint_acc      * joint_acc_penalty + \
@@ -569,8 +565,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # Reward Info for update
         self.extras["reward"] = {
-            "Task Penalty / Arm_deviation": joint_pos_penalty_arms,
-            "Task Penalty / Finger_deviation": joint_pos_penalty_fingers,
+            "Task Penalty / Arm_deviation": joint_deviation_penalty_arms,
+            "Task Penalty / Finger_deviation": joint_deviation_penalty_fingers,
             "Task Penalty / Arm_joint_limit": joint_limit_penalty_arm,
             "Task Penalty / Arm_torque": self.cfg.w_joint_torque * joint_torque_penalty_arm,
             "Task Penalty / Arm_acc": self.cfg.w_joint_acc * joint_acc_penalty_arm,
@@ -660,21 +656,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
         # Root Pose & Velocity 
-        # self.root_pos_w, self.root_rot_w = self._robot.data.body_link_pos_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_quat_w[:, self.torso_link_ids].view(-1, 4)
-        # self.root_lin_vel_w, self.root_ang_vel_w = self._robot.data.body_link_lin_vel_w[:, self.torso_link_ids].view(-1, 3), self._robot.data.body_link_ang_vel_w[:, self.torso_link_ids].view(-1, 3)
-        # self.root_lin_vel_b = quat_apply_inverse(self.root_rot_w, self.root_lin_vel_w)
-        # self.root_lin_vel_b = quat_apply_inverse(self.root_rot_w, self.root_ang_vel_w)
         self.root_pos_w, self.root_rot_w = self._robot.data.root_pos_w, self._robot.data.root_quat_w
         self.root_lin_vel_w, self.root_ang_vel_w = self._robot.data.root_lin_vel_w, self._robot.data.root_ang_vel_w
-        self.root_lin_vel_b, self.root_lin_vel_b = self._robot.data.root_lin_vel_b, self._robot.data.root_ang_vel_b
+        self.root_lin_vel_b, self.root_ang_vel_b = self._robot.data.root_lin_vel_b, self._robot.data.root_ang_vel_b
         self.vel_yaw = quat_apply_inverse(yaw_quat(self.root_rot_w), self.root_lin_vel_w[:, :3]) # yaw of rot_w : (body -> world)
-        # Heading (Torso)
-        self.torso_rot_w = self._robot.data.body_link_quat_w[:, self.torso_link_ids].view(-1, 4)
-
-        forward_torso_w = quat_apply(self.torso_rot_w, self.forward_vec)
-        self.torso_heading = torch.atan2(forward_torso_w[:, 1], forward_torso_w[:, 0])
-        self.torso_heading_sin = torch.sin(self.torso_heading)
-        self.torso_heading_cos = torch.cos(self.torso_heading)
         # Heading (Root)
         forward_root_w = quat_apply(self._robot.data.root_quat_w, self.forward_vec)
         self.root_heading = torch.atan2(forward_root_w[:, 1], forward_root_w[:, 0])
@@ -684,8 +669,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.projected_gravity = self._robot.data.projected_gravity_b
         # Joint Angle & Velocity
         self.joint_pos, self.joint_vel = self._robot.data.joint_pos, self._robot.data.joint_vel
-        # Height (For rough terrain)
-        # self.height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - 0.5).clip(min=-1.0, max=1.0)
         # Information related to Commands Tracking
         self.command_inputs_b = self.commands.command_b
         self.command_inputs_w = self.commands.command_w
@@ -700,139 +683,143 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # ==== Information related to Gait Guidance ====
         # Foot pos (World Frame)
-        self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
-        self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
-        # Counting variables
-        if env_ids is not None:
-            mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
-            mask[env_ids] = False
-            if torch.any(mask):
-                # Update without reset env
-                self.phase[mask] += 1 / self.full_step_period[mask]
-                self.phase_count[mask] += 1
-                self.update_count[mask] += 1
-                # Phase and command update signal
-                self.update_phase_ids[mask] = (self.phase_count[mask] >= self.full_step_period[mask])
-                self.update_command_ids[mask] = (self.update_count[mask] >= self.step_period[mask])
-                # Counting variables
-                combined_mask = self.update_command_ids & mask
-                self.phase_count[combined_mask] = 0
-                self.phase[combined_mask] = 0
-                self.update_count[combined_mask] = 0
-                # Prev commands
-                self.prev_target_footstep_w[combined_mask] = self.target_footstep_w[combined_mask].clone()
-                self.prev_target_footstep_b[combined_mask] = self.target_footstep_b[combined_mask].clone()
-            # Update only reset env
-            self.support_foot_pos[env_ids] = self.foot_pos_w[env_ids, 1, :3] # Left swing and Right support
-            self.support_foot_rot[env_ids] = self.foot_rot_w[env_ids, 1, :4] # Left swing and Right support
-            self.prev_target_footstep_w[env_ids] = 0
-            self.prev_target_footstep_b[env_ids] = 0
-        else:
-            # Total Update
-            self.phase += 1 / self.full_step_period
-            self.phase_count += 1
-            self.update_count += 1
-            # Phase and command update signal
-            self.update_phase_ids = (self.phase_count >= self.full_step_period)
-            self.update_command_ids = (self.update_count >= self.step_period)
-            # Counting variables
-            self.phase_count[self.update_phase_ids] = 0
-            self.phase[self.update_phase_ids] = 0
-            self.update_count[self.update_command_ids] = 0
-            # Prev commands
-            self.prev_target_footstep_w[self.update_command_ids] = self.target_footstep_w[self.update_command_ids].clone()
-            self.prev_target_footstep_b[self.update_command_ids] = self.target_footstep_b[self.update_command_ids].clone()
+        # self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        # self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        # # Counting variables
+        # if env_ids is not None:
+        #     mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        #     mask[env_ids] = False
+        #     if torch.any(mask):
+        #         # Update without reset env
+        #         self.phase[mask] += 1 / self.full_step_period[mask]
+        #         self.phase_count[mask] += 1
+        #         self.update_count[mask] += 1
+        #         # Phase and command update signal
+        #         self.update_phase_ids[mask] = (self.phase_count[mask] >= self.full_step_period[mask])
+        #         self.update_command_ids[mask] = (self.update_count[mask] >= self.step_period[mask])
+        #         # Counting variables
+        #         combined_mask = self.update_command_ids & mask
+        #         self.phase_count[combined_mask] = 0
+        #         self.phase[combined_mask] = 0
+        #         self.update_count[combined_mask] = 0
+        #         # Prev commands
+        #         self.prev_target_footstep_w[combined_mask] = self.target_footstep_w[combined_mask].clone()
+        #         self.prev_target_footstep_b[combined_mask] = self.target_footstep_b[combined_mask].clone()
+        #     # Update only reset env
+        #     self.support_foot_pos[env_ids] = self.foot_pos_w[env_ids, 1, :3] # Left swing and Right support
+        #     self.support_foot_rot[env_ids] = self.foot_rot_w[env_ids, 1, :4] # Left swing and Right support
+        #     self.prev_target_footstep_w[env_ids] = 0
+        #     self.prev_target_footstep_b[env_ids] = 0
+        # else:
+        #     # Total Update
+        #     self.phase += 1 / self.full_step_period
+        #     self.phase_count += 1
+        #     self.update_count += 1
+        #     # Phase and command update signal
+        #     self.update_phase_ids = (self.phase_count >= self.full_step_period)
+        #     self.update_command_ids = (self.update_count >= self.step_period)
+        #     # Counting variables
+        #     self.phase_count[self.update_phase_ids] = 0
+        #     self.phase[self.update_phase_ids] = 0
+        #     self.update_count[self.update_command_ids] = 0
+        #     # Prev commands
+        #     self.prev_target_footstep_w[self.update_command_ids] = self.target_footstep_w[self.update_command_ids].clone()
+        #     self.prev_target_footstep_b[self.update_command_ids] = self.target_footstep_b[self.update_command_ids].clone()
 
-        # Center of Mass (CoM)
-        self.CoM = (self._robot.data.body_link_pos_w * self.robot_mass.unsqueeze(-1)).sum(dim=1) / self.total_mass.unsqueeze(-1)
+        # # Center of Mass (CoM)
+        # self.CoM = (self._robot.data.body_link_pos_w * self.robot_mass.unsqueeze(-1)).sum(dim=1) / self.total_mass.unsqueeze(-1)
 
-        # Target foot pos update
-        if torch.any(self.update_command_ids):
-            update_commands_mask = self.target_footstep_w[self.update_command_ids].clone()
-            # Switch the swing foot
-            if env_ids is not None:
-                combined_mask = self.update_command_ids & mask # Not reset env and command updated env
-            else:
-                combined_mask = self.update_command_ids # command updated env
+        # # Target foot pos update
+        # if torch.any(self.update_command_ids):
+        #     update_commands_mask = self.target_footstep_w[self.update_command_ids].clone()
+        #     # Switch the swing foot
+        #     if env_ids is not None:
+        #         combined_mask = self.update_command_ids & mask # Not reset env and command updated env
+        #     else:
+        #         combined_mask = self.update_command_ids # command updated env
 
-            self.foot_on_swing[combined_mask] = ~self.foot_on_swing[combined_mask] # NOTE: Assume single stance (double stance -> guide left single, right stand)
+        #     self.foot_on_swing[combined_mask] = ~self.foot_on_swing[combined_mask] # NOTE: Assume single stance (double stance -> guide left single, right stand)
 
-            # Switch the support foot
-            left_support_mask  = (self.foot_on_swing[:, 0] == 0) 
-            right_support_mask = (self.foot_on_swing[:, 1] == 0)
+        #     # Switch the support foot
+        #     left_support_mask  = (self.foot_on_swing[:, 0] == 0) 
+        #     right_support_mask = (self.foot_on_swing[:, 1] == 0)
             
-            left_combined_mask = combined_mask & left_support_mask   # valid ``env and left support env
-            right_combined_mask = combined_mask & right_support_mask # valid env and right support env
+        #     left_combined_mask = combined_mask & left_support_mask   # valid ``env and left support env
+        #     right_combined_mask = combined_mask & right_support_mask # valid env and right support env
 
-            # ============== Support Foot Update ==============
-            self.support_foot_pos[left_combined_mask] = self.foot_pos_w[left_combined_mask, 0, :3]
-            self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
-            self.support_foot_rot[left_combined_mask] = self.foot_rot_w[left_combined_mask, 0, :4]
-            self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
+        #     # ============== Support Foot Update ==============
+        #     self.support_foot_pos[left_combined_mask] = self.foot_pos_w[left_combined_mask, 0, :3]
+        #     self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
+        #     self.support_foot_rot[left_combined_mask] = self.foot_rot_w[left_combined_mask, 0, :4]
+        #     self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
 
-            # Update footstep command
-            support_yaw = euler_xyz_from_quat(self.support_foot_rot[self.update_command_ids])[2]
-            update_commands_mask[~self.foot_on_swing[self.update_command_ids]] = torch.cat([self.support_foot_pos[self.update_command_ids, :2], support_yaw.unsqueeze(-1)], dim=-1)
-            update_commands_mask[self.foot_on_swing[self.update_command_ids]] = self.compute_target_footstep()
+        #     # Update footstep command
+        #     support_yaw = euler_xyz_from_quat(self.support_foot_rot[self.update_command_ids])[2]
+        #     update_commands_mask[~self.foot_on_swing[self.update_command_ids]] = torch.cat([self.support_foot_pos[self.update_command_ids, :2], support_yaw.unsqueeze(-1)], dim=-1)
+        #     update_commands_mask[self.foot_on_swing[self.update_command_ids]] = self.compute_target_footstep()
 
-            foot_collision_ids = (update_commands_mask[:, 0, :2] - update_commands_mask[:, 1, :2]).norm(dim=1) < self.cfg.self_collision_threshold
-            if torch.any(foot_collision_ids):
-                update_commands_mask[foot_collision_ids, :, :2] = adjust_foot_collision(update_commands_mask[foot_collision_ids, :, :2], 
-                                                                                        self.foot_on_swing[self.update_command_ids][foot_collision_ids],
-                                                                                        self.cfg.self_collision_threshold)
-            self.target_footstep_w[self.update_command_ids] = update_commands_mask
+        #     foot_collision_ids = (update_commands_mask[:, 0, :2] - update_commands_mask[:, 1, :2]).norm(dim=1) < self.cfg.self_collision_threshold
+        #     if torch.any(foot_collision_ids):
+        #         update_commands_mask[foot_collision_ids, :, :2] = adjust_foot_collision(update_commands_mask[foot_collision_ids, :, :2], 
+        #                                                                                 self.foot_on_swing[self.update_command_ids][foot_collision_ids],
+        #                                                                                 self.cfg.self_collision_threshold)
+        #     self.target_footstep_w[self.update_command_ids] = update_commands_mask
 
-        # Phase variable
-        self.phase_sin = torch.sin(2*torch.pi*self.phase)
-        self.phase_cos = torch.cos(2*torch.pi*self.phase)
+        # # Phase variable
+        # self.phase_sin = torch.sin(2*torch.pi*self.phase)
+        # self.phase_cos = torch.cos(2*torch.pi*self.phase)
 
-        # Foot states (Body Frame)
-        foot_forward_w_left = quat_apply(self.foot_rot_w[:, 0], self.forward_vec) # rot_w : (base -> world)
-        foot_forward_w_right = quat_apply(self.foot_rot_w[:, 1], self.forward_vec) # rot_w : (base -> world)
-        foot_forward_w = torch.cat([foot_forward_w_left.unsqueeze(1), foot_forward_w_right.unsqueeze(1)], dim=1)
-        foot_forward_b_left = quat_apply_inverse(self.root_rot_w, foot_forward_w_left) # rot_w (base -> world) [E, 3]
-        foot_forward_b_right = quat_apply_inverse(self.root_rot_w, foot_forward_w_right) # rot_w (base -> world) [E, 3]
-        foot_forward_b = torch.cat([foot_forward_b_left.unsqueeze(1), foot_forward_b_right.unsqueeze(1)], dim=1) # [E, 2, 3]
-        self.foot_rot_yaw_w = torch.atan2(foot_forward_w[..., 1], foot_forward_w[..., 0])
-        self.foot_rot_yaw_b = torch.atan2(foot_forward_b[..., 1], foot_forward_b[..., 0])
+        # # Foot states (Body Frame)
+        # foot_forward_w_left = quat_apply(self.foot_rot_w[:, 0], self.forward_vec) # rot_w : (base -> world)
+        # foot_forward_w_right = quat_apply(self.foot_rot_w[:, 1], self.forward_vec) # rot_w : (base -> world)
+        # foot_forward_w = torch.cat([foot_forward_w_left.unsqueeze(1), foot_forward_w_right.unsqueeze(1)], dim=1)
+        # foot_forward_b_left = quat_apply_inverse(self.root_rot_w, foot_forward_w_left) # rot_w (base -> world) [E, 3]
+        # foot_forward_b_right = quat_apply_inverse(self.root_rot_w, foot_forward_w_right) # rot_w (base -> world) [E, 3]
+        # foot_forward_b = torch.cat([foot_forward_b_left.unsqueeze(1), foot_forward_b_right.unsqueeze(1)], dim=1) # [E, 2, 3]
+        # self.foot_rot_yaw_w = torch.atan2(foot_forward_w[..., 1], foot_forward_w[..., 0])
+        # self.foot_rot_yaw_b = torch.atan2(foot_forward_b[..., 1], foot_forward_b[..., 0])
 
-        left_foot_pos_b = quat_apply_inverse(self.root_rot_w, self.foot_pos_w[:, 0, :3] - self.root_pos_w) # [E, 3]
-        right_foot_pos_b = quat_apply_inverse(self.root_rot_w, self.foot_pos_w[:, 1, :3] - self.root_pos_w) # [E, 3]
-        self.foot_pos_b = torch.cat([left_foot_pos_b.unsqueeze(1), right_foot_pos_b.unsqueeze(1)], dim=1)
+        # left_foot_pos_b = quat_apply_inverse(self.root_rot_w, self.foot_pos_w[:, 0, :3] - self.root_pos_w) # [E, 3]
+        # right_foot_pos_b = quat_apply_inverse(self.root_rot_w, self.foot_pos_w[:, 1, :3] - self.root_pos_w) # [E, 3]
+        # self.foot_pos_b = torch.cat([left_foot_pos_b.unsqueeze(1), right_foot_pos_b.unsqueeze(1)], dim=1)
 
-        if env_ids is not None:
-            self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # NOTE: Right foot is support foot at initial state
-            self.target_footstep_w[env_ids, 1, 2]  = self.foot_rot_yaw_w[env_ids, 1] # Right foot
+        # if env_ids is not None:
+        #     self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # NOTE: Right foot is support foot at initial state
+        #     self.target_footstep_w[env_ids, 1, 2]  = self.foot_rot_yaw_w[env_ids, 1] # Right foot
 
-        # Contact schedule
-        self.contact_schedule = smooth_sqr_wave(self.phase)
-        self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
-                                               torch.cat([self.target_footstep_w[:, :, :2], torch.zeros((self.num_envs, 2, 1), device=self.device)], dim=-1), dim=-1) # [E, 2]
-        self.step_rotation_offset = torch.square(wrap_to_pi(self.target_footstep_w[:, :, 2] - self.foot_rot_yaw_w)) # [E, 2]
+        # # Contact schedule
+        # self.contact_schedule = smooth_sqr_wave(self.phase)
+        # self.step_location_offset = torch.norm(self.foot_pos_w[:, :, :3] - \
+        #                                        torch.cat([self.target_footstep_w[:, :, :2], torch.zeros((self.num_envs, 2, 1), device=self.device)], dim=-1), dim=-1) # [E, 2]
+        # self.step_rotation_offset = torch.square(wrap_to_pi(self.target_footstep_w[:, :, 2] - self.foot_rot_yaw_w)) # [E, 2]
 
-        # Command pos (Body Frame)
-        target_left_footstep_b  = quat_apply_inverse(self.root_rot_w, 
-                                                     torch.cat([self.target_footstep_w[:, 0, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.root_pos_w)
-        target_right_footstep_b = quat_apply_inverse(self.root_rot_w,
-                                                     torch.cat([self.target_footstep_w[:, 1, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.root_pos_w)
-        self.target_footstep_b = torch.cat([target_left_footstep_b.unsqueeze(1), target_right_footstep_b.unsqueeze(1)], dim=1)
+        # # Command pos (Body Frame)
+        # target_left_footstep_b  = quat_apply_inverse(self.root_rot_w, 
+        #                                              torch.cat([self.target_footstep_w[:, 0, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.root_pos_w)
+        # target_right_footstep_b = quat_apply_inverse(self.root_rot_w,
+        #                                              torch.cat([self.target_footstep_w[:, 1, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1) - self.root_pos_w)
+        # self.target_footstep_b = torch.cat([target_left_footstep_b.unsqueeze(1), target_right_footstep_b.unsqueeze(1)], dim=1)
 
-        # Command yaw (Body Frame)
-        target_yaw_w = self.target_footstep_w[:, :, 2]
-        target_forward_w = torch.stack([torch.cos(target_yaw_w), torch.sin(target_yaw_w), torch.zeros_like(target_yaw_w)], dim=-1)
-        target_forward_b_left  = quat_apply_inverse(self.root_rot_w, target_forward_w[:, 0, :3])
-        target_forward_b_right = quat_apply_inverse(self.root_rot_w, target_forward_w[:, 1, :3])
-        target_forward_b = torch.cat([target_forward_b_left.unsqueeze(1), target_forward_b_right.unsqueeze(1)], dim=1)
-        self.target_footstep_yaw_b = torch.atan2(target_forward_b[..., 1], target_forward_b[..., 0])
+        # # Command yaw (Body Frame)
+        # target_yaw_w = self.target_footstep_w[:, :, 2]
+        # target_forward_w = torch.stack([torch.cos(target_yaw_w), torch.sin(target_yaw_w), torch.zeros_like(target_yaw_w)], dim=-1)
+        # target_forward_b_left  = quat_apply_inverse(self.root_rot_w, target_forward_w[:, 0, :3])
+        # target_forward_b_right = quat_apply_inverse(self.root_rot_w, target_forward_w[:, 1, :3])
+        # target_forward_b = torch.cat([target_forward_b_left.unsqueeze(1), target_forward_b_right.unsqueeze(1)], dim=1)
+        # self.target_footstep_yaw_b = torch.atan2(target_forward_b[..., 1], target_forward_b[..., 0])
 
         # Feet Slide
         self.is_contacts = self.contact_sensors.data.net_forces_w_history[:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-        # Joint Limits
+        # Joint out of limits 
         self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
+        
+        # Hip joint regularization (rolling and yawing)
         self.deviation_hip = self.joint_pos[:, self.hip_joint_ids] - self._robot.data.default_joint_pos[:, self.hip_joint_ids]
+        # Upper body regularization
         self.deviation_arms = self.joint_pos[:, self.arm_joint_ids] - self._robot.data.default_joint_pos[:, self.arm_joint_ids]
         self.deviation_fingers = self.joint_pos[:, self.finger_joint_ids] - self._robot.data.default_joint_pos[:, self.finger_joint_ids]
+        # Upper body reguarization (yawing)
         self.deviation_torso = self.joint_pos[:, self.torso_joint_ids] - self._robot.data.default_joint_pos[:, self.torso_joint_ids]
 
 

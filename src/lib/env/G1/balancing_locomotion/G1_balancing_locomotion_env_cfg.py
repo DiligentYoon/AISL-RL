@@ -145,10 +145,10 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_flat: float = 1.0
 
     w_limits: float = 10.0
-    w_limits_hip: float = 0.1
-    w_limits_arm: float = 0.1
-    w_limits_fingers: float = 0.05
-    w_limits_torso: float = 0.1
+    w_deviation_hip: float = 0.1
+    w_deviation_arm: float = 0.1
+    w_deviation_fingers: float = 0.05
+    w_deviation_torso: float = 0.1
 
     w_termination: float = 100
     termination_height: float = 0.4
