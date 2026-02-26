@@ -14,12 +14,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -308,24 +308,16 @@ def main():
             cumulative_rewards[finished_episodes] = 0
             cumulative_timesteps[finished_episodes] = 0
 
-            # # Success rate
-            # if next_infos.get("success_rate", None) is not None:
-            #     # Specific success conditions exist
-            #     success_rate = next_infos["success_rate"]
-            # else:
-            #     # Success conditions is not existed
-            #     success_episodes = terminated.nonzero(as_tuple=False)
-            #     success_rate = success_episodes / finished_episodes
-            
-            # if torch.is_tensor(success_rate):
-            #     CLI_episode_success_rate.append(100 * success_rate.item())
-            # else:
-            #     CLI_episode_success_rate.append(100 * success_rate)
-
         # record data
         tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(rewards).item())
         tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(rewards).item())
         tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(rewards).item())
+
+        task_reward = next_infos.get("reward", None)
+        if task_reward is not None:
+            for k, v in task_reward.items():
+                tracking_data[k].append(torch.mean(v).item())
+
 
         if len(track_rewards):
             track_reward_np = np.array(track_rewards)
@@ -389,7 +381,6 @@ def main():
             line_episode_step = f"Avg Episode Step  : {ep_step}"
             line_per_step_reward = f"Per-Step Rewards  : {per_r}"
             line_episode_reward = f"Epiode Rewards    : {ep_r}"
-            # line_episode_success = f"Success Rate       : {ep_srate}"
 
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
@@ -406,7 +397,6 @@ def main():
             print(f"| {line_episode_step:<{content_width-1}}|")
             print(f"| {line_per_step_reward:<{content_width-1}}|")
             print(f"| {line_episode_reward:<{content_width-1}}|")
-            # print(f"| {line_episode_success:<{content_width-1}}|")
             print(f"|________________________________________________________________|")
 
             # update rollout time

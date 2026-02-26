@@ -152,11 +152,11 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     termination_target_foot: float = 1.0
 
     # ===== Gait guidance ===== #
-    self_collision_threshold = 0.15
-    time_period_min = 0.2
-    time_period_max = 0.3
-    dstep_min = 0.2
-    dstep_max = 0.25
+    self_collision_threshold = 0.2
+    time_period_min = 0.3
+    time_period_max = 0.35
+    dstep_min = 0.3
+    dstep_max = 0.35
     z_c_min = 0.6
     z_c_max = 0.7
 
