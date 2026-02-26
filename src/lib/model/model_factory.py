@@ -50,7 +50,7 @@ class ModelFactory:
                 actor = SharedActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
-                                    encoder_hidden_dim=128,
+                                    encoder_hidden_dim=256,
                                     RMA_hidden_dim=0,
                                     min_log_std=self.model_cfg["policy"]["min_log_std"],
                                     max_log_std=self.model_cfg["policy"]["max_log_std"],
