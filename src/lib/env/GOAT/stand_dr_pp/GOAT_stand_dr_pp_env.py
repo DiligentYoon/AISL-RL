@@ -157,7 +157,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         observation = torch.cat((self.base_acceleration,
                                  self.base_angular_vel,
                                  self.base_quaternion,
-                                 self.joint_pos,
+                                 self.joint_pos[:, self.joint_ids],
                                  self.joint_vel), dim=1)
 
         return observation
@@ -173,7 +173,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self.base_angular_vel,
                                  self.gravity_vector,
                                  self.base_quaternion,
-                                 self.joint_pos,
+                                 self.joint_pos[:, self.joint_ids],
                                  self.joint_vel), dim=1)
         
         privileged_info = torch.cat((self.base_vel,

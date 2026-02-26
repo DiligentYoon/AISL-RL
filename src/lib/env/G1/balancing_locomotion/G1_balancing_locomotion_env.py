@@ -483,20 +483,21 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # Reward Info for update
         self.extras["reward"] = {
-            "Penalty / Arm_deviation": joint_pos_penalty_arms,
-            "Penalty / Finger_deviation": joint_pos_penalty_fingers,
-            "Penalty / Arm_joint_limit": joint_limit_penalty_arm,
-            "Penalty / Arm_torque": self.cfg.w_joint_torque * joint_torque_penalty_arm,
-            "Penalty / Arm_acc": self.cfg.w_joint_acc * joint_acc_penalty_arm,
-            "Penalty / Leg_joint_limit": joint_limit_penalty_leg,
-            "Penalty / Leg_torque": joint_torque_penalty_leg,
-            "Penalty / Leg_acc": joint_acc_penalty_leg,
-            "Penalty / Torso_Angular_velocity": ang_vel_xy_penalty,
-            "Reward / Leg_gait": gait_reward,
-            "Reward / Torso_linear velocity": lin_vel_rewards,
-            "Reward / Torso_heading": heading_rewards,
-            "Reward / Torso_height": height_rewards,
-            "Reward / Torso_flat": flat_rewards,
+            "Task Penalty / Arm_deviation": joint_pos_penalty_arms,
+            "Task Penalty / Finger_deviation": joint_pos_penalty_fingers,
+            "Task Penalty / Arm_joint_limit": joint_limit_penalty_arm,
+            "Task Penalty / Arm_torque": self.cfg.w_joint_torque * joint_torque_penalty_arm,
+            "Task Penalty / Arm_acc": self.cfg.w_joint_acc * joint_acc_penalty_arm,
+            "Task Penalty / Leg_joint_limit": joint_limit_penalty_leg,
+            "Task Penalty / Leg_torque": self.cfg.w_joint_torque * joint_torque_penalty_leg,
+            "Task Penalty / Leg_acc": self.cfg.w_joint_acc * joint_acc_penalty_leg,
+            "Task Penalty / Torso_Angular_velocity": ang_vel_xy_penalty,
+            "Task Penalty / Leg_slide":slide_penalty,
+            "Task Reward / Leg_gait": gait_reward,
+            "Task Reward / Torso_linear velocity": lin_vel_rewards,
+            "Task Reward / Torso_heading": heading_rewards,
+            "Task Reward / Torso_height": height_rewards,
+            "Task Reward / Torso_flat": flat_rewards,
         }
         
         return rewards

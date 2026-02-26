@@ -49,8 +49,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 26                      # Observation space
-    state_space = 41                            # State space including privilege information
+    observation_space = 24                      # Observation space
+    state_space = 39                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
