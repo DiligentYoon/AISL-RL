@@ -115,6 +115,12 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.target_footstep_b = torch.zeros((self.num_envs, 2, 3), dtype=torch.float, device=self.device)
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
 
+        # Reward Info for logging
+        self.extras["reward"] = {
+            "arm": {},
+            "leg": {}
+        }
+
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
 
@@ -270,6 +276,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             observations = {
                 "arm": torch.cat(
                     [
+                        self.CoM[:, 2:3],                                # [E, 1]
                         self.torso_lin_vel_b,                            # [E, 3]
                         self.torso_ang_vel_b,                            # [E, 3]
                         self.projected_gravity,                          # [E, 3]
@@ -282,6 +289,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                 ),
                 "leg": torch.cat(
                     [
+                        self.CoM[:, 2:3],                                   # [E, 1]
                         self.torso_lin_vel_b,                               # [E, 3]
                         self.torso_ang_vel_b,                               # [E, 3]    
                         self.projected_gravity,                             # [E, 3]
@@ -290,8 +298,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                         self.z_c.unsqueeze(-1),                             # [E, 1]
                         self.phase_sin.unsqueeze(-1),                       # [E, 1]
                         self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.foot_on_swing.float(),                         # [E, 2]
-                        self.in_contact.float(),                            # [E, 2]
                         self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
                         self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
                         self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
@@ -308,6 +314,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             sorted_actions = actions[:, self.mapping_sort_ids]
             observations = torch.cat(
                 [
+                    self.CoM[:, 2:3],                                   # [E, 1]
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
                     self.projected_gravity,                             # [E, 3]
@@ -316,8 +323,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.z_c.unsqueeze(-1),                             # [E, 1]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.foot_on_swing.float(),                         # [E, 2]
-                    self.in_contact.float(),                            # [E, 2]
                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
                     self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
@@ -338,6 +343,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             sorted_actions = actions[:, self.mapping_sort_ids]
             shared_states = torch.cat(
                 [
+                    self.CoM[:, 2:3],                                   # [E, 1]
                     self.torso_lin_vel_b,                               # [E, 3]
                     self.torso_ang_vel_b,                               # [E, 3]
                     self.projected_gravity,                             # [E, 3]
@@ -346,8 +352,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                     self.z_c.unsqueeze(-1),                             # [E, 1]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.foot_on_swing.float(),                         # [E, 2]
-                    self.in_contact.float(),                            # [E, 2]
                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
                     self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
@@ -370,10 +374,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking Rewards (Torso)
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_w[:, :2] - self.torso_lin_vel_w[:, :2]), dim=1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2]), dim=1)
         ang_vel_error = torch.square(self.command_inputs_w[:, 2] - self.torso_ang_vel_w[:, 2])
-        heading_error = torch.abs(wrap_to_pi(self.commands.heading - self.torso_heading))
-        height_error  = torch.abs(self.CoM[:, 2] - self.z_c)
+        heading_error = torch.square(wrap_to_pi(self.commands.heading - self.torso_heading))
+        height_error  = torch.square(self.CoM[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
         ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
         heading_rewards = torch.exp(-heading_error / 0.5**2)
@@ -385,7 +389,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # Control Penalty (Total)
         ang_vel_xy_penalty = -torch.sum(torch.square(self.torso_ang_vel_b[:, :2]), dim=1)
-        joint_limit_penalty   = -torch.sum(self.out_of_limits_joint, dim=1).clip(0, 1)     
+        joint_limit_penalty   = -(torch.sum(self.out_of_limits_joint, dim=1).clip(0, 1))
         joint_torque_penalty = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
         joint_acc_penalty = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
 
@@ -393,11 +397,11 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
 
         # Gait Rewards (Leg)
-        footstep_loc_error = self.step_location_offset[self.foot_on_swing]
-        footstep_rot_error = self.step_rotation_offset[self.foot_on_swing]
+        footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
+        footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
         contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
         footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
-        gait_reward = contact_schedule + footstep_tracking
+        gait_reward = contact_schedule * footstep_tracking
 
         # print(f"contact (left) | contact (right) | contact_schedule | footstep tracking : {self.in_contact[:, 0].int().item()} | {self.in_contact[:, 1].int().item()} | {contact_schedule.item():.2f} | {footstep_tracking.item():.2f}")
 
@@ -430,10 +434,13 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             leg_rewards = common_rewards + \
                           self.cfg.w_feet_gait     * gait_reward + \
                           self.cfg.w_feet_slide    * slide_penalty + \
-                          self.cfg.w_limits        * joint_limit_penalty + \
                           self.cfg.w_joint_torque  * joint_torque_penalty + \
                           self.cfg.w_joint_acc     * joint_acc_penalty + \
-                          self.cfg.w_action_rate   * action_rate_penalty_leg 
+                          self.cfg.w_action_rate   * action_rate_penalty_leg
+            
+            self.extras["reward"]["arm"] = {
+                "Penalty / arm_deviation": torch.mean(joint_pos_penalty_arms).item(),
+                "Penalty / finger_deviation": torch.mean(joint_pos_penalty_fingers).item()}
                           
             # Dictionary key order (alphabetical order in dictionary)
             rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]

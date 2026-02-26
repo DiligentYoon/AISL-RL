@@ -110,8 +110,8 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 87, "leg": 72}                    
-    state_space = {"arm": 147, "leg": 147}
+    observation_space = {"arm": 88, "leg": 69}                    
+    state_space = {"arm": 144, "leg": 144}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -127,13 +127,13 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_track_lin_vel: float = 6.0
     w_track_ang_vel: float = 0.0
     w_track_heading: float = 3.0
-    w_track_height : float = 2.0
+    w_track_height : float = 1.0
 
     w_feet_gait: float = 4.0
-    w_feet_slide: float = 0.1
+    w_feet_slide: float = 0.0
 
     w_lin_vel_z: float  = 0.2
-    w_ang_vel_xy: float = 0.01
+    w_ang_vel_xy: float = 0.1
     w_joint_torque: float = 2.0e-6
     w_joint_acc: float = 1.0e-7
     w_action_rate: float = 0.0
@@ -145,17 +145,17 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_limits_fingers: float = 0.05
     w_limits_torso: float = 0.1
 
-    w_termination: float = 100
+    w_termination: float = 300
     termination_height: float = 0.4
     termination_gravity: float = 0.6
-    termination_ang_vel: float = 10.0
+    termination_ang_vel: float = 30.0
     termination_target_foot: float = 1.0
 
     # ===== Gait guidance ===== #
-    self_collision_threshold = 0.1
+    self_collision_threshold = 0.15
     time_period_min = 0.2
     time_period_max = 0.3
-    dstep_min = 0.15
+    dstep_min = 0.2
     dstep_max = 0.25
     z_c_min = 0.6
     z_c_max = 0.7
