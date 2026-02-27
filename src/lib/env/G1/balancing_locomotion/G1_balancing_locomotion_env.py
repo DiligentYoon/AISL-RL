@@ -482,15 +482,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
-        # in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
-        # single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
-        # gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
-        # gait_reward = torch.clamp(gait_reward, max=0.4)
+        in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
+        single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
+        gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
+        gait_reward = torch.clamp(gait_reward, max=0.4)
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
-        contact_schedule = ((self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule).clip(min=0.0)
+        # contact_schedule = ((self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule).clip(min=0.0)
         # footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
-        gait_reward = contact_schedule
+        # gait_reward = contact_schedule
 
         # print(f"gait : {gait_reward.item():.2f}")
 
@@ -615,13 +615,9 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
 
-        # swing_foot_pos = self.foot_pos_w[self.foot_on_swing]
-        # target_foot_pos = self.target_footstep_w[self.foot_on_swing]
-
         died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
         died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_lin_vel_b, dim=-1) >= self.cfg.termination_ang_vel
-        # died_fall_3 = torch.norm(target_foot_pos[:, :2] - swing_foot_pos[:, :2], dim=-1) >= self.cfg.termination_target_foot
         died = died_fall | died_fall_2 | died_ang
         return died, time_out
 

@@ -15,7 +15,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_balancing_locomotion/2026-02-27_14-54-55_mappo/agent_32000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_balancing_locomotion/2026-02-27_17-59-10_mappo/agent_28800.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -73,6 +73,7 @@ def main():
     # ============================================================================================================================
 
     # create isaac environment
+    env_cfg.seed = cfg.get("seed", None)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # get environment (step) dt for real-time evaluation
@@ -228,6 +229,7 @@ def main():
     else:
         plot = None
 
+    agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
     cumulative_rewards = 0
@@ -239,7 +241,7 @@ def main():
         # run everything in inference mode
         with torch.no_grad():
             # agent stepping
-            actions, _,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
 

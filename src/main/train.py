@@ -88,6 +88,7 @@ def main():
     # ============================ Env & Wrapper Spawn ================================
 
     # Create isaac environment
+    env_cfg.seed = cfg.get("seed", None)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # Get environment (step) dt for real-time evaluation
@@ -103,8 +104,6 @@ def main():
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
         checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
-    if cfg["agent"]["experiment"]["evaluation_interval"] == "auto":
-        evaluation_interval = int(cfg["train"]["timesteps"] / 10)
 
 
     # ======================= Buffer =========================
