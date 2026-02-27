@@ -114,8 +114,8 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # state_space = {"arm": 150, "leg": 150}
 
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 87, "leg": 48}                    
-    state_space = {"arm": 123, "leg": 123}
+    observation_space = {"arm": 87, "leg": 50}                    
+    state_space = {"arm": 125, "leg": 125}
     
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
@@ -139,7 +139,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_flat:       float = 1.0
 
     w_ang_vel_xy:   float = 0.1
-    w_joint_torque: float = 1.0e-7
+    w_joint_torque: float = 2.0e-7
     w_joint_acc:    float = 1.0e-7
 
     w_limits:            float = 10.0
