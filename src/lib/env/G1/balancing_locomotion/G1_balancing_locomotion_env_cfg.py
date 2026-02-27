@@ -134,21 +134,21 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_track_heading: float = 3.0
     w_track_height : float = 1.0
 
-    w_feet_gait: float = 10.0
+    w_feet_gait:  float = 10.0
     w_feet_slide: float = 1.0
 
-    w_lin_vel_z: float  = 0.2
-    w_ang_vel_xy: float = 0.1
+    w_lin_vel_z:    float  = 0.2
+    w_ang_vel_xy:   float = 0.1
     w_joint_torque: float = 1.0e-6
-    w_joint_acc: float = 1.0e-7
-    w_action_rate: float = 0.0
-    w_flat: float = 1.0
+    w_joint_acc:    float = 1.0e-7
+    w_action_rate:  float = 0.0
+    w_flat:         float = 1.0
 
-    w_limits: float = 10.0
-    w_deviation_hip: float = 0.1
-    w_deviation_arm: float = 0.1
-    w_deviation_fingers: float = 0.05
-    w_deviation_torso: float = 0.1
+    w_limits:            float = 10.0
+    w_deviation_hip:     float = 0.1
+    w_deviation_arm:     float = 0.1
+    w_deviation_fingers: float = 0.1
+    w_deviation_torso:   float = 0.1
 
     w_termination: float = 100
     termination_height: float = 0.4
