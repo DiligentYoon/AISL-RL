@@ -46,8 +46,9 @@ agent:
   experiment:
     directory: "g1_balancing_locomotion"
     experiment_name: ""
+    evaluation_interval: auto
     write_interval: auto
     checkpoint_interval: auto
 
 train:
-  timesteps: 32000
+  timesteps: 500

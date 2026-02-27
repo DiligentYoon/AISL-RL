@@ -217,7 +217,6 @@ class UniformVelocityCommand():
         self.time_left[env_ids] = r.uniform_(*self.cfg.resampling_time_range)
 
         # commands in world frame
-        # forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
         self.vel_command_w[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
         self.vel_command_w[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
         # # yaw rate (may be overridden by heading post-process)

@@ -15,7 +15,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_balancing_locomotion/2026-02-27_14-54-55_mappo/agent_32000.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -103,6 +103,8 @@ def main():
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
         checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
+    if cfg["agent"]["experiment"]["evaluation_interval"] == "auto":
+        evaluation_interval = int(cfg["train"]["timesteps"] / 10)
 
 
     # ======================= Buffer =========================

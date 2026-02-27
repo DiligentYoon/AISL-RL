@@ -15,7 +15,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_balancing_locomotion/2026-02-27_01-05-22_mappo/agent_25600.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_balancing_locomotion/2026-02-27_14-54-55_mappo/agent_32000.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -229,30 +229,39 @@ def main():
         plot = None
 
     obs, states, infos = env.reset()
-    rollout = 0
     timestep = 0
+    cumulative_rewards = 0
+    cumulative_steps = 0
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
 
         # run everything in inference mode
-        with torch.inference_mode():
+        with torch.no_grad():
             # agent stepping
             actions, _,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
-            # update rollout number
-            rollout += 1
 
-            # Plot Phase
-            if plot is not None:
-                # Plotter Update
-                if "viz_data" in next_infos:
-                    plot.update(next_infos["viz_data"])
+        # update metric
+        cumulative_rewards += rewards[0].mean().item()
+        cumulative_steps += 1
 
-                # Plotter should be resetted in accordance with env reset (Assume single env (index = 0))
-                if terminated[0] | truncated[0]:
-                    plot.reset()
+        # reset metric
+        if terminated[0] | truncated[0]:
+            print(f"Episode step | Cumulative reward : {cumulative_steps} | {cumulative_rewards}")
+            cumulative_rewards = 0
+            cumulative_steps = 0
+
+        # Plot Phase
+        if plot is not None:
+            # Plotter Update
+            if "viz_data" in next_infos:
+                plot.update(next_infos["viz_data"])
+
+            # Plotter should be resetted in accordance with env reset (Assume single env (index = 0))
+            if terminated[0] | truncated[0]:
+                plot.reset()
 
         # Video update
         if args_cli.video:
