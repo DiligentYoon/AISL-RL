@@ -712,17 +712,19 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             mask[env_ids] = False
             if torch.any(mask):
                 # Update without reset env
+                # Phase update signal
                 self.phase[mask] += 1 / self.full_step_period[mask]
                 self.phase_count[mask] += 1
-                self.update_count[mask] += 1
-                # Phase and command update signal
                 self.update_phase_ids[mask] = (self.phase_count[mask] >= self.full_step_period[mask])
+                # Step command update signal
+                self.update_count[mask] += 1
                 self.update_command_ids[mask] = (self.update_count[mask] >= self.step_period[mask])
-                # Counting variables
-                combined_mask = self.update_command_ids & mask
-                self.phase_count[combined_mask] = 0
-                self.phase[combined_mask] = 0
-                self.update_count[combined_mask] = 0
+                # Schedule variables
+                phase_update_mask = self.update_phase_ids & mask
+                command_update_mask = self.update_command_ids & mask
+                self.phase_count[phase_update_mask] = 0
+                self.phase[phase_update_mask] = 0
+                self.update_count[command_update_mask] = 0
             #     # Prev commands
             #     self.prev_target_footstep_w[combined_mask] = self.target_footstep_w[combined_mask].clone()
             #     self.prev_target_footstep_b[combined_mask] = self.target_footstep_b[combined_mask].clone()

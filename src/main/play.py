@@ -232,7 +232,9 @@ def main():
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
-    cumulative_rewards = 0
+    per_step_task_rewards = None
+    cumulative_task_rewards = None
+    cumulative_total_rewards = 0
     cumulative_steps = 0
     # simulate environment
     while simulation_app.is_running():
@@ -245,14 +247,60 @@ def main():
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
 
-        # update metric
-        cumulative_rewards += rewards[0].mean().item()
+        # Task reward
+        task_reward = next_infos.get("reward", None)
+        if task_reward is not None:
+            if cumulative_task_rewards is None:
+                # Initialization
+                cumulative_task_rewards = {}
+                for k in task_reward.keys():
+                    cumulative_task_rewards[k] = 0
+            
+            if per_step_task_rewards is None:
+                # Initialization
+                per_step_task_rewards = {}
+                for k in task_reward.keys():
+                    per_step_task_rewards[k] = 0
+            
+            for k, v in task_reward.items():
+                cumulative_task_rewards[k] += v.mean().item()
+
+        # Total reward
+        cumulative_total_rewards += rewards[0].mean().item()
         cumulative_steps += 1
 
-        # reset metric
+        # logging and reset metric
         if terminated[0] | truncated[0]:
-            print(f"Episode step | Cumulative reward : {cumulative_steps} | {cumulative_rewards}")
-            cumulative_rewards = 0
+            # Per-step calculation
+            per_step_total_rewards = cumulative_total_rewards / cumulative_steps
+            if cumulative_task_rewards:
+                for k, v in cumulative_task_rewards.items():
+                    per_step_task_rewards[k] = cumulative_task_rewards[k] / cumulative_steps
+
+            content_width = 80
+            line_header = "Evaluation Metric Table"
+            print(f" {'_' * content_width}")
+            print(f"|{' ' * content_width}|")
+            print(f"|{line_header.center(content_width)}|")
+            print(f"|{'_' * content_width}|")
+            print(f"|{' ' * content_width}|")
+            if cumulative_task_rewards:
+                for k, v in cumulative_task_rewards.items():
+                    print(f"| {k:<50}: {v:<26.3f} |")
+            if per_step_task_rewards:
+                for k, v in per_step_task_rewards.items():
+                    print(f"| {f'Per step {k}':<50}: {v:<26.3f} |")
+            print(f"| {'Total Reward':<50}: {cumulative_total_rewards:<26.3f} |")
+            print(f"| {'Total Step':<50}: {cumulative_steps:<26d} |")
+            print(f"|{'_' * content_width}|")
+
+            for k in task_reward.keys():
+                if cumulative_task_rewards:
+                    cumulative_task_rewards[k] = 0
+                if per_step_task_rewards:
+                    per_step_task_rewards[k] = 0
+
+            cumulative_total_rewards = 0
             cumulative_steps = 0
 
         # Plot Phase
