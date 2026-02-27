@@ -146,24 +146,15 @@ class UniformVelocityCommand():
     @property
     def command_b(self) -> torch.Tensor:
         """(num_envs, 3): [vx, vy, yaw_rate] in base frame."""
-        if self.is_body_frame:
-            return self.vel_command_b
-        else:
-            vel_w_3d = torch.cat([self.vel_command_w[:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
-            self.vel_command_b[:, :2] = quat_apply_inverse(self.robot.data.root_quat_w[:], vel_w_3d)[:, :2]
-            self.vel_command_b[:, 2] = self.vel_command_w[:, 2].clone()
-            return self.vel_command_b
+        vel_w_3d = torch.cat([self.vel_command_w[:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
+        self.vel_command_b[:, :2] = quat_apply_inverse(self.robot.data.root_quat_w[:], vel_w_3d)[:, :2]
+        self.vel_command_b[:, 2] = self.vel_command_w[:, 2].clone()
+        return self.vel_command_b
     
     @property
     def command_w(self) -> torch.Tensor:
         """(num_envs, 3): [vx, vy, yaw_rate] in world frame."""
-        if self.is_body_frame:
-            vel_b_3d = torch.cat([self.vel_command_b[:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
-            self.vel_command_w[:, :2] = quat_apply(self.robot.data.root_quat_w[:], vel_b_3d)[:, :2]
-            self.vel_command_w[:, 2] = self.vel_command_b[:, 2].clone()
-            return self.vel_command_w
-        else:
-            return self.vel_command_w
+        return self.vel_command_w
     
     @property
     def heading(self) -> torch.Tensor:
@@ -216,29 +207,16 @@ class UniformVelocityCommand():
         # duration
         self.time_left[env_ids] = r.uniform_(*self.cfg.resampling_time_range)
 
-        if self.is_body_frame:
-            # linear vel in body frame
-            self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
-            self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
-            # yaw rate (may be overridden by heading post-process)
-            self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
+        # linear vel in body frame
+        self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+        self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
+        # yaw rate (may be overridden by heading post-process)
+        self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
 
-            # commadns in world frame
-            vel_b_3d = torch.cat([self.vel_command_b[env_ids, :2], torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
-            self.vel_command_w[env_ids, :2] = quat_apply(self.robot.data.root_quat_w[env_ids], vel_b_3d)[:, :2]
-            self.vel_command_w[env_ids, 2] = self.vel_command_b[env_ids, 2].clone()
-        else:
-            # commands in world frame
-            self.vel_command_w[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
-            self.vel_command_w[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
-            # # yaw rate (may be overridden by heading post-process)
-            self.vel_command_w[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
-
-            # commadns in body frame
-            vel_w_3d = torch.cat([self.vel_command_w[env_ids, :2], torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
-            self.vel_command_b[env_ids, :2] = quat_apply_inverse(self.robot.data.root_quat_w[env_ids], vel_w_3d)[:, :2]
-            self.vel_command_b[env_ids, 2] = self.vel_command_w[env_ids, 2].clone()
-
+        # commadns in world frame
+        vel_b_3d = torch.cat([self.vel_command_b[env_ids, :2], torch.zeros((len(env_ids), 1), device=self.device)], dim=-1)
+        self.vel_command_w[env_ids, :2] = quat_apply(self.robot.data.root_quat_w[env_ids], vel_b_3d)[:, :2]
+        self.vel_command_w[env_ids, 2] = self.vel_command_b[env_ids, 2].clone()
 
         # heading env selection (probabilistic)
         if self.cfg.heading_command:
