@@ -484,9 +484,11 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # gait_reward = torch.clamp(gait_reward, max=0.4)
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
-        contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
+        contact_schedule = ((self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule).clip(min=0.0)
         # footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
         gait_reward = contact_schedule
+
+        # print(f"gait : {gait_reward.item():.2f}")
 
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
