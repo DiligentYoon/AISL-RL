@@ -482,15 +482,18 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
-        in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
-        single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
-        gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
-        gait_reward = torch.clamp(gait_reward, max=0.4)
+        # in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
+        # single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
+        # gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
+        # gait_reward = torch.clamp(gait_reward, max=0.4)
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
-        # contact_schedule = ((self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule).clip(min=0.0)
+        s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
+        diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
+        # /ontact_schedule = ((self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule).clip(min=0.0)
         # footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
         # gait_reward = contact_schedule
+        gait_reward = (diff * s).clamp(min=0.0)
 
         # print(f"gait : {gait_reward.item():.2f}")
 
