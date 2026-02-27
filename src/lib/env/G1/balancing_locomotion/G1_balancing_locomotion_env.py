@@ -268,27 +268,29 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             observations = {
                 "leg": torch.cat(
                     [
+                        self.CoM[:, 2:3],
+                        self.root_heading.unsqueeze(-1),
                         self.root_lin_vel_b,                            # [E, 3]
-                        self.root_lin_vel_b,                            # [E, 3]    
+                        self.root_ang_vel_b,                            # [E, 3]    
                         self.projected_gravity,                          # [E, 3]
                         self.command_inputs_b,                             # [E, 3]
                         self.phase_sin.unsqueeze(-1),                       # [E, 1]
                         self.phase_cos.unsqueeze(-1),                       # [E, 1]
                         self.joint_pos[:, self.total_leg_joint_ids], # [E, 12]
                         self.joint_vel[:, self.total_leg_joint_ids], # [E, 12]
-                        self.actions["leg"]                              # [E, 12]
                     ],
                     dim=-1
                 ),
                 "arm": torch.cat(
                     [
+                        self.CoM[:, 2:3],
+                        self.root_heading.unsqueeze(-1),
                         self.root_lin_vel_b,                            # [E, 3]
-                        self.root_lin_vel_b,                            # [E, 3]
+                        self.root_ang_vel_b,                            # [E, 3]
                         self.projected_gravity,                          # [E, 3]
                         self.command_inputs_b,                             # [E, 3]
                         self.joint_pos[:, self.total_arm_joint_ids], # [E, 25]
                         self.joint_vel[:, self.total_arm_joint_ids], # [E, 25]
-                        self.actions["arm"]                              # [E, 25]
                     ],
                     dim=-1
                 ),
@@ -296,15 +298,16 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         else:
             observations = torch.cat(
                 [
+                    self.CoM[:, 2:3],
+                    self.root_heading.unsqueeze(-1),
                     self.root_lin_vel_b,           # [E, 3]
-                    self.root_lin_vel_b,           # [E, 3]
+                    self.root_ang_vel_b,           # [E, 3]
                     self.projected_gravity,         # [E, 3]
                     self.command_inputs_b,            # [E, 3]
-                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos,             # [E, 37]
-                    self.joint_vel,             # [E, 37]
-                    self.actions                    # [E, 37]  
+                    self.phase_sin.unsqueeze(-1),     # [E, 1]
+                    self.phase_cos.unsqueeze(-1),     # [E, 1]
+                    self.joint_pos,                   # [E, 37]
+                    self.joint_vel,                   # [E, 37]
                 ],
                 dim=-1
             )
@@ -318,15 +321,16 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             sorted_actions = actions[:, self.mapping_sort_ids]
             shared_states = torch.cat(
                 [
+                    self.CoM[:, 2:3],
+                    self.root_heading.unsqueeze(-1),
                     self.root_lin_vel_b,           # [E, 3]
-                    self.root_lin_vel_b,           # [E, 3]
+                    self.root_ang_vel_b,           # [E, 3]
                     self.projected_gravity,         # [E, 3]
                     self.command_inputs_b,          # [E, 3]
                     self.phase_sin.unsqueeze(-1),   # [E, 1]
                     self.phase_cos.unsqueeze(-1),   # [E, 1]
                     self.joint_pos,                 # [E, 37]
-                    self.joint_vel,             # [E, 37]
-                    sorted_actions,                 # [E, 37]
+                    self.joint_vel,                 # [E, 37]
                 ], dim=-1) 
             
             states = {
@@ -501,7 +505,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
-            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.ankle_roll_link_ids], dim=1)
+            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.ankle_roll_link_ids+self.hip_knee_joint_ids], dim=1)
             joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
             joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
             # joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
@@ -629,7 +633,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.update_curriculum()
         # Randomization by Event-based randomizer
         self._robot.reset(env_ids)
-        self.commands.reset(env_ids)
         super()._reset_idx(env_ids)
 
         # Prev State Initialization
@@ -661,6 +664,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.phase[env_ids] = 0
         self.update_command_ids[env_ids] = True
         self.update_count[env_ids] = 0
+        # Command
+        self.commands.reset(env_ids)
         self.step_period, self.full_step_period, self.dstep_width = resample_commands(self.step_period,
                                                                                       self.full_step_period,
                                                                                       self.dstep_width,

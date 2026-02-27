@@ -523,8 +523,8 @@ class CooperativeMAPPO(MAPPO):
                 shared_params = list(self.shared_actor.shared_backbone.parameters())
 
                 # Total Loss
-                policy_total = (policy_losses["arm"] + entropy_losses["arm"]) + \
-                               (policy_losses["leg"] + entropy_losses["leg"])
+                policy_total = 0.7*(policy_losses["arm"] + entropy_losses["arm"]) + \
+                               1.0*(policy_losses["leg"] + entropy_losses["leg"])
 
                 value_total  = value_losses["arm"] + value_losses["leg"]
 
