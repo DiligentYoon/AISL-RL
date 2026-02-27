@@ -496,8 +496,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
             joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
-            joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-            joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
+            joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
+            joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
+            # joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
+            # joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
             action_rate_penalty_leg   = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
             
             joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
