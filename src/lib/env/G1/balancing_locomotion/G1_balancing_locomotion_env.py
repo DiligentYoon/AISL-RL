@@ -482,7 +482,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
         gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
         gait_reward = torch.clamp(gait_reward, max=0.4)
-        gait_reward *= torch.norm(self.command_inputs_b[:, :2], dim=1) > 0.1
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
         # contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
@@ -500,7 +499,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
-            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
+            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.ankle_roll_link_ids], dim=1)
             joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
             joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
             # joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
