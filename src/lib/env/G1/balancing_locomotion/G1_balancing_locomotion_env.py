@@ -478,15 +478,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Termination (Torso)
         terminate_penalty = -self.reset_terminated.float()
         # Gait Rewards (Leg)
-        in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
-        single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
-        gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
-        gait_reward = torch.clamp(gait_reward, max=0.4)
+        # in_mode_time = torch.where(self.in_contact, self.contact_time, self.air_time)
+        # single_stance = torch.sum(self.in_contact.int(), dim=1) == 1
+        # gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
+        # gait_reward = torch.clamp(gait_reward, max=0.4)
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
-        # contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
+        contact_schedule = (self.in_contact[:, 1].int() - self.in_contact[:, 0].int()) * self.contact_schedule
         # footstep_tracking = torch.exp(-footstep_loc_error / 0.5**2) + torch.exp(-footstep_rot_error / 0.5**2)
-        # gait_reward = contact_schedule
+        gait_reward = contact_schedule
 
         # Sliding Penalty (Leg)
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
