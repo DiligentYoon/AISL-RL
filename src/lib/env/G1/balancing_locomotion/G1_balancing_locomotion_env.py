@@ -688,7 +688,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b = self.commands.command_b
         self.command_inputs_w = self.commands.command_w
-        self.command_inputs_yaw = self.commands.command_yaw
         self.command_heading = self.commands.heading
         self.command_heading_sin = torch.sin(self.command_heading)
         self.command_heading_cos = torch.cos(self.command_heading)
