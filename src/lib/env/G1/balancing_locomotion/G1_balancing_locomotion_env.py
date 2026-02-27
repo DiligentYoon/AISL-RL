@@ -609,8 +609,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
         died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_lin_vel_b, dim=-1) >= self.cfg.termination_ang_vel
-        died_fall_3 = torch.norm(target_foot_pos[:, :2] - swing_foot_pos[:, :2], dim=-1) >= self.cfg.termination_target_foot
-        died = died_fall | died_fall_2 | died_fall_3 | died_ang
+        # died_fall_3 = torch.norm(target_foot_pos[:, :2] - swing_foot_pos[:, :2], dim=-1) >= self.cfg.termination_target_foot
+        died = died_fall | died_fall_2 | died_ang
         return died, time_out
 
 
@@ -693,8 +693,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # ==== Information related to Gait Guidance ====
         # Foot pos (World Frame)
-        self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
-        self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        # self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        # self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
         # # Counting variables
         # if env_ids is not None:
         #     mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
