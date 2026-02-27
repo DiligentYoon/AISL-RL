@@ -170,23 +170,23 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         
         # ============== Target Foot Cube and Rotation Frame ================ # 
-        pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
-        z_height = 0.01 * torch.ones_like(pos[..., :1])             # [E, 2, 1]
-        target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
+        # pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
+        # z_height = 0.01 * torch.ones_like(pos[..., :1])             # [E, 2, 1]
+        # target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
 
-        target_yaw = self.target_footstep_w[..., 2].view(-1).clone()    # [E*2, 1]
-        target_quat = quat_from_euler_xyz(torch.zeros_like(target_yaw), # [E*2, 1]
-                                          torch.zeros_like(target_yaw), # [E*2, 1]
-                                          target_yaw)                   # [E*2, 1]
+        # target_yaw = self.target_footstep_w[..., 2].view(-1).clone()    # [E*2, 1]
+        # target_quat = quat_from_euler_xyz(torch.zeros_like(target_yaw), # [E*2, 1]
+        #                                   torch.zeros_like(target_yaw), # [E*2, 1]
+        #                                   target_yaw)                   # [E*2, 1]
         
-        # Color difference between support (green) and swing (red) foot
-        marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
+        # # Color difference between support (green) and swing (red) foot
+        # marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
 
         
-        # =============== Foot Rotation Frame =============== #
-        foot_pos = self.foot_pos_w.clone().view(-1, 3)
-        foot_rot = self.foot_rot_w.clone().view(-1, 4)
-        foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
+        # # =============== Foot Rotation Frame =============== #
+        # foot_pos = self.foot_pos_w.clone().view(-1, 3)
+        # foot_rot = self.foot_rot_w.clone().view(-1, 4)
+        # foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
 
         # =============== Torso ================
         torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
@@ -195,15 +195,15 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        self.target_foot_visualizer.visualize(translations=target_pos, 
-                                              orientations=target_quat, 
-                                              marker_indices=marker_indices)
-        self.target_foot_rotation_visalizer.visualize(translations=target_pos,
-                                                      orientations=target_quat,
-                                                      marker_indices=foot_marker_indices)
-        self.foot_rotation_visalizer.visualize(translations=foot_pos,
-                                               orientations=foot_rot,
-                                               marker_indices=foot_marker_indices)
+        # self.target_foot_visualizer.visualize(translations=target_pos, 
+        #                                       orientations=target_quat, 
+        #                                       marker_indices=marker_indices)
+        # self.target_foot_rotation_visalizer.visualize(translations=target_pos,
+        #                                               orientations=target_quat,
+        #                                               marker_indices=foot_marker_indices)
+        # self.foot_rotation_visalizer.visualize(translations=foot_pos,
+        #                                        orientations=foot_rot,
+        #                                        marker_indices=foot_marker_indices)
         self.torso_rotation_visalizer.visualize(translations=torso_pos,
                                                 orientations=torso_rot)
 
@@ -476,7 +476,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         in_mode_time = torch.where(in_contact, self.contact_time, self.air_time)
         single_stance = torch.sum(in_contact.int(), dim=1) == 1
         gait_reward = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
-        gait_reward = torch.clamp(gait_reward, max=2.0)
+        gait_reward = torch.clamp(gait_reward, max=0.4)
         gait_reward *= torch.norm(self.command_inputs_b[:, :2], dim=1) > 0.1
         # footstep_loc_error = torch.sum(self.step_location_offset * self.foot_on_swing.float(), dim=1)
         # footstep_rot_error = torch.sum(self.step_rotation_offset * self.foot_on_swing.float(), dim=1)
@@ -693,8 +693,8 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
 
         # ==== Information related to Gait Guidance ====
         # Foot pos (World Frame)
-        # self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
-        # self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        self.foot_pos_w = self._robot.data.body_link_pos_w[:, self.ankle_roll_link_ids] # [Left, Right]
+        self.foot_rot_w = self._robot.data.body_link_quat_w[:, self.ankle_roll_link_ids] # [Left, Right]
         # # Counting variables
         # if env_ids is not None:
         #     mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
