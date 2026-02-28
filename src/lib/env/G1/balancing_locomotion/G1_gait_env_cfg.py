@@ -161,8 +161,8 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     time_period_max = 0.35
     dstep_min = 0.35
     dstep_max = 0.35
-    z_c_min = 0.65
-    z_c_max = 0.65
+    z_c_min = 0.75
+    z_c_max = 0.75
 
 
     # Simulation

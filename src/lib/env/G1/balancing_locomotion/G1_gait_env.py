@@ -110,6 +110,33 @@ class G1GaitEnv(G1BaseEnv):
                 self.torso_rotation_visalizer.set_visibility(False)
 
 
+    def _debug_vis_callback(self, event):
+        if not self._robot.is_initialized:
+            return
+        # ============== Arrow ================ # 
+        # Arrow: get marker location
+        base_pos_w = self._robot.data.root_pos_w.clone()
+        base_pos_w[:, 2] += 0.5
+        # Arrow: resolve the scales and quaternions
+        vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
+                                                                                              xy_velocity=self.commands.command_b)
+        vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
+                                                                                      xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
+
+        zeros = torch.zeros_like(self.command_heading)
+        vel_des_arrow_quat = quat_from_euler_xyz(zeros, zeros, self.command_heading)
+        vel_arrow_quat = quat_from_euler_xyz(zeros, zeros, self.root_heading)
+
+        # =============== Root ================
+        root_pos = self.root_pos_w[:, :3]
+        root_rot = self.root_rot_w[:, :4]
+
+        # display markers
+        self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
+        self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
+        self.torso_rotation_visalizer.visualize(translations=root_pos,
+                                                orientations=root_rot)
+
     def _setup_scene(self):
         super()._setup_scene()
         # sensor
