@@ -738,10 +738,10 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
             self.phase += 1 / self.full_step_period
             self.phase_count += 1
             self.update_count += 1
-            # Phase and command update signal
+            # Phase and step update signal
             self.update_phase_ids = (self.phase_count >= self.full_step_period)
             self.update_command_ids = (self.update_count >= self.step_period)
-            # Counting variables
+            # Schedule variables
             self.phase_count[self.update_phase_ids] = 0
             self.phase[self.update_phase_ids] = 0
             self.update_count[self.update_command_ids] = 0
