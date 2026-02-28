@@ -19,12 +19,12 @@ from isaaclab.managers import SceneEntityCfg
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
-from lib.env.G1.balancing_locomotion.G1_balancing_locomotion_env_cfg import G1BalancingLocomotionEnvCfg
+from lib.env.G1.lipm.G1_lipm_env_cfg import G1LIPMEnvCfg
 
-class G1BalancingLocomotionEnv(G1BaseEnv):
-    cfg: G1BalancingLocomotionEnvCfg
+class G1LIPMEnv(G1BaseEnv):
+    cfg: G1LIPMEnvCfg
 
-    def __init__(self, cfg: G1BalancingLocomotionEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: G1LIPMEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # Commands for reference generator

@@ -19,7 +19,7 @@ from isaaclab.managers import SceneEntityCfg
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
-from lib.env.G1.balancing_locomotion.G1_gait_env_cfg import G1GaitEnvCfg
+from lib.env.G1.gait.G1_gait_env_cfg import G1GaitEnvCfg
 
 class G1GaitEnv(G1BaseEnv):
     cfg: G1GaitEnvCfg
@@ -309,7 +309,7 @@ class G1GaitEnv(G1BaseEnv):
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
                       self.cfg.w_joint_torque        * joint_torque_penalty_leg        + \
                       self.cfg.w_joint_vel           * joint_vel_penalty_leg           + \
-                      self.cfg.w_action_rate        * action_rate_penalty_leg 
+                      self.cfg.w_action_rate         * action_rate_penalty_leg 
 
         # Dictionary key order (alphabetical order in dictionary)
         rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]

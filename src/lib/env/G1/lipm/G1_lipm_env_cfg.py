@@ -101,7 +101,7 @@ class EventCfg:
 
 
 @configclass
-class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
+class G1LIPMEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200
