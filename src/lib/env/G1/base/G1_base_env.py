@@ -34,7 +34,10 @@ class G1BaseEnv(Env):
                                                                r".*_shoulder_(pitch|roll|yaw)_joint",
                                                                r".*_elbow_(pitch|roll)_joint",
                                                                r".*_(zero|one|two|three|four|five|six)_joint"])
-        
+        # Joint Limits
+        self.leg_joint_limits = self.joint_pos_limits[:, self.total_leg_joint_ids]
+        self.arm_joint_limits = self.joint_pos_limits[:, self.total_arm_joint_ids]
+
     # Create scene
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)

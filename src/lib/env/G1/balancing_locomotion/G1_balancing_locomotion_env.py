@@ -21,10 +21,6 @@ from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
 from lib.env.G1.balancing_locomotion.G1_balancing_locomotion_env_cfg import G1BalancingLocomotionEnvCfg
 
-def normalize_angle(x):
-    return torch.atan2(torch.sin(x), torch.cos(x))
-
-
 class G1BalancingLocomotionEnv(G1BaseEnv):
     cfg: G1BalancingLocomotionEnvCfg
 
@@ -216,7 +212,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         self.contact_sensors = self.scene.sensors["contact_forces"]
         # self.height_scanner = self.scene.sensors["height_scanner"]
         # self.height_scanner.update_period = self.cfg.decimation * self.cfg.sim_dt
-        self.contact_sensors.update_period = self.cfg.sim_dt * self.cfg.decimation
+        self.contact_sensors.update_period = self.cfg.sim_dt
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # add ground plane
@@ -317,8 +313,6 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
     def _get_states(self) -> dict[str, torch.Tensor] | torch.Tensor:
         if self.cfg.num_agents > 1:
             # Multi Agent
-            actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
-            sorted_actions = actions[:, self.mapping_sort_ids]
             shared_states = torch.cat(
                 [
                     self.CoM[:, 2:3],

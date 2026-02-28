@@ -223,6 +223,11 @@ def main():
     else:
         print("[INFO] Unfortunately a pre-trained checkpoint is not found for this task.")
         resume_path = None
+    
+    # Verify save logic
+    verify_save_logic = True
+    if verify_save_logic:
+        test_agent = copy.deepcopy(agent)
 
     # ======================= Training ============================
 
@@ -298,7 +303,8 @@ def main():
         # Mean of per-step rewards
         CLI_step_reward_means.append(torch.mean(rewards).item())
 
-        finished_episodes = (terminated + truncated).nonzero(as_tuple=False)
+        done = (terminated | truncated).squeeze(-1)
+        finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
         if finished_episodes.numel():
             # Storage cumulative rewards and timesteps
             track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
@@ -408,6 +414,24 @@ def main():
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
             checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
             agent.save(checkpoint_path, checkpoint_path_jit)
+
+            if verify_save_logic:
+                test_agent.load(checkpoint_path)
+                test_agent.set_running_mode("eval")
+                with torch.no_grad():
+                    agent.set_running_mode("eval")
+                    actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    test_actions, test_nonscaled_actions, test_action_log_probs, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    agent.set_running_mode("train")
+                
+                if not torch.allclose(actions, test_actions):
+                    max_err = (actions - test_actions).abs().max().item()
+                    raise RuntimeError(f"Model mismatch. Please check the save logic. [Max Error : {max_err}]")
+                
+                if not torch.allclose(nonscaled_actions, test_nonscaled_actions):
+                    max_err = (nonscaled_actions - test_nonscaled_actions).abs().max().item()
+                    raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
+
 
         # update
         obs = next_obs
