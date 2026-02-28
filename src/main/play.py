@@ -42,6 +42,7 @@ import time
 import torch
 import copy
 import numpy as np
+import collections
 
 from datetime import datetime
 
@@ -109,6 +110,7 @@ def main():
         act_size = {}
         buffers = {}
         possible_agents = env._unwrapped.cfg.possible_agents
+        num_agent = len(possible_agents)
         for uid in possible_agents:
             observation_space = env.observation_space[uid]
             action_space = env.action_space[uid]
@@ -231,77 +233,110 @@ def main():
 
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
+    write_interval = int(env._unwrapped.cfg.episode_length_s / (env._unwrapped.cfg.sim_dt * env._unwrapped.cfg.decimation))
     timestep = 0
-    per_step_task_rewards = None
-    cumulative_task_rewards = None
-    cumulative_total_rewards = 0
-    cumulative_steps = 0
+    tracking_data = collections.defaultdict(list)
+    track_cumulative_rewards   = collections.deque(maxlen=500)
+    track_cumulative_timesteps = collections.deque(maxlen=500)
+    cumulative_rewards = None
+    cumulative_timesteps = None
     # simulate environment
     while simulation_app.is_running():
-        start_time = time.time()
-
         # run everything in inference mode
         with torch.no_grad():
             # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
+            # update rollout number
+            timestep += 1
 
-        # Task reward
+        # ============ Logging phase =============
+
+        # Data setting for logging
+        if multi_agent:
+            logged_reward = rewards.view(-1, num_agent)
+            logged_reward = torch.mean(logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        else:
+            logged_reward = rewards
+
+        if cumulative_rewards is None:
+            cumulative_rewards = torch.zeros_like(logged_reward, dtype=torch.float32)
+            cumulative_timesteps = torch.zeros_like(logged_reward, dtype=torch.int32)
+
+        # Record data
+        tracking_data["Per step Reward / Maximum Value"].append(torch.max(logged_reward).item())
+        tracking_data["Per step Reward / Minimum Value"].append(torch.min(logged_reward).item())
+        tracking_data["Per step Reward / Mean Value"].append(torch.mean(logged_reward).item())
+
+        # Accumulates per-step rewards
+        cumulative_rewards.add_(logged_reward)
+        cumulative_timesteps.add_(1)
+
+        done = (terminated | truncated).squeeze(-1)
+        finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
+        if finished_episodes.numel():
+            # Storage cumulative rewards and timesteps
+            track_cumulative_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+            track_cumulative_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].reshape(-1).tolist())
+            # Reset the cumulative rewards and timesteps
+            cumulative_rewards[finished_episodes] = 0
+            cumulative_timesteps[finished_episodes] = 0
+
+        # Record cumulative data
+        if len(track_cumulative_rewards):
+            track_reward_np = np.array(track_cumulative_rewards)
+            track_timestep_np = np.array(track_cumulative_timesteps)
+
+            tracking_data["Total Reward / Maximum Value"].append(np.max(track_reward_np))
+            tracking_data["Total Reward / Minimum Value"].append(np.min(track_reward_np))
+            tracking_data["Total Reward / Mean Value"].append(np.mean(track_reward_np))
+
+            tracking_data["Total Episode / Maximum Value"].append(np.max(track_timestep_np))
+            tracking_data["Total Episode / Minimum Value"].append(np.min(track_timestep_np))
+            tracking_data["Total Episode / Mean Value"].append(np.mean(track_timestep_np))
+
+            # reset data containers for next iteration
+            track_cumulative_rewards.clear()
+            track_cumulative_timesteps.clear()
+
+        # Record Task Reward data (Only per step)
         task_reward = next_infos.get("reward", None)
         if task_reward is not None:
-            if cumulative_task_rewards is None:
-                # Initialization
-                cumulative_task_rewards = {}
-                for k in task_reward.keys():
-                    cumulative_task_rewards[k] = 0
-            
-            if per_step_task_rewards is None:
-                # Initialization
-                per_step_task_rewards = {}
-                for k in task_reward.keys():
-                    per_step_task_rewards[k] = 0
-            
             for k, v in task_reward.items():
-                cumulative_task_rewards[k] += v.mean().item()
+                # Mean value of env axis
+                key = f"Per step {k}"
+                tracking_data[key].append(torch.mean(v).item())
 
-        # Total reward
-        cumulative_total_rewards += rewards[0].mean().item()
-        cumulative_steps += 1
-
-        # logging and reset metric
-        if terminated[0] | truncated[0]:
-            # Per-step calculation
-            per_step_total_rewards = cumulative_total_rewards / cumulative_steps
-            if cumulative_task_rewards:
-                for k, v in cumulative_task_rewards.items():
-                    per_step_task_rewards[k] = cumulative_task_rewards[k] / cumulative_steps
-
-            content_width = 80
-            line_header = "Evaluation Metric Table"
+        # CLI Logging with specific interval
+        if timestep % write_interval == 0:
+            last_prefix = None
+            # sorted_keys = sorted(tracking_data.keys())
+            content_width = 90
+            line_header = f"Metric Table of {args_cli.task} Task"
             print(f" {'_' * content_width}")
             print(f"|{' ' * content_width}|")
             print(f"|{line_header.center(content_width)}|")
             print(f"|{'_' * content_width}|")
             print(f"|{' ' * content_width}|")
-            if cumulative_task_rewards:
-                for k, v in cumulative_task_rewards.items():
-                    print(f"| {k:<50}: {v:<26.3f} |")
-            if per_step_task_rewards:
-                for k, v in per_step_task_rewards.items():
-                    print(f"| {f'Per step {k}':<50}: {v:<26.3f} |")
-            print(f"| {'Total Reward':<50}: {cumulative_total_rewards:<26.3f} |")
-            print(f"| {'Total Step':<50}: {cumulative_steps:<26d} |")
+
+            for k, v in tracking_data.items():
+                current_prefix = k.split('/')[0].strip() if '/' in k else "Other"
+
+                if last_prefix is not None and last_prefix != current_prefix:
+                    print(f"|{'-' * (content_width)}|")
+                last_prefix = current_prefix
+
+                if k.endswith("(min)"):
+                    print(f"| {k:<50}: {np.min(v):<36.3f} |")
+                elif k.endswith("(max)"):
+                    print(f"| {k:<50}: {np.max(v):<36.3f} |")
+                else:
+                    print(f"| {k:<50}: {np.mean(v):<36.3f} |")
             print(f"|{'_' * content_width}|")
 
-            for k in task_reward.keys():
-                if cumulative_task_rewards:
-                    cumulative_task_rewards[k] = 0
-                if per_step_task_rewards:
-                    per_step_task_rewards[k] = 0
-
-            cumulative_total_rewards = 0
-            cumulative_steps = 0
+            # reset data containers for next iteration
+            tracking_data.clear()
 
         # Plot Phase
         if plot is not None:
@@ -309,19 +344,16 @@ def main():
             if "viz_data" in next_infos:
                 plot.update(next_infos["viz_data"])
 
-            # Plotter should be resetted in accordance with env reset (Assume single env (index = 0))
+            # Plotter should be resetted in accordance to env reset (compatible only with env_ids=0)
             if terminated[0] | truncated[0]:
                 plot.reset()
 
         # Video update
-        if args_cli.video:
-            timestep += 1
+        if args_cli.video and timestep == args_cli.video_length:
             # exit the play loop after recording one video
-            if timestep == args_cli.video_length:
-                break
+            break
         
         # state update
-        # simulation_app.update()
         obs = next_obs
         states = next_states
         infos = next_infos
