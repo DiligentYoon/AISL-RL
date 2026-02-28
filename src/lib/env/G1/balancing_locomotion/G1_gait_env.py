@@ -258,7 +258,7 @@ class G1GaitEnv(G1BaseEnv):
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
-        gait_reward = (diff * s).clamp(min=0.0)
+        gait_reward = (diff * s)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding

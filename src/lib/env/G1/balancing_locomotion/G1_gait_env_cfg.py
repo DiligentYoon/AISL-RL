@@ -132,7 +132,7 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     w_track_heading: float = 1.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 3.0
+    w_feet_gait:  float = 4.0
     w_feet_slide: float = 2.0
     w_flat:       float = 1.0
 

@@ -122,6 +122,7 @@ def main():
         act_size = {}
         buffers = {}
         possible_agents = env._unwrapped.cfg.possible_agents
+        num_agent = len(possible_agents)
         for uid in possible_agents:
             observation_space = env.observation_space[uid]
             action_space = env.action_space[uid]
@@ -293,15 +294,21 @@ def main():
         # =============== Logging Phase ================
 
         # Data setting for logging
+        if multi_agent:
+            logged_reward = rewards.view(-1, num_agent)
+            logged_reward = torch.mean(logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        else:
+            logged_reward = rewards
+
         if cumulative_rewards is None:
-            cumulative_rewards = torch.zeros_like(rewards, dtype=torch.float32)
-            cumulative_timesteps = torch.zeros_like(rewards, dtype=torch.int32)
+            cumulative_rewards = torch.zeros_like(logged_reward, dtype=torch.float32)
+            cumulative_timesteps = torch.zeros_like(logged_reward, dtype=torch.int32)
         
         # Accumulates per-step rewards
-        cumulative_rewards.add_(rewards)
+        cumulative_rewards.add_(logged_reward)
         cumulative_timesteps.add_(1)
-        # Mean of per-step rewards
-        CLI_step_reward_means.append(torch.mean(rewards).item())
+        # Mean of per-step rewards (Mean value of env axis)
+        CLI_step_reward_means.append(torch.mean(logged_reward, dim=0).item())
 
         done = (terminated | truncated).squeeze(-1)
         finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
@@ -316,15 +323,15 @@ def main():
             cumulative_timesteps[finished_episodes] = 0
 
         # record data
-        tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(rewards).item())
-        tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(rewards).item())
-        tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(rewards).item())
+        tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(logged_reward).item())
+        tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(logged_reward).item())
+        tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(logged_reward).item())
 
         task_reward = next_infos.get("reward", None)
         if task_reward is not None:
             for k, v in task_reward.items():
+                # Mean value of env axis
                 tracking_data[k].append(torch.mean(v).item())
-
 
         if len(track_rewards):
             track_reward_np = np.array(track_rewards)
