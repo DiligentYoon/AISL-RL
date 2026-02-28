@@ -142,7 +142,7 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     w_joint_torque: float = 2.0e-5
     w_joint_acc:    float = 1.0e-6
 
-    w_limits:            float = 10.0
+    w_limits:            float = 20.0
     w_deviation_hip:     float = 0.1
     w_deviation_arm:     float = 0.1
     w_deviation_fingers: float = 0.1
