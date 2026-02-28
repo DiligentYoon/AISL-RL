@@ -235,7 +235,7 @@ class G1GaitEnv(G1BaseEnv):
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
-        slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_roll_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
+        slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) 
@@ -342,11 +342,11 @@ class G1GaitEnv(G1BaseEnv):
 
         # Command resampling
         self.commands.reset(env_ids)
-        self.step_period, self.full_step_period, self.dstep_width = resample_commands(self.step_period,
-                                                                                      self.full_step_period,
-                                                                                      env_ids,
-                                                                                      self.step_dt,
-                                                                                      self.cfg.time_period_min, self.cfg.time_period_max)
+        self.step_period, self.full_step_period= resample_commands(self.step_period,
+                                                                   self.full_step_period,
+                                                                   env_ids,
+                                                                   self.step_dt,
+                                                                   self.cfg.time_period_min, self.cfg.time_period_max)
         
         self._compute_intermediate_values(env_ids)
 
