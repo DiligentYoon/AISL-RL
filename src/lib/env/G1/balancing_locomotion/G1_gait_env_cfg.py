@@ -128,32 +128,35 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 1.0
-    w_track_ang_vel: float = 0.0
+    w_track_lin_vel: float = 4.0
     w_track_heading: float = 1.0
     w_track_height : float = 1.0
 
     w_feet_gait:  float = 3.0
     w_feet_slide: float = 2.0
-    w_flat:       float = 2.0
+    w_flat:       float = 1.0
 
-    w_lin_vel_z:    float = 0.3
-    w_ang_vel_xy:   float = 0.3
-    w_joint_torque: float = 2.0e-5
-    w_joint_acc:    float = 1.0e-6
+    w_lin_vel_z:          float = 0.1
+    w_ang_vel_xy:         float = 0.01
+    w_joint_torque:       float = 1.0e-5
+    w_joint_torque_limit: float = 1.0e-3
+    w_joint_acc:          float = 1.0e-6
+    w_joint_vel:          float = 1.0e-3
 
-    w_limits:            float = 20.0
-    w_deviation_hip:     float = 0.1
+    w_limits:            float = 10.0
+    w_deviation_hip:     float = 1.0
+    w_deviation_torso:   float = 1.0
     w_deviation_arm:     float = 0.1
-    w_deviation_fingers: float = 0.1
-    w_deviation_torso:   float = 0.3
+    w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.0
 
-    w_termination: float = 200
+    w_termination: float = 100
     termination_height: float = 0.45
     termination_gravity: float = 0.5
     termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
+
+    soft_torque_limit: float = 0.9
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2

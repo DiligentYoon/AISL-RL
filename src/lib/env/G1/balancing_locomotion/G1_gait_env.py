@@ -271,38 +271,42 @@ class G1GaitEnv(G1BaseEnv):
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
 
-        joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
-        joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-        joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
+        joint_limit_penalty_leg         = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
+        joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
+        joint_torque_penalty_leg        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
+        joint_vel_penalty_leg           = -torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
         
         joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
+        joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
         joint_torque_penalty_arm  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
-        joint_acc_penalty_arm     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_arm_joint_ids]), dim=1)
+        joint_vel_penalty_arm     = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
 
         # Multi Agent
-        common_rewards = self.cfg.w_track_lin_vel    * lin_vel_rewards     + \
-                            self.cfg.w_track_heading * heading_rewards     + \
-                            self.cfg.w_track_height  * height_rewards      + \
-                            self.cfg.w_flat          * flat_rewards        + \
-                            self.cfg.w_lin_vel_z     * lin_vel_z_penalty   + \
-                            self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
-                            self.cfg.w_termination   * terminate_penalty
+        common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
+                         self.cfg.w_track_heading * heading_rewards     + \
+                         self.cfg.w_track_height  * height_rewards      + \
+                         self.cfg.w_flat          * flat_rewards        + \
+                         self.cfg.w_lin_vel_z     * lin_vel_z_penalty   + \
+                         self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
+                         self.cfg.w_termination   * terminate_penalty
         
-        arm_rewards = common_rewards                                               + \
-                    self.cfg.w_deviation_torso   * joint_deviation_penalty_torso   + \
-                    self.cfg.w_deviation_arm     * joint_deviation_penalty_arms    + \
-                    self.cfg.w_deviation_fingers * joint_deviation_penalty_fingers + \
-                    self.cfg.w_limits            * joint_limit_penalty_arm         + \
-                    self.cfg.w_joint_torque      * joint_torque_penalty_arm        + \
-                    self.cfg.w_joint_acc         * joint_acc_penalty_arm           
+        arm_rewards = common_rewards                                                  + \
+                      self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
+                      self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
+                      self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers + \
+                      self.cfg.w_limits             * joint_limit_penalty_arm         + \
+                      self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
+                      self.cfg.w_joint_torque       * joint_torque_penalty_arm        + \
+                      self.cfg.w_joint_vel          * joint_vel_penalty_arm           
         
-        leg_rewards = common_rewards                                              + \
-                        self.cfg.w_feet_slide    * slide_penalty                  + \
-                        self.cfg.w_feet_gait     * gait_reward                    + \
-                        self.cfg.w_deviation_hip * joint_deviation_penalty_hip_xz + \
-                        self.cfg.w_limits        * joint_limit_penalty_leg        + \
-                        self.cfg.w_joint_torque  * joint_torque_penalty_leg       + \
-                        self.cfg.w_joint_acc     * joint_acc_penalty_leg    
+        leg_rewards = common_rewards                                                   + \
+                      self.cfg.w_feet_slide          * slide_penalty                   + \
+                      self.cfg.w_feet_gait           * gait_reward                     + \
+                      self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
+                      self.cfg.w_limits              * joint_limit_penalty_leg         + \
+                      self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
+                      self.cfg.w_joint_torque        * joint_torque_penalty_leg        + \
+                      self.cfg.w_joint_vel           * joint_vel_penalty_leg    
 
         # Dictionary key order (alphabetical order in dictionary)
         rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2] 
@@ -320,18 +324,20 @@ class G1GaitEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy        * ang_vel_xy_penalty,
-            "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso   * joint_deviation_penalty_torso,
-            "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm     * joint_deviation_penalty_arms,
-            "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers * joint_deviation_penalty_fingers,
-            "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits            * joint_limit_penalty_arm,
-            "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque      * joint_torque_penalty_arm,
-            "Task Penalty / Arm_Acc"               : self.cfg.w_joint_acc         * joint_acc_penalty_arm,
-            "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide        * slide_penalty,
-            "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip     * joint_deviation_penalty_hip_xz,
-            "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits            * joint_limit_penalty_leg,
-            "Task Penalty / Leg_Torque"            : self.cfg.w_joint_torque      * joint_torque_penalty_leg,
-            "Task Penalty / Leg_Acc"               : self.cfg.w_joint_acc         * joint_acc_penalty_leg,
+            "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
+            "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
+            "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
+            "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers,
+            "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
+            "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
+            "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
+            "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
+            "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
+            "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
+            "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
+            "Task Penalty / Leg_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_leg,
+            "Task Penalty / Leg_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_leg,
+            "Task Penalty / Leg_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_leg,
         }
         
         return rewards  
@@ -453,6 +459,7 @@ class G1GaitEnv(G1BaseEnv):
         # Regularization Parameter
         self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
+        self.out_of_limits_torque = torch.abs(self._robot.data.applied_torque - self._robot.data.joint_effort_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.deviation_hip_xz = self.joint_pos[:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[:, self.hip_xz_joint_ids]
         self.deviation_arms = self.joint_pos[:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[:, self.arm_all_joint_ids]
         self.deviation_fingers = self.joint_pos[:, self.finger_all_joint_ids] - self._robot.data.default_joint_pos[:, self.finger_all_joint_ids]
