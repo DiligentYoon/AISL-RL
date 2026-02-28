@@ -44,7 +44,7 @@ agent:
 
   # logging and checkpoint
   experiment:
-    directory: "g1_balancing_locomotion"
+    directory: "g1_lipm"
     experiment_name: ""
     evaluation_interval: auto
     write_interval: auto

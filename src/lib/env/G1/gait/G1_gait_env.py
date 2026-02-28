@@ -432,7 +432,7 @@ class G1GaitEnv(G1BaseEnv):
 
         # Gait guidance
         if env_ids is not None:
-            # Init env 와 progress env를 따로 처리
+            # Individual processing Init env and progress env
             mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
             mask[env_ids] = False
             if torch.any(mask):
@@ -471,7 +471,6 @@ class G1GaitEnv(G1BaseEnv):
         # Phase variable
         self.phase_sin = torch.sin(2*torch.pi*self.phase)
         self.phase_cos = torch.cos(2*torch.pi*self.phase)
-
 
         # Feet Slide
         self.is_contacts = self.contact_sensors.data.net_forces_w_history[:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
