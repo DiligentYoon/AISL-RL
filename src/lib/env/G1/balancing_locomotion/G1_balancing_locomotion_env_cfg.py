@@ -137,6 +137,7 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_feet_slide: float = 2.0
     w_flat:       float = 1.0
 
+    w_lin_vel_z:    float = 0.3
     w_ang_vel_xy:   float = 0.3
     w_joint_torque: float = 2.0e-7
     w_joint_acc:    float = 1.0e-7
@@ -149,17 +150,17 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     w_action_rate:       float = 0.0
 
     w_termination: float = 200
-    termination_height: float = 0.4
-    termination_gravity: float = 0.55
+    termination_height: float = 0.45
+    termination_gravity: float = 0.5
     termination_ang_vel: float = 20.0
     termination_target_foot: float = 1.0
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
+    time_period_min = 0.35
     time_period_max = 0.35
-    dstep_min = 0.25
-    dstep_max = 0.3
+    dstep_min = 0.35
+    dstep_max = 0.35
     z_c_min = 0.6
     z_c_max = 0.7
 

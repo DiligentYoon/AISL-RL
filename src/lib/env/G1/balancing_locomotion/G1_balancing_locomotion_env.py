@@ -504,15 +504,14 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
         joint_deviation_penalty_arms    = -torch.sum(torch.abs(self.deviation_arms), dim=1) 
         joint_deviation_penalty_fingers = -torch.sum(torch.abs(self.deviation_fingers), dim=1)
         joint_deviation_penalty_torso   = -torch.sum(torch.abs(self.deviation_torso), dim=1)
+        lin_vel_z_penalty               = -torch.square(self.root_lin_vel_b[:, 2])
         ang_vel_xy_penalty              = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
 
         if self.cfg.possible_agents is not None:
             # Control Penalty (Leg and Arm)
-            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.ankle_roll_link_ids+self.hip_knee_joint_ids], dim=1)
+            joint_limit_penalty_leg   = -torch.sum(self.out_of_limits_joint[:, self.ankle_joint_ids], dim=1)
             joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.hip_knee_joint_ids]), dim=1)
             joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.hip_knee_joint_ids]), dim=1)
-            # joint_torque_penalty_leg  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-            # joint_acc_penalty_leg     = -torch.sum(torch.square(self._robot.data.joint_acc[:, self.total_leg_joint_ids]), dim=1)
             action_rate_penalty_leg   = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
             
             joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
@@ -525,6 +524,7 @@ class G1BalancingLocomotionEnv(G1BaseEnv):
                              self.cfg.w_track_heading * heading_rewards     + \
                              self.cfg.w_track_height  * height_rewards      + \
                              self.cfg.w_flat          * flat_rewards        + \
+                             self.cfg.w_lin_vel_z     * lin_vel_z_penalty   + \
                              self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
                              self.cfg.w_termination   * terminate_penalty
             
@@ -946,13 +946,18 @@ def resample_commands(step_period: torch.Tensor,
     period_min = int(time_period_min / sim_dt)
     period_max = int(time_period_max / sim_dt)
 
-    step_period[env_ids] = torch.randint(low=period_min, 
-                                         high=period_max,
-                                         size=(len(env_ids),), device=step_period.device)
+    if period_max == period_min:
+        step_period[env_ids] = torch.tensor(period_min, dtype=torch.long,device=step_period.device).repeat(len(env_ids))
+    else:
+        step_period[env_ids] = torch.randint(low=period_min, 
+                                            high=period_max,
+                                            size=(len(env_ids),), device=step_period.device)
     
     full_step_period[env_ids] = 2 * step_period[env_ids]
     
-
-    dstep_width[env_ids] = dstep_width_min + (dstep_width_max - dstep_width_min) * torch.rand(size=(len(env_ids),), device=dstep_width.device)
+    if dstep_width_max == dstep_width_min:
+        dstep_width[env_ids] = torch.tensor(dstep_width_min, dtype=torch.float, device=dstep_width.device).repeat(len(env_ids))
+    else:
+        dstep_width[env_ids] = dstep_width_min + (dstep_width_max - dstep_width_min) * torch.rand(size=(len(env_ids),), device=dstep_width.device)
 
     return step_period, full_step_period, dstep_width
