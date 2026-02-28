@@ -148,7 +148,7 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     w_deviation_torso:   float = 1.0
     w_deviation_arm:     float = 0.1
     w_deviation_fingers: float = 0.05
-    w_action_rate:       float = 0.0
+    w_action_rate:       float = 0.5
 
     w_termination: float = 100
     termination_height: float = 0.45

@@ -275,12 +275,13 @@ class G1GaitEnv(G1BaseEnv):
         joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
         joint_torque_penalty_leg        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
         joint_vel_penalty_leg           = -torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
-        
-        joint_limit_penalty_arm   = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
-        joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
-        joint_torque_penalty_arm  = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
-        joint_vel_penalty_arm     = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
+        action_rate_penalty_leg         = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
 
+        joint_limit_penalty_arm         = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
+        joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
+        joint_torque_penalty_arm        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
+        joint_vel_penalty_arm           = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
+        action_rate_penalty_arm         = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
         # Multi Agent
         common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
                          self.cfg.w_track_heading * heading_rewards     + \
@@ -297,7 +298,8 @@ class G1GaitEnv(G1BaseEnv):
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
                       self.cfg.w_joint_torque       * joint_torque_penalty_arm        + \
-                      self.cfg.w_joint_vel          * joint_vel_penalty_arm           
+                      self.cfg.w_joint_vel          * joint_vel_penalty_arm           + \
+                      self.cfg.w_action_rate        * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                   + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
@@ -306,10 +308,14 @@ class G1GaitEnv(G1BaseEnv):
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
                       self.cfg.w_joint_torque        * joint_torque_penalty_leg        + \
-                      self.cfg.w_joint_vel           * joint_vel_penalty_leg    
+                      self.cfg.w_joint_vel           * joint_vel_penalty_leg           + \
+                      self.cfg.w_action_rate        * action_rate_penalty_leg 
 
         # Dictionary key order (alphabetical order in dictionary)
-        rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2] 
+        rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
+
+        # Update Prev Actions (Multi Agent)
+        self.prev_actions = {k: v.clone() for k, v in self.actions.items()}
 
         # Reward Info for logging
         self.extras["reward"] = {
@@ -332,12 +338,14 @@ class G1GaitEnv(G1BaseEnv):
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
+            "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
             "Task Penalty / Leg_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_leg,
             "Task Penalty / Leg_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_leg,
             "Task Penalty / Leg_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_leg,
+            "Task Penalty / Leg_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_leg,
         }
         
         return rewards  
@@ -373,6 +381,17 @@ class G1GaitEnv(G1BaseEnv):
         self.update_phase_ids[env_ids] = True
         self.command_count[env_ids] = 0
         self.update_command_ids[env_ids] = True
+
+        if hasattr(self, "prev_actions"):
+            self.prev_actions["leg"][env_ids] = 0.0
+            self.prev_actions["arm"][env_ids] = 0.0
+        else:
+            self.prev_actions = {
+                    "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
+                    "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
+            }
+                
+
 
         # Command resampling
         self.commands.reset(env_ids)
