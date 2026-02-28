@@ -135,7 +135,7 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:  float = 4.0
     w_feet_slide: float = 2.0
-    w_flat:       float = 1.0
+    w_flat:       float = 2.0
 
     w_lin_vel_z:    float = 0.3
     w_ang_vel_xy:   float = 0.3

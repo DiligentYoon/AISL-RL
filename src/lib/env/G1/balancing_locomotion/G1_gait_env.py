@@ -254,7 +254,7 @@ class G1GaitEnv(G1BaseEnv):
         height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards 
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
-        flat_rewards = torch.exp(-tilting / 0.5**2)
+        flat_rewards = torch.exp(-tilting / 0.2**2)
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
@@ -346,7 +346,8 @@ class G1GaitEnv(G1BaseEnv):
         projected_gravity_y = self.projected_gravity[:, 1]
 
         died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
-        died_fall_2 = torch.logical_or(projected_gravity_x >= self.cfg.termination_gravity, projected_gravity_y >= self.cfg.termination_gravity)
+        died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
+                                       torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         died = died_fall | died_fall_2 | died_ang
         return died, time_out
