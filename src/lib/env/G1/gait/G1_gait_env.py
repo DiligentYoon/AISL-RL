@@ -477,7 +477,7 @@ class G1GaitEnv(G1BaseEnv):
         # Regularization Parameter
         self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
-        self.out_of_limits_torque = torch.abs(self._robot.data.applied_torque - self._robot.data.joint_effort_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self._robot.data.joint_effort_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.deviation_hip_xz = self.joint_pos[:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[:, self.hip_xz_joint_ids]
         self.deviation_arms = self.joint_pos[:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[:, self.arm_all_joint_ids]
         self.deviation_fingers = self.joint_pos[:, self.finger_all_joint_ids] - self._robot.data.default_joint_pos[:, self.finger_all_joint_ids]

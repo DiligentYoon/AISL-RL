@@ -151,7 +151,7 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     w_action_rate:       float = 0.05
 
     w_termination: float = 200
-    termination_height: float = 0.45
+    termination_height: float = 0.3
     termination_gravity: float = 0.5
     termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
