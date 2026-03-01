@@ -15,8 +15,6 @@ from isaaclab.markers import VisualizationMarkers
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
 
 from isaaclab.sensors import ContactSensor
-from isaaclab.managers import SceneEntityCfg
-from isaacsim.core.utils import bounds
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
@@ -216,12 +214,6 @@ class G1LIPMEnv(G1BaseEnv):
         # add commands cfg
         self.cfg.commands.num_envs = self.scene.num_envs
         self.cfg.commands.step_dt = self.step_dt
-
-        robot_prim_path = "/World/envs/env_0/Robot"
-        robot_bbox_cache = bounds.create_bbox_cache()
-        robot_aabb = bounds.compute_aabb(bbox_cache=robot_bbox_cache,
-                                         prim_path=robot_prim_path,
-                                         include_children=True)
 
 
     def _pre_physics_step(self, actions: dict[str, torch.Tensor] | torch.Tensor):
