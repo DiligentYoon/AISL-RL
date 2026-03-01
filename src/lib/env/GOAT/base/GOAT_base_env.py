@@ -22,7 +22,7 @@ class GOATBaseEnv(Env):
         self.joint_pos_limits = self._robot.data.joint_pos_limits
         self.joint_vel_limits = self._robot.data.joint_vel_limits
         # Joint Torque Limits
-        self.torque_limits = torch.tensor(self.cfg.torque_limits, device=self.device)  # Isaac sim cannot bring torque limits from urdf
+        self.torque_limits = torch.tensor(self.cfg.torque_limits, device=self.device).unsqueeze(0).expand(self.num_envs, -1) # Isaac sim cannot bring torque limits from urdf
         # Joint Ids
         self.joint_ids, _ = self._robot.find_joints(["hip_.*", "thigh_.*", "knee_.*"])
         self.wheel_ids, _ = self._robot.find_joints(["wheel_.*"])

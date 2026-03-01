@@ -27,9 +27,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self._contact_sensor =  self.scene.sensors["contact_sensor"]
         self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
 
-        # HW limits
-        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
-
         # Torque controller initialization
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
@@ -41,8 +38,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                             num_leg=self.cfg.num_leg,
                                             device=self.device,
                                             dt=self.cfg.sim_dt,
-                                            limits=self._robot.data.joint_limits,
-                                            default_pos=self._robot.data.default_joint_pos)
+                                            pos_limits=self._robot.data.joint_limits,
+                                            torque_limits=self.torque_limits,
+                                            default_joint_pos=self._robot.data.default_joint_pos)
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
@@ -51,7 +49,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               num_dof=1,                        # One wheel per legs
                                               num_leg=self.cfg.num_leg,
                                               device=self.device,
-                                              dt=self.cfg.sim_dt)
+                                              dt=self.cfg.sim_dt,
+                                              joint_vel_limits=self.joint_vel_limits,
+                                              torque_limits=self.torque_limits)
 
         # Curriculum Info
         self.extras["Curriculum"] = {}
@@ -60,6 +60,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
         self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
+
+        # Previous action
+        self.previous_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
         # Plotting boolean
         self.is_plot = (self.num_envs == 1)
@@ -85,29 +88,29 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor):
 
-        # NOTE: Other initializations (joint states, material properties, etc..) are implemented by domain randomizer
+        # NOTE: Initializations (joint states, material properties, etc..) are implemented by domain randomizer
         # Adjustment the Domain Randomization Parameters
-        self.set_curriculum()
+        # self.set_curriculum()
         super()._reset_idx(env_ids)
 
         # Reset previous action observation
-        self.actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
+        self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
 
-        # ============== Position Adjustment =============== #
-        root_state = self._robot.data.default_root_state[env_ids].clone()
-        root_state[:, 2] += self.robot_collision_min_z
+        # # ============== Position Adjustment =============== #
+        # root_state = self._robot.data.default_root_state[env_ids].clone()
+        # root_state[:, 2] += self.robot_collision_min_z
 
-        # Change to global height
-        root_state[:,:3] += self.scene.env_origins[env_ids]
+        # # Change to global height
+        # root_state[:,:3] += self.scene.env_origins[env_ids]
 
-        # ============== Rotation Adjustment (Yawing) =============== #
-        root_yaw = -3.14 + (3.14 - (-3.14)) * torch.rand(len(env_ids), device=self.device) # Uniform distribution [-pi, pi]
-        root_rot_w = quat_from_euler_xyz(torch.zeros_like(root_yaw), torch.zeros_like(root_yaw), root_yaw)
-        root_state[:, 3:7] = root_rot_w
+        # # ============== Rotation Adjustment (Yawing) =============== #
+        # root_yaw = -3.14 + (3.14 - (-3.14)) * torch.rand(len(env_ids), device=self.device) # Uniform distribution [-pi, pi]
+        # root_rot_w = quat_from_euler_xyz(torch.zeros_like(root_yaw), torch.zeros_like(root_yaw), root_yaw)
+        # root_state[:, 3:7] = root_rot_w
 
-        # Apply base settings
-        self._robot.write_root_state_to_sim(root_state=root_state,
-                                            env_ids=env_ids)
+        # # Apply base settings
+        # self._robot.write_root_state_to_sim(root_state=root_state,
+        #                                     env_ids=env_ids)
         
 
 
@@ -134,13 +137,10 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         self.joint_torque_cmd = self.leg_controller.compute_torque(joint_pos=joint_pos,
                                                                    joint_vel=joint_vel,
-                                                                   joint_pos_cmd=self.joint_pos_delta_cmd,
-                                                                   torque_limits=self.torque_limits)
+                                                                   joint_pos_cmd=self.joint_pos_delta_cmd)
         
         self.wheel_torque_cmd = self.wheel_controller.compute_torque(joint_vel=joint_vel,
-                                                                     joint_vel_cmd=self.wheel_vel_cmd,
-                                                                     joint_vel_limits=self.joint_vel_limits,
-                                                                     torque_limits=self.torque_limits)
+                                                                     joint_vel_cmd=self.wheel_vel_cmd)
         # Combine torque commands
         self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
         # zero_torque = torch.zeros_like(self.torque_cmd)
@@ -228,7 +228,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel), dim=1)
-        p_action_rate       = -torch.sum(torch.square(self.actions - self.previous_action), dim=1)
+        p_action_rate       = -torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
@@ -265,7 +265,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             "Task Penalty / Action_Rate"    : self.cfg.p_action_rate_weight * p_action_rate,
         }
 
-        self.previous_action = self.actions.clone()
+        self.previous_actions = self.actions.clone()
 
         return total_reward
     

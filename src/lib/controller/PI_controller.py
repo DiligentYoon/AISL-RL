@@ -7,7 +7,11 @@ class PI_Controller():
     τ = Kp*e + Ki*∫e
     """
 
-    def __init__(self, kp, ki, alpha, num_envs: int, num_dof: int, num_leg: int, device: str, dt: float):
+    def __init__(self, 
+                 kp, ki, alpha, 
+                 num_envs: int, num_dof: int, num_leg: int, 
+                 device: str, dt: float,
+                 joint_vel_limits: torch.Tensor, torque_limits: torch.Tensor):
         """
         Controller initialization  for velocity control
 
@@ -28,6 +32,8 @@ class PI_Controller():
         self.num_leg = num_leg
         self.dt = dt
         self.alpha = alpha
+        self.joint_vel_limits = joint_vel_limits
+        self.torque_limits = torque_limits
         self.old_torque = torch.zeros(self.num_envs, num_dof * num_leg, device=self.device)
 
         # kp gain
@@ -54,8 +60,6 @@ class PI_Controller():
         self,
         joint_vel: torch.Tensor,
         joint_vel_cmd: torch.Tensor,
-        joint_vel_limits: torch.Tensor,
-        torque_limits: torch.Tensor
     ) -> torch.Tensor:
         """
         Compute joint input torque.
@@ -79,17 +83,17 @@ class PI_Controller():
         left_leg_indices = torch.tensor([6], device=self.device, dtype=torch.long)                                      # Hard coded
         right_leg_indices = torch.tensor([7], device=self.device, dtype=torch.long)                                     # Hard coded
 
-        torque_limits = torque_limits[:, 6:]            # Extract wheel torque limits
+        torque_limits = self.torque_limits[:, 6:]            # Extract wheel torque limits
 
         # --- Left Leg slicing ---
         joint_vel_left = torch.index_select(joint_vel, 1, left_leg_indices)
         joint_vel_cmd_left = joint_vel_cmd[:, 0].unsqueeze(-1)
-        joint_vel_limits_left = torch.index_select(joint_vel_limits, 1, left_leg_indices)
+        joint_vel_limits_left = torch.index_select(self.joint_vel_limits, 1, left_leg_indices)
 
         # --- Right Leg slicing ---
         joint_vel_right = torch.index_select(joint_vel, 1, right_leg_indices)
         joint_vel_cmd_right = joint_vel_cmd[:, 1].unsqueeze(-1)
-        joint_vel_limits_right = torch.index_select(joint_vel_limits, 1, right_leg_indices)
+        joint_vel_limits_right = torch.index_select(self.joint_vel_limits, 1, right_leg_indices)
 
         # Left foot PI control
         joint_vel_cmd_left = torch.clamp(joint_vel_cmd_left, - joint_vel_limits_left, joint_vel_limits_left)            # Clipping joint position command

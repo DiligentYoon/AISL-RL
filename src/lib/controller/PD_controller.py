@@ -139,6 +139,6 @@ class PD_Controller():
         self.old_torque = torque.clone()
 
         # Clip torque based on torque_limits
-        torque = torch.clamp(torque, -self.joint_torque_limits, self.joint_torque_limits)
+        torque = torch.clamp(torque, -self.joint_torque_limits[:, :6], self.joint_torque_limits[:, :6])
         
         return torque

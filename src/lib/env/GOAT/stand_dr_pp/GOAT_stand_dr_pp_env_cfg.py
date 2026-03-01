@@ -29,6 +29,21 @@ class EventCfg:
         },
     )
 
+    reset_body = EventTerm(
+        func=randomizer.reset_root_state_uniform,
+        mode='reset',
+        params={
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.63, 0.63), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (-0.0, 0.0),
+                "z": (-0.0, 0.0),
+                "roll": (-0.0, 0.0),
+                "pitch": (-0.0, 0.0),
+                "yaw": (-0.0, 0.0)},
+        },
+    )
+
     wheel_physics_material = EventTerm(
       func=randomizer.randomize_rigid_body_material,
       mode='reset',
