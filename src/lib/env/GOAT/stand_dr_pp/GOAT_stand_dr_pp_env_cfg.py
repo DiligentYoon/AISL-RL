@@ -6,10 +6,12 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import DCMotorCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -19,21 +21,11 @@ from isaaclab.managers import SceneEntityCfg
 class EventCfg:
     """Configuration for domain-randomization events."""
 
-    reset_joint = EventTerm(
-        func=randomizer.reset_joints_by_offset,
-        mode='reset',
-        params={      
-            "position_range": (0, 0),
-            "velocity_range": (0, 0),
-            "asset_cfg": SceneEntityCfg("robot"),
-        },
-    )
-
     reset_body = EventTerm(
         func=randomizer.reset_root_state_uniform,
         mode='reset',
         params={
-            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.63, 0.63), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.626, 0.626), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (-0.0, 0.0),
@@ -41,6 +33,15 @@ class EventCfg:
                 "roll": (-0.0, 0.0),
                 "pitch": (-0.0, 0.0),
                 "yaw": (-0.0, 0.0)},
+        },
+    )
+
+    reset_robot_joints = EventTerm(
+        func=randomizer.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
         },
     )
 
@@ -59,6 +60,9 @@ class EventCfg:
 
 @configclass
 class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
+    ## =========== Domain Randomization ============ ##
+    events = EventCfg()
+
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -69,8 +73,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[3.0, 4.0, 3.0]])
-    joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
+    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
     wheel_kp = torch.tensor([[3.0]])
     wheel_ki = torch.tensor([[3.0]])
     PD_LPF_gain = 0.049
@@ -110,19 +114,19 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     base_tilt_reset_condition = 28              # degree
 
     ## ==================== Reward Shaping ==================== ##
-    target_height = 0.4                        # meter (m)
+    target_height = events.reset_body.params["pose_range"]["z"][1] # meter (m)
     upright_threshold = 5                       # degree
     height_threshold = 0.1                      # meter (m)
     curriculum_level_up_threshold = 0.8         # success rate
     curriculum_level_down_threshold = 0.2
-    soft_torque_limit = 0.8
+    soft_torque_limit = 0.85
 
     r_upright_weight = 3.0
     r_height_weight = 2.0
     r_alive_weight = 2.0
 
-    p_lin_vel_weight = 0.01
-    p_ang_vel_weight = 0.01
+    p_lin_vel_weight = 0.1
+    p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 0.5
     p_all_torque_weight = 0.1
@@ -184,10 +188,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         update_period=0.0                                           # Update every period
     )
 
-    
-    # Domain Randomization
-    events = EventCfg()
-
     # Noise Model
     action_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     action_noise_params: dict = {
@@ -201,3 +201,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "std": 0.08,
         "operation": "add",
     }
+
+    # Visualization
+    root_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Root"
+    )
+
+    root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)

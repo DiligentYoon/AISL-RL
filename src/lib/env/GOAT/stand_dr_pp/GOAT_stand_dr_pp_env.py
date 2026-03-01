@@ -5,7 +5,8 @@ import copy
 import numpy as np
 
 from isaaclab.utils.math import normalize, quat_from_angle_axis, quat_from_euler_xyz
-from isaaclab.terrains import TerrainImporter 
+from isaaclab.terrains import TerrainImporter
+from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
 from isaacsim.core.utils import bounds
 from isaacsim.core.utils import prims
@@ -65,22 +66,36 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.previous_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
         # Plotting boolean
+        debug_vis = self.num_envs <= 32
+        self.set_debug_vis(debug_vis)
         self.is_plot = (self.num_envs == 1)
     
+
+    def _set_debug_vis_impl(self, debug_vis: bool):
+        if debug_vis:
+            if not hasattr(self, "root_visualizer"):
+                self.root_visualizer = VisualizationMarkers(self.cfg.root_visualizer_cfg)
+            self.root_visualizer.set_visibility(True)
+        else:
+            if hasattr(self, "root_visualizer"):
+                self.root_visualizer.set_visibility(False)
+
+    def _debug_vis_callback(self, event):
+        if not self._robot.is_initialized:
+            return
+        
+        root_pos = self.base_pos_w
+        root_rot = self.base_rot_w
+
+        self.root_visualizer.visualize(root_pos, root_rot)
+
+
     def _setup_scene(self):
         super()._setup_scene()
 
         self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
-        
-        # Compute collision box info
-        robot_prim_path = "/World/envs/env_0/Robot"
-        robot_bbox_cache = bounds.create_bbox_cache()
-        robot_aabb = bounds.compute_aabb(bbox_cache=robot_bbox_cache,
-                                         prim_path=robot_prim_path,
-                                         include_children=True)
-        self.robot_collision_min_z = -robot_aabb[2]
 
         # Spawn contact sensor
         contact_sensor = ContactSensor(cfg=self.cfg.contact_sensor)
@@ -92,25 +107,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Adjustment the Domain Randomization Parameters
         # self.set_curriculum()
         super()._reset_idx(env_ids)
-
         # Reset previous action observation
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
-
-        # # ============== Position Adjustment =============== #
-        # root_state = self._robot.data.default_root_state[env_ids].clone()
-        # root_state[:, 2] += self.robot_collision_min_z
-
-        # # Change to global height
-        # root_state[:,:3] += self.scene.env_origins[env_ids]
-
-        # # ============== Rotation Adjustment (Yawing) =============== #
-        # root_yaw = -3.14 + (3.14 - (-3.14)) * torch.rand(len(env_ids), device=self.device) # Uniform distribution [-pi, pi]
-        # root_rot_w = quat_from_euler_xyz(torch.zeros_like(root_yaw), torch.zeros_like(root_yaw), root_yaw)
-        # root_state[:, 3:7] = root_rot_w
-
-        # # Apply base settings
-        # self._robot.write_root_state_to_sim(root_state=root_state,
-        #                                     env_ids=env_ids)
         
 
 
@@ -156,9 +154,10 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_acceleration,
-                                 self.base_angular_vel,
-                                 self.base_quaternion,
+        # TODO: base의 높이를 알 수 있는 방법이 있는지 check
+        observation = torch.cat((self.base_ang_acceleration,
+                                 self.base_ang_vel,
+                                 self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
                                  self.joint_vel), dim=1)
 
@@ -171,14 +170,14 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_acceleration,
-                                 self.base_angular_vel,
+        observation = torch.cat((self.base_ang_acceleration,
+                                 self.base_ang_vel,
                                  self.gravity_vector,
-                                 self.base_quaternion,
+                                 self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
                                  self.joint_vel), dim=1)
         
-        privileged_info = torch.cat((self.base_vel,
+        privileged_info = torch.cat((self.base_lin_vel,
                                      self.base_height,
                                      self.contact_force,
                                      self.friction_coefficient), dim=1)
@@ -201,8 +200,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         is_height_reached = torch.abs(self.base_height - self.cfg.target_height) < self.cfg.height_threshold
         
         # Velocity criteria (Only strict for balancing)
-        lin_vel_norm = torch.norm(self.base_vel, dim=1)                             # L2 norm 
-        ang_vel_norm = torch.norm(self.base_angular_vel, dim=1)
+        lin_vel_norm = torch.norm(self.base_lin_vel, dim=1)                             # L2 norm 
+        ang_vel_norm = torch.norm(self.base_ang_vel, dim=1)
         is_stable = (lin_vel_norm < 0.5) & (ang_vel_norm < 1.0)
 
         is_upright = is_upright.view(-1)
@@ -222,8 +221,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         r_alive = self.cfg.r_alive_weight * current_time / (self.cfg.max_episode_length)
  
         # Regularization Penalty
-        p_lin_vel           = -torch.sum(torch.square(self.base_vel), dim=1)
-        p_ang_vel           = -torch.sum(torch.square(self.base_angular_vel), dim=1)
+        p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
+        p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel), dim=1)
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
@@ -259,7 +258,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             "Task Penalty / Lin_Vel"        : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"        : self.cfg.p_ang_vel_weight * p_ang_vel,
             "Task Penalty / Joint_Limit"    : self.cfg.p_joint_limit_weight * p_joint_limit,
-            "Task Penalty / Toruqe_Limit"   : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
+            "Task Penalty / Torque_Limit"   : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
             "Task Penalty / Torque"         : self.cfg.p_all_torque_weight * p_all_torque,
             "Task Penalty / Joint_Vel"      : self.cfg.p_joint_velocity_weight * p_joint_velocity,
             "Task Penalty / Action_Rate"    : self.cfg.p_action_rate_weight * p_action_rate,
@@ -287,17 +286,18 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
     def _compute_intermediate_values(self):
         # Observation data
-        self.base_acceleration = self._robot.root_physx_view.get_link_accelerations()[:, 0, 3:]
-        self.base_angular_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
-        self.gravity_vector = self._robot.data.projected_gravity_b                                      # Unit vector
-        # self.base_quaternion = self._robot.root_physx_view.get_root_transforms()[:, 3:]
-        self.base_quaternion = self._robot.data.root_com_quat_w
+        self.base_pos_w = self._robot.data.root_pos_w
+        self.base_rot_w = self._robot.data.root_quat_w
+        self.base_ang_vel = self._robot.data.root_ang_vel_w
+        self.base_ang_acceleration = self._robot.data.body_acc_w[:, 0, 3:]
+        self.base_ang_vel = self._robot.data.body_ang_vel_w[:, 0, :3]
+        self.gravity_vector = self._robot.data.projected_gravity_b                     
         self.joint_pos = self._robot.data.joint_pos
         self.joint_vel = self._robot.data.joint_vel
 
         # State(privileged) data
-        self.base_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
-        self.base_height = self._robot.root_physx_view.get_root_transforms()[:, 2].unsqueeze(1)
+        self.base_lin_vel = self._robot.data.root_vel_w[:, :3]
+        self.base_height = self._robot.data.root_pos_w[:, 2].unsqueeze(-1)
         self.contact_force = self._contact_sensor.data.net_forces_w.view(self.num_envs, -1)
         material_property = self._robot.root_physx_view.get_material_properties()                   # device is "cpu" not "cuda" 
         self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
