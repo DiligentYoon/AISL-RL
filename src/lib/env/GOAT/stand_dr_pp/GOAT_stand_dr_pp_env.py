@@ -27,17 +27,22 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self._contact_sensor =  self.scene.sensors["contact_sensor"]
         self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
 
+        # HW limits
+        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
+
         # Torque controller initialization
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
                                             kd=self.cfg.joint_kd,
                                             alpha=0.059,
+                                            pos_margin_factor=self.cfg.pos_margin_factor,
                                             num_envs=self.num_envs,
                                             num_dof=self.cfg.leg_dof,
                                             num_leg=self.cfg.num_leg,
                                             device=self.device,
                                             dt=self.cfg.sim_dt,
-                                            limits=self._robot.data.joint_limits)
+                                            limits=self._robot.data.joint_limits,
+                                            default_pos=self._robot.data.default_joint_pos)
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
@@ -47,9 +52,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               num_leg=self.cfg.num_leg,
                                               device=self.device,
                                               dt=self.cfg.sim_dt)
-        # HW limits
-        self.joint_input_limits = self.cfg.joint_input_limits.unsqueeze(0).expand(self.num_envs, -1, -1).to(device=self.device)         # Currently not used
-        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
 
         # Curriculum Info
         self.extras["Curriculum"] = {}
@@ -210,49 +212,60 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # ======================= Reward ======================= #
         # Orientation Reward (Projected Gravity Alignment) [Highest Priority]
         upright_error = torch.norm(self.gravity_vector - target_gravity, dim=1)
-        r_upright = torch.exp(-torch.square(upright_error) / 0.25)                                       # Raidial Basis FUnction (RBF)
+        r_upright = torch.exp(-torch.square(upright_error) / 0.5**2)                                       # Raidial Basis FUnction (RBF)
 
         # Base Height Reward
         height_error = torch.norm(self.base_height - self.cfg.target_height, dim=1)
-        r_height = torch.exp(-torch.square(height_error) / 0.3)
-
-        # Stop Reward
-        vel_lin_error = torch.norm(-self.base_vel, dim=1)
-        r_vel_lin = torch.exp(-torch.square(vel_lin_error) / 0.5)
-
-        vel_ang_error = torch.norm(-self.base_angular_vel, dim=1)
-        r_vel_ang = torch.exp(-torch.square(vel_ang_error) / 0.5)
+        r_height = torch.exp(-torch.square(height_error) / 0.5**2)
 
         # Alive Reward
         r_alive = self.cfg.r_alive_weight * current_time / (self.cfg.max_episode_length)
  
-        # Energy / Action Penalty
-        p_torque = -torch.sum(torch.square(self.applied_torque), dim=1)
-        p_joint_limit = -torch.sum(self.offset_limits_joint, dim=1) 
-        p_terminated = -self.reset_terminated.float()
-
+        # Regularization Penalty
+        p_lin_vel           = -torch.sum(torch.square(self.base_vel), dim=1)
+        p_ang_vel           = -torch.sum(torch.square(self.base_angular_vel), dim=1)
+        p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
+        p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
+        p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
+        p_joint_velocity    = -torch.sum(torch.square(self.joint_vel), dim=1)
+        p_action_rate       = -torch.sum(torch.square(self.actions - self.previous_action), dim=1)
+        p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
         total_reward = (
-            self.cfg.r_upright_weight * r_upright * r_alive +
-            self.cfg.r_height_weight * r_height +
-            self.cfg.r_vel_lin_weight * r_vel_lin +
-            self.cfg.r_vel_ang_weight * r_vel_ang +
-            self.cfg.r_alive_weight * r_alive +
-            self.cfg.p_torque_weight * p_torque +
-            self.cfg.p_joint_limit_weight * p_joint_limit +
+            self.cfg.r_upright_weight * r_upright * r_alive         +
+            self.cfg.r_height_weight * r_height                     +
+            self.cfg.r_alive_weight * r_alive                       +
+            self.cfg.p_lin_vel_weight * p_lin_vel                   +
+            self.cfg.p_ang_vel_weight * p_ang_vel                   +
+            self.cfg.p_joint_limit_weight * p_joint_limit           +
+            self.cfg.p_all_torque_limit_weight * p_all_torque_limit +
+            self.cfg.p_all_torque_weight * p_all_torque             +
+            self.cfg.p_joint_velocity_weight * p_joint_velocity     +
+            self.cfg.p_action_rate_weight * p_action_rate           +
             self.cfg.p_terminated_weight * p_terminated
         )
 
         self.extras["reward"] = {
-            "Task Reward / ": self.cfg.r_upright_weight * r_upright * r_alive,
-            "Task Reward / ": self.cfg.r_height_weight * r_height,
-            "Task Reward / ": self.cfg.r_vel_lin_weight * r_vel_lin,
-            "Task Reward / ": self.cfg.r_vel_ang_weight * r_vel_ang,
-            "Task Reward / ": self.cfg.r_alive_weight * r_alive,
-            "Task Penalty / Joint torque": self.cfg.p_torque_weight * p_torque,
-            "Task Penalty / Joint limit": self.cfg.p_joint_limit_weight * p_joint_limit,
+            # ==========================================
+            # Task Reward (+)
+            # ==========================================
+            "Task Reward / Upright"         : self.cfg.r_upright_weight * r_upright * r_alive,
+            "Task Reward / Height"          : self.cfg.r_height_weight * r_height,
+            "Task Reward / Alive"           : self.cfg.r_alive_weight * r_alive,
+            # ==========================================
+            # Task Penalty (-)
+            # ==========================================
+            "Task Penalty / Lin_Vel"        : self.cfg.p_lin_vel_weight * p_lin_vel,
+            "Task Penalty / Ang_Vel"        : self.cfg.p_ang_vel_weight * p_ang_vel,
+            "Task Penalty / Joint_Limit"    : self.cfg.p_joint_limit_weight * p_joint_limit,
+            "Task Penalty / Toruqe_Limit"   : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
+            "Task Penalty / Torque"         : self.cfg.p_all_torque_weight * p_all_torque,
+            "Task Penalty / Joint_Vel"      : self.cfg.p_joint_velocity_weight * p_joint_velocity,
+            "Task Penalty / Action_Rate"    : self.cfg.p_action_rate_weight * p_action_rate,
         }
+
+        self.previous_action = self.actions.clone()
 
         return total_reward
     
@@ -281,8 +294,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.base_quaternion = self._robot.data.root_com_quat_w
         self.joint_pos = self._robot.data.joint_pos
         self.joint_vel = self._robot.data.joint_vel
-        self.previous_action = self.actions.clone()
-        self.flat_previous_action = self.previous_action.view(self.num_envs, -1)
 
         # State(privileged) data
         self.base_vel = self._robot.root_physx_view.get_link_velocities()[:, 0, :3]
@@ -292,8 +303,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
 
         # Action regularization
-        self.offset_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
+        self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
+        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self._robot.data.joint_effort_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
         
 

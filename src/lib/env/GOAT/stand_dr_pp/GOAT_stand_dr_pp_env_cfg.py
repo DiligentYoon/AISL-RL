@@ -60,18 +60,17 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     wheel_ki = torch.tensor([[0.3]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    action_scale_factor = {"joint" : [5.0, ()],
-                           "wheel" : [3.0, ()]}
+    action_scale_factor = {"joint" : [1.0, ()],
+                           "wheel" : [1.0, ()]}
+    pos_margin_factor = 1.2
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Whee per legs
-    torque_limits = torch.tensor([4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 2.5, 2.5])
-    joint_input_limits = torch.tensor([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])         # Currently not used
+    torque_limits = [1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
     
-
     ## ==================== Curriculum parameters ==================== ##
     total_DR_curriculum_level = 5               # Domain Randomization curriculum level
     total_task_curriculum_level = ["balancing", "recovery"]
@@ -101,15 +100,20 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     height_threshold = 0.1                      # meter (m)
     curriculum_level_up_threshold = 0.8         # success rate
     curriculum_level_down_threshold = 0.2
+    soft_torque_limit = 0.8
 
-    r_upright_weight = 1.5
-    r_height_weight = 0.25
-    r_vel_lin_weight = 0.005
-    r_vel_ang_weight = 0.005
-    r_alive_weight = 1.0
-    p_torque_weight = 0.1
-    p_joint_limit_weight = 1.0
-    p_terminated_weight = 100.0
+    r_upright_weight = 3.0
+    r_height_weight = 2.0
+    r_alive_weight = 2.0
+
+    p_lin_vel_weight = 0.01
+    p_ang_vel_weight = 0.01
+    p_joint_limit_weight = 5.0
+    p_all_torque_limit_weight = 0.5
+    p_all_torque_weight = 0.1
+    p_joint_velocity_weight = 0.01
+    p_action_rate_weight = 0.05
+    p_terminated_weight = 200.0
 
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
