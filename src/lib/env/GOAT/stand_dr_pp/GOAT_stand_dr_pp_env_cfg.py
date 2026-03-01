@@ -110,7 +110,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     base_tilt_reset_condition = 28              # degree
 
     ## ==================== Reward Shaping ==================== ##
-    target_height = 0.45                        # meter (m)
+    target_height = 0.4                        # meter (m)
     upright_threshold = 5                       # degree
     height_threshold = 0.1                      # meter (m)
     curriculum_level_up_threshold = 0.8         # success rate
@@ -123,7 +123,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     p_lin_vel_weight = 0.01
     p_ang_vel_weight = 0.01
-    p_joint_limit_weight = 5.0
+    p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 0.5
     p_all_torque_weight = 0.1
     p_joint_velocity_weight = 0.01

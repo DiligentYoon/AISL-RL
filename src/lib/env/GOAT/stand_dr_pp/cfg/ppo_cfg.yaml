@@ -16,12 +16,12 @@ buffer:
 
 agent:
   class: PPO
-  rollouts: 64
+  rollouts: 32
   learning_epochs: 5
   mini_batches: 4
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 5.0e-04
+  learning_rate: 5.0e-05
   random_timesteps: 0
   learning_starts: 0
   grad_norm_clip: 1.0
@@ -47,4 +47,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 36000
+  timesteps: 96000

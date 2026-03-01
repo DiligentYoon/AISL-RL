@@ -305,7 +305,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Action regularization
         self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
-        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self._robot.data.joint_effort_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
         
 
