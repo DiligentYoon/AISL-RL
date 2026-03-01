@@ -159,23 +159,23 @@ class G1LIPMEnv(G1BaseEnv):
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         
         # ============== Target Foot Cube and Rotation Frame ================ # 
-        # pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
-        # z_height = 0.01 * torch.ones_like(pos[..., :1])             # [E, 2, 1]
-        # target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
+        pos = self.target_footstep_w[..., :2].clone()               # [E, 2, 2]
+        z_height = 0.01 * torch.ones_like(pos[..., :1])             # [E, 2, 1]
+        target_pos = torch.cat([pos, z_height], dim=-1).view(-1, 3) # [E*2, 3]
 
-        # target_yaw = self.target_footstep_w[..., 2].view(-1).clone()    # [E*2, 1]
-        # target_quat = quat_from_euler_xyz(torch.zeros_like(target_yaw), # [E*2, 1]
-        #                                   torch.zeros_like(target_yaw), # [E*2, 1]
-        #                                   target_yaw)                   # [E*2, 1]
+        target_yaw = self.target_footstep_w[..., 2].view(-1).clone()    # [E*2, 1]
+        target_quat = quat_from_euler_xyz(torch.zeros_like(target_yaw), # [E*2, 1]
+                                          torch.zeros_like(target_yaw), # [E*2, 1]
+                                          target_yaw)                   # [E*2, 1]
         
-        # # Color difference between support (green) and swing (red) foot
-        # marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
+        # Color difference between support (green) and swing (red) foot
+        marker_indices = torch.where(self.foot_on_swing.view(-1), 0, 1)
 
         
-        # # =============== Foot Rotation Frame =============== #
-        # foot_pos = self.foot_pos_w.clone().view(-1, 3)
-        # foot_rot = self.foot_rot_w.clone().view(-1, 4)
-        # foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
+        # =============== Foot Rotation Frame =============== #
+        foot_pos = self.foot_pos_w.clone().view(-1, 3)
+        foot_rot = self.foot_rot_w.clone().view(-1, 4)
+        foot_marker_indices = torch.tensor([0, 0], device=self.device).repeat(self.num_envs)
 
         # =============== Torso ================
         torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
@@ -184,15 +184,15 @@ class G1LIPMEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        # self.target_foot_visualizer.visualize(translations=target_pos, 
-        #                                       orientations=target_quat, 
-        #                                       marker_indices=marker_indices)
-        # self.target_foot_rotation_visalizer.visualize(translations=target_pos,
-        #                                               orientations=target_quat,
-        #                                               marker_indices=foot_marker_indices)
-        # self.foot_rotation_visalizer.visualize(translations=foot_pos,
-        #                                        orientations=foot_rot,
-        #                                        marker_indices=foot_marker_indices)
+        self.target_foot_visualizer.visualize(translations=target_pos, 
+                                              orientations=target_quat, 
+                                              marker_indices=marker_indices)
+        self.target_foot_rotation_visalizer.visualize(translations=target_pos,
+                                                      orientations=target_quat,
+                                                      marker_indices=foot_marker_indices)
+        self.foot_rotation_visalizer.visualize(translations=foot_pos,
+                                               orientations=foot_rot,
+                                               marker_indices=foot_marker_indices)
         self.torso_rotation_visalizer.visualize(translations=torso_pos,
                                                 orientations=torso_rot)
 
@@ -268,6 +268,10 @@ class G1LIPMEnv(G1BaseEnv):
                     self.command_inputs_b,
                     self.phase_sin.unsqueeze(-1),
                     self.phase_cos.unsqueeze(-1),
+                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                    self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
                     self.joint_pos[:, self.total_leg_joint_ids],
                     self.joint_vel[:, self.total_leg_joint_ids]
                 ],
@@ -290,6 +294,10 @@ class G1LIPMEnv(G1BaseEnv):
                 self.command_inputs_b,          # [E, 3]
                 self.phase_sin.unsqueeze(-1),   # [E, 1]
                 self.phase_cos.unsqueeze(-1),   # [E, 1]
+                self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
                 self.joint_pos,                 # [E, 37]
                 self.joint_vel,                 # [E, 37]
             ], dim=-1) 
@@ -583,6 +591,7 @@ class G1LIPMEnv(G1BaseEnv):
         self.commands.reset(env_ids)
         self.step_period, self.full_step_period, self.dstep_width = resample_commands(self.step_period,
                                                                                       self.full_step_period,
+                                                                                      self.dstep_width,
                                                                                       env_ids,
                                                                                       self.step_dt,
                                                                                       self.cfg.time_period_min, self.cfg.time_period_max,
@@ -705,7 +714,7 @@ class G1LIPMEnv(G1BaseEnv):
             left_combined_mask = combined_mask & left_support_mask
             # Envs which are valid and require right stance state
             right_combined_mask = combined_mask & right_support_mask
-            # Update foot pos and rot
+            # Update support foot pos and rot
             self.support_foot_pos[left_combined_mask] = self.foot_pos_w[left_combined_mask, 0, :3]
             self.support_foot_rot[left_combined_mask] = self.foot_rot_w[left_combined_mask, 0, :4]
             self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
@@ -725,6 +734,7 @@ class G1LIPMEnv(G1BaseEnv):
                 update_commands_mask[foot_collision_ids, :, :2] = adjust_target_foot(update_commands_mask[foot_collision_ids, :, :2], 
                                                                                      swing_foot_collision,
                                                                                      self.cfg.self_collision_threshold)
+            # Assign commands
             self.target_footstep_w[self.update_command_ids] = update_commands_mask
 
         # Command pos in body frame
@@ -763,7 +773,7 @@ class G1LIPMEnv(G1BaseEnv):
         command = self.command_inputs_w[update_ids]
         T = step_period * self.step_dt
         CoM = self.CoM[update_ids]
-        z_c = CoM[:, 2]
+        z_c = self.CoM[update_ids, 2]
 
         w0 = torch.sqrt(9.81 / z_c)
         dstep_length = torch.norm(command[:, :2], dim=1, keepdim=True).squeeze(-1) * T
@@ -778,15 +788,13 @@ class G1LIPMEnv(G1BaseEnv):
         y_com_rel = CoM[:, 1] - support_foot_pos[:, 1]
         
         # Linear CoM velocity in world frame
-        # vel_x_com = command[:, 0]
-        # vel_y_com = command[:, 1]
         vel_x_com = self.root_lin_vel_w[update_ids, 0]
         vel_y_com = self.root_lin_vel_w[update_ids, 1]
 
         # Final step COM pos
-        x_com_f  = x_com_rel * torch.cosh(w0 * T) + (vel_x_com / w0) * torch.sinh(w0 * T)
+        x_com_f  = x_com_rel * torch.cosh(w0 * T)      + (vel_x_com / w0) * torch.sinh(w0 * T)
         vx_com_f = x_com_rel * w0 * torch.sinh(w0 * T) + vel_x_com * torch.cosh(w0 * T)
-        y_com_f  = y_com_rel * torch.cosh(w0 * T) + (vel_y_com / w0) * torch.sinh(w0 * T)
+        y_com_f  = y_com_rel * torch.cosh(w0 * T)      + (vel_y_com / w0) * torch.sinh(w0 * T)
         vy_com_f = y_com_rel * w0 * torch.sinh(w0 * T) + vel_y_com * torch.cosh(w0 * T)
 
         # Final ICP

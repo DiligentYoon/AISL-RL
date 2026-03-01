@@ -114,8 +114,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     # state_space = {"arm": 150, "leg": 150}
 
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 40}                    
-    state_space = {"arm": 90, "leg": 90}
+    observation_space = {"arm": 66, "leg": 56}                    
+    state_space = {"arm": 106, "leg": 106}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
