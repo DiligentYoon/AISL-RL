@@ -69,10 +69,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[0.330, 4.270, 0.40]])
-    joint_kd = torch.tensor([[0.015, 0.010, 0.018]])
-    wheel_kp = torch.tensor([[0.3]])
-    wheel_ki = torch.tensor([[0.3]])
+    joint_kp = torch.tensor([[3.0, 4.0, 3.0]])
+    joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
+    wheel_kp = torch.tensor([[3.0]])
+    wheel_ki = torch.tensor([[3.0]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
     action_scale_factor = {"joint" : [1.0, ()],
