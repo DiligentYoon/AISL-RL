@@ -8,14 +8,16 @@ from isaaclab.utils import configclass
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.assets import ArticulationCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.sensors import ContactSensorCfg
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
-from isaaclab.managers import SceneEntityCfg
 
 
 @configclass
@@ -105,7 +107,120 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200
-    decimation = 4                       
+    decimation = 4
+
+    # ================= Robot =================== ##    
+    robot: ArticulationCfg = ArticulationCfg(
+    prim_path="/World/envs/env_.*/Robot",
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd",
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        # pos=(0.0, 0.0, 0.706), # knee = 0.6 rad
+        pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
+        joint_pos={
+            ".*_hip_pitch_joint": -0.35,
+            ".*_knee_joint": 0.7,
+            ".*_ankle_pitch_joint": -0.35,
+            # ".*_hip_pitch_joint": -0.10,
+            # ".*_knee_joint": 0.30,
+            # ".*_ankle_pitch_joint": -0.20,
+            
+            ".*_elbow_pitch_joint": 0.87,
+            "left_shoulder_roll_joint": 0.16,
+            "left_shoulder_pitch_joint": 0.35,
+            "right_shoulder_roll_joint": -0.16,
+            "right_shoulder_pitch_joint": 0.35,
+            "left_one_joint": 1.0,
+            "right_one_joint": -1.0,
+            "left_two_joint": 0.52,
+            "right_two_joint": -0.52,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    soft_joint_pos_limit_factor=0.9,
+    actuators={
+        "legs": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_hip_yaw_joint",
+                ".*_hip_roll_joint",
+                ".*_hip_pitch_joint",
+                ".*_knee_joint",
+                "torso_joint",
+            ],
+            effort_limit_sim=300,
+            stiffness={
+                ".*_hip_yaw_joint": 150.0,
+                ".*_hip_roll_joint": 150.0,
+                ".*_hip_pitch_joint": 200.0,
+                ".*_knee_joint": 200.0,
+                "torso_joint": 200.0,
+            },
+            damping={
+                ".*_hip_yaw_joint": 5.0,
+                ".*_hip_roll_joint": 5.0,
+                ".*_hip_pitch_joint": 5.0,
+                ".*_knee_joint": 5.0,
+                "torso_joint": 5.0,
+            },
+            armature={
+                ".*_hip_.*": 0.01,
+                ".*_knee_joint": 0.01,
+                "torso_joint": 0.01,
+            },
+        ),
+        "feet": ImplicitActuatorCfg(
+            effort_limit_sim=20,
+            joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
+            stiffness=20.0,
+            damping=2.0,
+            armature=0.01,
+        ),
+        "arms": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_shoulder_pitch_joint",
+                ".*_shoulder_roll_joint",
+                ".*_shoulder_yaw_joint",
+                ".*_elbow_pitch_joint",
+                ".*_elbow_roll_joint",
+                ".*_five_joint",
+                ".*_three_joint",
+                ".*_six_joint",
+                ".*_four_joint",
+                ".*_zero_joint",
+                ".*_one_joint",
+                ".*_two_joint",
+            ],
+            effort_limit_sim=300,
+            stiffness=40.0,
+            damping=10.0,
+            armature={
+                ".*_shoulder_.*": 0.01,
+                ".*_elbow_.*": 0.01,
+                ".*_five_joint": 0.001,
+                ".*_three_joint": 0.001,
+                ".*_six_joint": 0.001,
+                ".*_four_joint": 0.001,
+                ".*_zero_joint": 0.001,
+                ".*_one_joint": 0.001,
+                ".*_two_joint": 0.001,
+            },
+        ),
+    },
+)                
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
@@ -164,8 +279,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     time_period_max = 0.35
     dstep_min = 0.35
     dstep_max = 0.35
-    z_c_min = 0.75
-    z_c_max = 0.75
+    z_c_min = robot.init_state.pos[2] + 0.01
+    z_c_max = robot.init_state.pos[2] + 0.01
     w_foot_loc = 0.4
     w_foot_rot = 0.4
 
