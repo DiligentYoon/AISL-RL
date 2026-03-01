@@ -166,6 +166,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.35
     z_c_min = 0.75
     z_c_max = 0.75
+    w_foot_loc = 0.4
+    w_foot_rot = 0.4
 
 
     # Simulation

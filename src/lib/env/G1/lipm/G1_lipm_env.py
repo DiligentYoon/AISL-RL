@@ -450,7 +450,13 @@ class G1LIPMEnv(G1BaseEnv):
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
-        gait_reward = (diff * s)
+        loc_error = torch.square(self.foot_pos_w[self.foot_on_swing, :3] - \
+                                 torch.cat([self.target_footstep_w[self.foot_on_swing][:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1))
+        loc_error = torch.sum(loc_error, dim=-1)
+        rot_error = torch.abs(wrap_to_pi(self.target_footstep_w[self.foot_on_swing][:, 2] - self.foot_yaw_w[self.foot_on_swing]))
+        footstep_loc_rewards = torch.exp(-loc_error / 0.5**2)
+        footstep_rot_rewards = torch.exp(-rot_error / 0.5**2)
+        gait_reward = (diff * s) * (1 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
