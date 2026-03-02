@@ -6,6 +6,8 @@ import gymnasium as gym
 from typing import Dict, Mapping, Union, Sequence
 from torch.nn import Module
 
+from lib.utils.seed_utils import set_seed
+
 class MultiAgent:
     """
     Base Agent Class
@@ -29,8 +31,12 @@ class MultiAgent:
         self.cfg = cfg
         self.model = model
         self.device = device
+        self.seed = self.cfg["seed"]
         self.possible_agents = possible_agents
         self.num_agents = len(possible_agents)
+
+        # set seed
+        set_seed(self.seed)
 
         # Spaces
         self.observation_space = observation_space

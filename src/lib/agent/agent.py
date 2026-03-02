@@ -6,6 +6,8 @@ from typing import Dict
 from torch.nn import Module
 from lib.model.MLP import ActorInference
 
+from lib.utils.seed_utils import set_seed
+
 class Agent:
     """
     Base Agent Class
@@ -25,6 +27,10 @@ class Agent:
         self.cfg = cfg
         self.model = model
         self.device = device
+        self.seed = self.cfg["seed"]
+
+        # set seed
+        set_seed(self.seed)
 
         # checkpoint
         self.checkpoint_modules = {}

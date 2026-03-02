@@ -89,6 +89,7 @@ def main():
 
     # Create isaac environment
     env_cfg.seed = cfg.get("seed", None)
+    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # Get environment (step) dt for real-time evaluation
