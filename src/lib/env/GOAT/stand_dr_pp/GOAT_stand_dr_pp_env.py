@@ -310,7 +310,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
         self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
-        self.joint_deviation , dim=1= self.joint_pos[:, self.joint_ids] - self._robot.data.default_joint_pos[:, self.joint_ids]
+        self.joint_deviation = self.joint_pos[:, self.joint_ids] - self._robot.data.default_joint_pos[:, self.joint_ids]
         
 
         # Extra Information data
