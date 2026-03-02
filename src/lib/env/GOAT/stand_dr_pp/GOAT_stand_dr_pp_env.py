@@ -214,7 +214,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         r_upright = torch.exp(-upright_error / 0.5**2)                                       # Raidial Basis FUnction (RBF)
 
         # Base Height Reward
-        height_error = torch.square(self.base_height - self.cfg.target_height)
+        height_error = torch.square(self.base_height - self.cfg.target_height).squeeze(-1)
         r_height = torch.exp(-height_error / 0.5**2)
 
         # Alive Reward
@@ -233,7 +233,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Total Reward Summation
         total_reward = (
-            self.cfg.r_upright_weight * r_upright * r_alive         +
+            self.cfg.r_upright_weight * r_upright                   +
             self.cfg.r_height_weight * r_height                     +
             self.cfg.r_alive_weight * r_alive                       +
             self.cfg.p_lin_vel_weight * p_lin_vel                   +
