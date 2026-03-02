@@ -87,6 +87,17 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
             },
+        # pos=(0.0, 0.0, 0.63),
+        # joint_pos={
+        #     "hip_L_Joint": 0.0,
+        #     "hip_R_Joint": 0.0,
+        #     "thigh_L_Joint": 0.0,
+        #     "thigh_R_Joint": -0.0,
+        #     "knee_L_Joint": 0.0,
+        #     "knee_R_Joint": -0.0,
+        #     "wheel_L_Joint": 0.0,
+        #     "wheel_R_Joint": 0.0,
+        #     },
         ),
 
     # Actuators cfg
