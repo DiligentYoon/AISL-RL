@@ -217,7 +217,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         r_height = torch.exp(-height_error / 0.5**2)
 
         # Alive Reward
-        r_alive = self.cfg.r_alive_weight * current_time / (self.cfg.max_episode_length)
+        r_alive = self.cfg.r_alive_weight * (current_time * self.cfg.decimation) / (self.cfg.max_episode_length)
  
         # Regularization Penalty
         p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
@@ -250,7 +250,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Upright"          : self.cfg.r_upright_weight * r_upright * r_alive,
+            "Task Reward / Upright"          : self.cfg.r_upright_weight * r_upright,
             "Task Reward / Height"           : self.cfg.r_height_weight * r_height,
             "Task Reward / Alive"            : self.cfg.r_alive_weight * r_alive,
             # ==========================================
@@ -356,12 +356,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             # Observation & Action Noises Control (Only Gaussian Noise)
             if self.cfg.action_noise_type:
                 self.cfg.action_noise_params["mean"] = 0.0
-                self.cfg.action_noise_params["std"] = 0.03
+                self.cfg.action_noise_params["std"] = 0.08
 
             if self.cfg.observation_noise_type:
                 self.cfg.observation_noise_params["mean"] = 0.0
-                self.cfg.observation_noise_params["std"] = 0.03
+                self.cfg.observation_noise_params["std"] = 0.08
 
             # Environment Parameters Control
-            self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.2) 
-            self.event_manager.cfg.wheel_physics_material.params["dynamic_friction_range"] = (0.5, 1.2)
+            self.event_manager.cfg.wheel_physics_material.params["static_friction_range"] = (0.5, 1.3) 
+            self.event_manager.cfg.wheel_physics_material.params["dynamic_friction_range"] = (0.5, 1.3)
