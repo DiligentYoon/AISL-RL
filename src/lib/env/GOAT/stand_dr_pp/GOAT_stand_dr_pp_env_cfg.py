@@ -10,7 +10,7 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
@@ -63,6 +63,23 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Domain Randomization ============ ##
     events = EventCfg()
 
+    ## =========== Robot Variation (Init pos) ============== ##
+    GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.594),
+            joint_pos={
+                "hip_L_Joint": 0.0,
+                "hip_R_Joint": 0.0,
+                "thigh_L_Joint": 0.55,
+                "thigh_R_Joint": -0.55,
+                "knee_L_Joint": 0.8,
+                "knee_R_Joint": -0.8,
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+                },
+            ),
+        )
+
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -114,7 +131,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     base_tilt_reset_condition = 28              # degree
 
     ## ==================== Reward Shaping ==================== ##
-    target_height = GOATBaseEnvCfg.GOAT_cfg.init_state.pos[2] # meter (m)
+    target_height = GOAT_cfg.init_state.pos[2] # meter (m)
     upright_threshold = 5                       # degree
     height_threshold = 0.1                      # meter (m)
     curriculum_level_up_threshold = 0.8         # success rate
