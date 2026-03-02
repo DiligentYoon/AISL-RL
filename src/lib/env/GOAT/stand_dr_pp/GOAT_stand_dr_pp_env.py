@@ -273,15 +273,19 @@ class GOATStandDRPPEnv(GOATBaseEnv):
     def _get_dones(self):
         self._compute_intermediate_values() # planning state calculation
         
-        tilt_threshold_rad = torch.tensor(self.cfg.base_tilt_reset_condition, device=self.device) * torch.pi / 180.0
-        cos_threshold = torch.cos(tilt_threshold_rad)
+        # tilt_threshold_rad = torch.tensor(self.cfg.base_tilt_reset_condition, device=self.device) * torch.pi / 180.0
+        # cos_threshold = torch.cos(tilt_threshold_rad)
 
-        target_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device)
-        base_tilt = torch.sum(self.gravity_vector * target_gravity, dim=1)
+        # target_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device)
+        # base_tilt = torch.sum(self.gravity_vector * target_gravity, dim=1)
 
-        terminated = (self.base_height < self.cfg.height_reset_condition) | (base_tilt < cos_threshold).unsqueeze(-1)
-        terminated = terminated.squeeze(-1)
-
+        projected_gravity_x = self.gravity_vector[:, 0]
+        projected_gravity_y = self.gravity_vector[:, 1]
+        died_fall   = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
+        died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
+                                       torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
+        
+        terminated = died_fall | died_fall_2
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated
