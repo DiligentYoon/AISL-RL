@@ -141,11 +141,10 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                                                      joint_vel_cmd=self.wheel_vel_cmd)
         # Combine torque commands
         self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
-        # zero_torque = torch.zeros_like(self.torque_cmd)
         
         # Load to sim buffer
         self._robot.set_joint_effort_target(self.torque_cmd)
-        # self._robot.set_joint_effort_target(zero_torque)
+        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
 
     def _get_observations(self) -> torch.Tensor:
         """

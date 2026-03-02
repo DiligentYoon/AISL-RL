@@ -76,14 +76,14 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
     
     # Initial Joint pos and vel
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.0),
+        pos=(0.0, 0.0, 0.594),
         joint_pos={
             "hip_L_Joint": 0.0,
             "hip_R_Joint": 0.0,
-            "thigh_L_Joint": 0.0,
-            "thigh_R_Joint": 0.0,
-            "knee_L_Joint": 0.3,
-            "knee_R_Joint": -0.3,
+            "thigh_L_Joint": 0.55,
+            "thigh_R_Joint": -0.55,
+            "knee_L_Joint": 0.8,
+            "knee_R_Joint": -0.8,
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
             },

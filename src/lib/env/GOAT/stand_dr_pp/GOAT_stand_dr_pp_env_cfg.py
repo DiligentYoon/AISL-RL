@@ -25,7 +25,7 @@ class EventCfg:
         func=randomizer.reset_root_state_uniform,
         mode='reset',
         params={
-            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.626, 0.626), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (-0.0, 0.0),
