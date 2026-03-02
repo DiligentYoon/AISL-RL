@@ -127,8 +127,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     default_terrain_restitution = 0.4
 
     ## ==================== Terminal condition ==================== ##
-    height_reset_condition = 0.4                # meter (m)
-    base_tilt_reset_condition = 28              # degree
+    height_reset_condition = 0.25                # meter (m)
+    base_tilt_reset_condition = 30              # degree
 
     ## ==================== Reward Shaping ==================== ##
     target_height = GOAT_cfg.init_state.pos[2] # meter (m)
@@ -145,7 +145,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 5.0
+    p_joint_deviation = 2.0
     p_all_torque_limit_weight = 1.0
     p_all_torque_weight = 1.0
     p_joint_velocity_weight = 0.01
