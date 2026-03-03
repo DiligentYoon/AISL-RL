@@ -225,7 +225,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Regularization Penalty
         p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
         p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel), dim=1)
-        p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation), dim=1) # wheel is not included
+        p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
         # p_joint_deviation_hip = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=-1)
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
