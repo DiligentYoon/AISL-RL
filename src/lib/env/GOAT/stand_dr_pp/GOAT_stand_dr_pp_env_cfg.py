@@ -140,7 +140,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.9
 
     r_upright_weight = 5.0
-    r_height_weight = 2.0
+    r_height_weight = 0.0
     r_alive_weight = 1.0
 
     p_lin_vel_weight = 0.1
