@@ -331,9 +331,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         applied_target = torch.cat([joint_cmd_deg, wheel_vel_cmd_rpm], dim=-1)
         applied_torque = self._robot.data.applied_torque
-
-        vals = applied_torque[:, :6].reshape(-1).detach().cpu().numpy().tolist()
-        print("Applied Torque:", [round(v, 2) for v in vals])
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["left_hip_torque (Nm)"]    = applied_torque[:, 0]

@@ -141,7 +141,5 @@ class PD_Controller():
 
         # Clip torque based on torque_limits
         torque = torch.clamp(torque, -self.joint_torque_limits[:, :6], self.joint_torque_limits[:, :6])
-        vals = torque.reshape(-1).detach().cpu().numpy().tolist()
-        print("Calculated Torque:", [round(v, 2) for v in vals])
         
         return torque

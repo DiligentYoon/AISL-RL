@@ -83,7 +83,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
-    decimation = 1                              # 100Hz policy
+    decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 24                      # Observation space
     state_space = 39                            # State space including privilege information
@@ -146,7 +146,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 10.0
+    p_joint_deviation = 1.0
     p_all_torque_limit_weight = 0.1
     p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.01
