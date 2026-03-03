@@ -224,3 +224,6 @@ class EnvCfg:
 
     commands: object | None = None
     """Reference Generator for task-specific behaviors"""
+
+    viz_data: dict | None = None
+    """Visualization Data for debugging"""

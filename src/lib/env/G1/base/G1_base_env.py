@@ -20,6 +20,9 @@ class G1BaseEnv(Env):
         self.joint_pos_limits = self._robot.data.joint_pos_limits
         self.joint_vel_limits = self._robot.data.joint_vel_limits
 
+        # Joint Torque Limits
+        self.soft_joint_torque_limits = 0.9 * self._robot.data.joint_effort_limits
+
         # Joint Ids
         self._joint_dof_ids, _ = self._robot.find_joints(".*")
         
@@ -31,7 +34,10 @@ class G1BaseEnv(Env):
                                                                r".*_shoulder_(pitch|roll|yaw)_joint",
                                                                r".*_elbow_(pitch|roll)_joint",
                                                                r".*_(zero|one|two|three|four|five|six)_joint"])
-        
+        # Joint Limits
+        self.leg_joint_limits = self.joint_pos_limits[:, self.total_leg_joint_ids]
+        self.arm_joint_limits = self.joint_pos_limits[:, self.total_arm_joint_ids]
+
     # Create scene
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)

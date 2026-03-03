@@ -14,12 +14,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-balancing-locomotion", help="Name of the task.")
+parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -88,6 +88,8 @@ def main():
     # ============================ Env & Wrapper Spawn ================================
 
     # Create isaac environment
+    env_cfg.seed = cfg.get("seed", None)
+    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # Get environment (step) dt for real-time evaluation
@@ -102,7 +104,7 @@ def main():
     if cfg["agent"]["experiment"]["write_interval"] == "auto":
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
-        checkpoint_interval = int(cfg["train"]["timesteps"] / 5)
+        checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
 
 
     # ======================= Buffer =========================
@@ -121,6 +123,7 @@ def main():
         act_size = {}
         buffers = {}
         possible_agents = env._unwrapped.cfg.possible_agents
+        num_agent = len(possible_agents)
         for uid in possible_agents:
             observation_space = env.observation_space[uid]
             action_space = env.action_space[uid]
@@ -222,6 +225,11 @@ def main():
     else:
         print("[INFO] Unfortunately a pre-trained checkpoint is not found for this task.")
         resume_path = None
+    
+    # Verify save logic
+    verify_save_logic = True
+    if verify_save_logic:
+        test_agent = copy.deepcopy(agent)
 
     # ======================= Training ============================
 
@@ -235,6 +243,7 @@ def main():
     CLI_track_rewards = collections.deque(maxlen=500)
     CLI_track_timesteps = collections.deque(maxlen=500)
     CLI_step_reward_means = collections.deque(maxlen=500)
+    # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
@@ -286,17 +295,24 @@ def main():
         # =============== Logging Phase ================
 
         # Data setting for logging
+        if multi_agent:
+            logged_reward = rewards.view(-1, num_agent)
+            logged_reward = torch.mean(logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        else:
+            logged_reward = rewards
+
         if cumulative_rewards is None:
-            cumulative_rewards = torch.zeros_like(rewards, dtype=torch.float32)
-            cumulative_timesteps = torch.zeros_like(rewards, dtype=torch.int32)
+            cumulative_rewards = torch.zeros_like(logged_reward, dtype=torch.float32)
+            cumulative_timesteps = torch.zeros_like(logged_reward, dtype=torch.int32)
         
         # Accumulates per-step rewards
-        cumulative_rewards.add_(rewards)
+        cumulative_rewards.add_(logged_reward)
         cumulative_timesteps.add_(1)
-        # Mean of per-step rewards
-        CLI_step_reward_means.append(torch.mean(rewards).item())
+        # Mean of per-step rewards (Mean value of env axis)
+        CLI_step_reward_means.append(torch.mean(logged_reward, dim=0).item())
 
-        finished_episodes = (terminated + truncated).nonzero(as_tuple=False)
+        done = (terminated | truncated).squeeze(-1)
+        finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
         if finished_episodes.numel():
             # Storage cumulative rewards and timesteps
             track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
@@ -308,9 +324,15 @@ def main():
             cumulative_timesteps[finished_episodes] = 0
 
         # record data
-        tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(rewards).item())
-        tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(rewards).item())
-        tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(rewards).item())
+        tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(logged_reward).item())
+        tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(logged_reward).item())
+        tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(logged_reward).item())
+
+        task_reward = next_infos.get("reward", None)
+        if task_reward is not None:
+            for k, v in task_reward.items():
+                # Mean value of env axis
+                tracking_data[k].append(torch.mean(v).item())
 
         if len(track_rewards):
             track_reward_np = np.array(track_rewards)
@@ -345,10 +367,12 @@ def main():
             per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
+            # avg_ep_srate = float(np.mean(CLI_episode_success_rate)) if len(CLI_episode_success_rate) else float ("nan")
 
             ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
+            # ep_srate = "-" if np.isnan(avg_ep_srate) else f"{avg_ep_srate:6.3f} %"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)
@@ -368,10 +392,10 @@ def main():
             line_value_loss = f"Value Loss        : {value_loss:6.3f}"
             line_policy_loss = f"Policy Loss       : {policy_loss:6.3f}"
             line_entropy_loss = f"Entropy Loss      : {entropy_loss:6.3f}"
+            line_approx_kl = f"Approximate KL    : {approx_kl:6.3f}"
             line_episode_step = f"Avg Episode Step  : {ep_step}"
             line_per_step_reward = f"Per-Step Rewards  : {per_r}"
             line_episode_reward = f"Epiode Rewards    : {ep_r}"
-            # line_episode_success = f"Avg Success Rate  : {100 * global_success_rate:6.2f} %"
 
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
@@ -384,10 +408,10 @@ def main():
             print(f"| {line_value_loss:<{content_width-1}}|")
             print(f"| {line_policy_loss:<{content_width-1}}|")
             print(f"| {line_entropy_loss:<{content_width-1}}|")
+            print(f"| {line_approx_kl:<{content_width-1}}|")
             print(f"| {line_episode_step:<{content_width-1}}|")
             print(f"| {line_per_step_reward:<{content_width-1}}|")
             print(f"| {line_episode_reward:<{content_width-1}}|")
-            # print(f"| {line_episode_success:<{content_width-1}}|")
             print(f"|________________________________________________________________|")
 
             # update rollout time
@@ -396,7 +420,26 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            agent.save(checkpoint_path)
+            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
+            agent.save(checkpoint_path, checkpoint_path_jit)
+
+            if verify_save_logic:
+                test_agent.load(checkpoint_path)
+                test_agent.set_running_mode("eval")
+                with torch.no_grad():
+                    agent.set_running_mode("eval")
+                    actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    test_actions, test_nonscaled_actions, test_action_log_probs, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    agent.set_running_mode("train")
+                
+                if not torch.allclose(actions, test_actions):
+                    max_err = (actions - test_actions).abs().max().item()
+                    raise RuntimeError(f"Model mismatch. Please check the save logic. [Max Error : {max_err}]")
+                
+                if not torch.allclose(nonscaled_actions, test_nonscaled_actions):
+                    max_err = (nonscaled_actions - test_nonscaled_actions).abs().max().item()
+                    raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
+
 
         # update
         obs = next_obs

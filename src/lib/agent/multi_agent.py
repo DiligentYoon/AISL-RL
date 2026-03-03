@@ -6,6 +6,8 @@ import gymnasium as gym
 from typing import Dict, Mapping, Union, Sequence
 from torch.nn import Module
 
+from lib.utils.seed_utils import set_seed
+
 class MultiAgent:
     """
     Base Agent Class
@@ -29,8 +31,12 @@ class MultiAgent:
         self.cfg = cfg
         self.model = model
         self.device = device
+        self.seed = self.cfg["seed"]
         self.possible_agents = possible_agents
         self.num_agents = len(possible_agents)
+
+        # set seed
+        set_seed(self.seed)
 
         # Spaces
         self.observation_space = observation_space
@@ -86,12 +92,13 @@ class MultiAgent:
                 raise ValueError("Not supported running mode. Please choose 'train' or 'eval'.")
 
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, path_jit: str | None = None) -> None:
         """
         Save the agent to the specified path
 
         Args:
             path: Path to save the model to
+            path_jit: Path to save jit scriptModule to (TODO: Multi-agent is not supported yet.)
         """
         modules = {}
         for uid in self.possible_agents:
@@ -102,6 +109,7 @@ class MultiAgent:
             modules[uid] = uid_module
             os.makedirs(os.path.dirname(path), exist_ok=True)
             torch.save(modules, path)
+        
     
 
     def load(self, path: str) -> None:

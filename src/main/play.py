@@ -13,13 +13,13 @@ parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent."
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-basic-locomotion", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_locomotion/2026-02-21_00-27-37_mappo/agent_3840.pt", help="Path to model checkpoint.")
+parser.add_argument("--num_envs", type=int, default=5, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -42,11 +42,13 @@ import time
 import torch
 import copy
 import numpy as np
+import collections
 
 from datetime import datetime
 
 import lib
 
+from lib.utils.plot_utils import PyQtLivePlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 
@@ -72,6 +74,8 @@ def main():
     # ============================================================================================================================
 
     # create isaac environment
+    env_cfg.seed = cfg.get("seed", None)
+    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # get environment (step) dt for real-time evaluation
@@ -107,6 +111,7 @@ def main():
         act_size = {}
         buffers = {}
         possible_agents = env._unwrapped.cfg.possible_agents
+        num_agent = len(possible_agents)
         for uid in possible_agents:
             observation_space = env.observation_space[uid]
             action_space = env.action_space[uid]
@@ -221,32 +226,135 @@ def main():
     # ======================================================================================================================
 
     # reset environment
+    if env._unwrapped.cfg.viz_data is not None:
+        plot_cfg = env._unwrapped.cfg.viz_data
+        plot = PyQtLivePlotter(env, plot_cfg)
+    else:
+        plot = None
+
+    agent.set_running_mode("eval")
     obs, states, infos = env.reset()
-    rollout = 0
+    write_interval = int(env._unwrapped.cfg.episode_length_s / (env._unwrapped.cfg.sim_dt * env._unwrapped.cfg.decimation))
     timestep = 0
-    test_checkpoint_step = 100
+    tracking_data = collections.defaultdict(list)
+    track_cumulative_rewards   = collections.deque(maxlen=500)
+    track_cumulative_timesteps = collections.deque(maxlen=500)
+    cumulative_rewards = None
+    cumulative_timesteps = None
     # simulate environment
     while simulation_app.is_running():
-        start_time = time.time()
-
         # run everything in inference mode
-        with torch.inference_mode():
+        with torch.no_grad():
             # agent stepping
-            actions, _,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
-            rollout += 1
+            timestep += 1
+
+        # ============ Logging phase =============
+
+        # Data setting for logging
+        if multi_agent:
+            logged_reward = rewards.view(-1, num_agent)
+            logged_reward = torch.mean(logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        else:
+            logged_reward = rewards
+
+        if cumulative_rewards is None:
+            cumulative_rewards = torch.zeros_like(logged_reward, dtype=torch.float32)
+            cumulative_timesteps = torch.zeros_like(logged_reward, dtype=torch.int32)
+
+        # Record data
+        tracking_data["Per step Reward / Maximum Value"].append(torch.max(logged_reward).item())
+        tracking_data["Per step Reward / Minimum Value"].append(torch.min(logged_reward).item())
+        tracking_data["Per step Reward / Mean Value"].append(torch.mean(logged_reward).item())
+
+        # Accumulates per-step rewards
+        cumulative_rewards.add_(logged_reward)
+        cumulative_timesteps.add_(1)
+
+        done = (terminated | truncated).squeeze(-1)
+        finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
+        if finished_episodes.numel():
+            # Storage cumulative rewards and timesteps
+            track_cumulative_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+            track_cumulative_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].reshape(-1).tolist())
+            # Reset the cumulative rewards and timesteps
+            cumulative_rewards[finished_episodes] = 0
+            cumulative_timesteps[finished_episodes] = 0
+
+        # Record cumulative data
+        if len(track_cumulative_rewards):
+            track_reward_np = np.array(track_cumulative_rewards)
+            track_timestep_np = np.array(track_cumulative_timesteps)
+
+            tracking_data["Total Reward / Maximum Value"].append(np.max(track_reward_np))
+            tracking_data["Total Reward / Minimum Value"].append(np.min(track_reward_np))
+            tracking_data["Total Reward / Mean Value"].append(np.mean(track_reward_np))
+
+            tracking_data["Total Episode / Maximum Value"].append(np.max(track_timestep_np))
+            tracking_data["Total Episode / Minimum Value"].append(np.min(track_timestep_np))
+            tracking_data["Total Episode / Mean Value"].append(np.mean(track_timestep_np))
+
+            # reset data containers for next iteration
+            track_cumulative_rewards.clear()
+            track_cumulative_timesteps.clear()
+
+        # Record Task Reward data (Only per step)
+        task_reward = next_infos.get("reward", None)
+        if task_reward is not None:
+            for k, v in task_reward.items():
+                # Mean value of env axis
+                key = f"Per step {k}"
+                tracking_data[key].append(torch.mean(v).item())
+
+        # CLI Logging with specific interval
+        if timestep % write_interval == 0:
+            last_prefix = None
+            # sorted_keys = sorted(tracking_data.keys())
+            content_width = 90
+            line_header = f"Metric Table of {args_cli.task} Task"
+            print(f" {'_' * content_width}")
+            print(f"|{' ' * content_width}|")
+            print(f"|{line_header.center(content_width)}|")
+            print(f"|{'_' * content_width}|")
+            print(f"|{' ' * content_width}|")
+
+            for k, v in tracking_data.items():
+                current_prefix = k.split('/')[0].strip() if '/' in k else "Other"
+
+                if last_prefix is not None and last_prefix != current_prefix:
+                    print(f"|{'-' * (content_width)}|")
+                last_prefix = current_prefix
+
+                if k.endswith("(min)"):
+                    print(f"| {k:<50}: {np.min(v):<36.3f} |")
+                elif k.endswith("(max)"):
+                    print(f"| {k:<50}: {np.max(v):<36.3f} |")
+                else:
+                    print(f"| {k:<50}: {np.mean(v):<36.3f} |")
+            print(f"|{'_' * content_width}|")
+
+            # reset data containers for next iteration
+            tracking_data.clear()
+
+        # Plot Phase
+        if plot is not None:
+            # Plotter Update
+            if "viz_data" in next_infos:
+                plot.update(next_infos["viz_data"])
+
+            # Plotter should be resetted in accordance to env reset (compatible only with env_ids=0)
+            if terminated[0] | truncated[0]:
+                plot.reset()
 
         # Video update
-        if args_cli.video:
-            timestep += 1
+        if args_cli.video and timestep == args_cli.video_length:
             # exit the play loop after recording one video
-            if timestep == args_cli.video_length:
-                break
+            break
         
         # state update
-        # simulation_app.update()
         obs = next_obs
         states = next_states
         infos = next_infos

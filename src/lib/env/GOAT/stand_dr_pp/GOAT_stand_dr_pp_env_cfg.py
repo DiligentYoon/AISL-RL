@@ -6,10 +6,12 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import DCMotorCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
+from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -19,13 +21,27 @@ from isaaclab.managers import SceneEntityCfg
 class EventCfg:
     """Configuration for domain-randomization events."""
 
-    reset_joint = EventTerm(
-        func=randomizer.reset_joints_by_offset,
+    reset_body = EventTerm(
+        func=randomizer.reset_root_state_uniform,
         mode='reset',
-        params={      
-            "position_range": (0, 0),
-            "velocity_range": (0, 0),
-            "asset_cfg": SceneEntityCfg("robot"),
+        params={
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (-0.0, 0.0),
+                "z": (-0.0, 0.0),
+                "roll": (-0.0, 0.0),
+                "pitch": (-0.0, 0.0),
+                "yaw": (-0.0, 0.0)},
+        },
+    )
+
+    reset_robot_joints = EventTerm(
+        func=randomizer.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
         },
     )
 
@@ -44,34 +60,53 @@ class EventCfg:
 
 @configclass
 class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
+    ## =========== Domain Randomization ============ ##
+    events = EventCfg()
+
+    ## =========== Robot Variation (Init pos) ============== ##
+    GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.594),
+            joint_pos={
+                "hip_L_Joint": 0.0,
+                "hip_R_Joint": 0.0,
+                "thigh_L_Joint": 0.55,
+                "thigh_R_Joint": -0.55,
+                "knee_L_Joint": 0.8,
+                "knee_R_Joint": -0.8,
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+                },
+            ),
+        )
+
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 26                      # Observation space
-    state_space = 41                            # State space including privilege information
+    observation_space = 24                      # Observation space
+    state_space = 39                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[0.330, 4.270, 0.40]])
-    joint_kd = torch.tensor([[0.015, 0.010, 0.018]])
-    wheel_kp = torch.tensor([[0.3]])
-    wheel_ki = torch.tensor([[0.3]])
+    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
+    wheel_kp = torch.tensor([[3.0]])
+    wheel_ki = torch.tensor([[3.0]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
-    action_scale_factor = {"joint" : [5.0, ()],
-                           "wheel" : [3.0, ()]}
+    action_scale_factor = {"joint" : [1.0, ()],
+                           "wheel" : [1.0, ()]}
+    pos_margin_factor = 1.1
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Whee per legs
-    torque_limits = torch.tensor([4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 2.5, 2.5])
-    joint_input_limits = torch.tensor([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])         # Currently not used
+    torque_limits = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
     
-
     ## ==================== Curriculum parameters ==================== ##
     total_DR_curriculum_level = 5               # Domain Randomization curriculum level
     total_task_curriculum_level = ["balancing", "recovery"]
@@ -92,24 +127,51 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     default_terrain_restitution = 0.4
 
     ## ==================== Terminal condition ==================== ##
-    height_reset_condition = 0.4                # meter (m)
-    base_tilt_reset_condition = 28              # degree
+    height_reset_condition = 0.15                # meter (m)
+    base_tilt_reset_condition = 30              # degree
+    termination_gravity = 0.7
 
     ## ==================== Reward Shaping ==================== ##
-    target_height = 0.45                        # meter (m)
+    target_height = GOAT_cfg.init_state.pos[2] # meter (m)
     upright_threshold = 5                       # degree
     height_threshold = 0.1                      # meter (m)
     curriculum_level_up_threshold = 0.8         # success rate
     curriculum_level_down_threshold = 0.2
+    soft_torque_limit = 0.9
 
-    r_upright_weight = 1.5
-    r_height_weight = 0.0
-    r_vel_lin_weight = 0.005
-    r_vel_ang_weight = 0.005
-    r_vel_joint_weight = 0.0
-    r_effort_weight = 0.0
-    r_terminated_weight = 0.0
+    r_upright_weight = 4.0
+    r_height_weight = 2.0
     r_alive_weight = 1.0
+
+    p_lin_vel_weight = 0.1
+    p_ang_vel_weight = 0.1
+    p_joint_limit_weight = 10.0
+    p_joint_deviation = 1.0
+    p_all_torque_limit_weight = 0.1
+    p_all_torque_weight = 0.005
+    p_joint_velocity_weight = 0.01
+    p_action_rate_weight = 0.5
+    p_terminated_weight = 100.0
+    
+
+    ## ==================== Plot variables ==================== ##
+    viz_data: dict = {
+        "left_hip_torque (Nm)": 0.0,
+        "right_hip_torque (Nm)": 0.0,
+        "left_thigh_torque (Nm)": 0.0,
+        "right_thigh_torque (Nm)": 0.0,
+        "left_knee_torque (Nm)": 0.0,
+        "right_knee_torque (Nm)": 0.0,
+        "left_wheel_torque (Nm)": 0.0,
+        "right_wheel_torque (Nm)": 0.0,
+        "left_hip_target (deg)": 0.0,
+        "right_hip_target (deg)": 0.0,
+        "left_thigh_target (deg)": 0.0,
+        "right_thigh_target (deg)": 0.0,
+        "left_knee_target (deg)": 0.0,
+        "right_knee_target (deg)": 0.0,
+        "left_wheel_target (rpm)": 0.0,
+        "right_wheel_target (rpm)": 0.0,}
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(
@@ -146,15 +208,11 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         update_period=0.0                                           # Update every period
     )
 
-    
-    # Domain Randomization
-    events = EventCfg()
-
     # Noise Model
     action_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     action_noise_params: dict = {
         "mean": 0.0,
-        "std": 0.05,
+        "std": 0.08,
         "operation": "add",
     }
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
@@ -163,3 +221,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "std": 0.08,
         "operation": "add",
     }
+
+    # Visualization
+    root_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Root"
+    )
+
+    root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)

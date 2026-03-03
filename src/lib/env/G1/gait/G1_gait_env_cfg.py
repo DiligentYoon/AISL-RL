@@ -10,7 +10,7 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
@@ -101,17 +101,21 @@ class EventCfg:
 
 
 @configclass
-class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
+class G1GaitEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 20.0
+    episode_length_s = 10.0
     sim_dt = 1/200
     decimation = 4                       
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 94, "leg": 75}                    
+    # state_space = {"arm": 150, "leg": 150}
+
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 87, "leg": 70}                    
-    state_space = {"arm": 145, "leg": 145}
+    observation_space = {"arm": 66, "leg": 40}                    
+    state_space = {"arm": 90, "leg": 90}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -124,38 +128,44 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 1.0
-    w_track_ang_vel: float = 1.0
+    w_track_lin_vel: float = 4.0
     w_track_heading: float = 1.0
     w_track_height : float = 1.0
 
-    w_feet_gait: float = 2.0
-    w_feet_slide: float = 0.1
+    w_feet_gait:  float = 4.0
+    w_feet_slide: float = 2.0
+    w_flat:       float = 1.0
 
-    w_lin_vel_z: float  = 0.2
-    w_ang_vel_xy: float = 0.05
-    w_joint_torque: float = 2.0e-6
-    w_joint_acc: float = 1.0e-7
-    w_action_rate: float = 0.005
-    w_flat: float = 1.0
+    w_lin_vel_z:          float = 0.1
+    w_ang_vel_xy:         float = 0.01
+    w_joint_torque:       float = 1.0e-5
+    w_joint_torque_limit: float = 1.0e-4
+    w_joint_acc:          float = 1.0e-6
+    w_joint_vel:          float = 5.0e-4
 
-    w_limits_ankle: float = 1.0
-    w_limits_hip: float = 0.1
-    w_limits_arm: float = 0.1
-    w_limits_fingers: float = 0.05
-    w_limits_torso: float = 0.1
+    w_limits:            float = 10.0
+    w_deviation_hip:     float = 1.0
+    w_deviation_torso:   float = 1.0
+    w_deviation_arm:     float = 0.1
+    w_deviation_fingers: float = 0.05
+    w_action_rate:       float = 0.05
 
     w_termination: float = 200
-    termination_height: float = 0.4
+    termination_height: float = 0.45
+    termination_gravity: float = 0.5
+    termination_ang_vel: float = 15.0
+    termination_target_foot: float = 1.0
+
+    soft_torque_limit: float = 0.9
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
-    time_period_max = 0.5
-    dstep_min = 0.5
-    dstep_max = 0.6
-    z_c_min = 0.8
-    z_c_max = 1.0
+    time_period_min = 0.35
+    time_period_max = 0.35
+    dstep_min = 0.35
+    dstep_max = 0.35
+    z_c_min = 0.75
+    z_c_max = 0.75
 
 
     # Simulation
@@ -173,8 +183,9 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(1.0, 1.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
+        is_body_frame=False,
     )
 
     # Terrain
@@ -228,6 +239,21 @@ class G1BalancingLocomotionEnvCfg(G1BaseEnvCfg):
         }
     )
 
+    target_foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Target_foot_rotation"
+    )
+
+    foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Foot_rotation"
+    )
+
+    torso_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Torso_rotation"
+    )
+
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    target_foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    torso_rotation_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)

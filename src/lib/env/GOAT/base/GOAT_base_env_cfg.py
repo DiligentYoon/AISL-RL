@@ -47,7 +47,8 @@ else:
 
 GOAT_Cfg: ArticulationCfg = ArticulationCfg(
     # prim_path="{ENV_REGEX_NS}/Robot",               # Path for Interactivescene's clone_environemnts
-    prim_path="/World/envs/env_.*/Robot",               # Path for DirectRLEnv
+    prim_path="/World/envs/env_.*/Robot",             # Path for DirectRLEnv
+    soft_joint_pos_limit_factor=0.9,
     spawn=sim_utils.UsdFileCfg(
         usd_path=urdf_converter.usd_path,
         scale=(1.0, 1.0, 1.0),
@@ -75,17 +76,28 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
     
     # Initial Joint pos and vel
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.0),
+        pos=(0.0, 0.0, 0.594),
         joint_pos={
             "hip_L_Joint": 0.0,
             "hip_R_Joint": 0.0,
-            "thigh_L_Joint": 0.0,
-            "thigh_R_Joint": 0.0,
-            "knee_L_Joint": 0.0,
-            "knee_R_Joint": 0.0,
+            "thigh_L_Joint": 0.55,
+            "thigh_R_Joint": -0.55,
+            "knee_L_Joint": 0.8,
+            "knee_R_Joint": -0.8,
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
             },
+        # pos=(0.0, 0.0, 0.63),
+        # joint_pos={
+        #     "hip_L_Joint": 0.0,
+        #     "hip_R_Joint": 0.0,
+        #     "thigh_L_Joint": 0.0,
+        #     "thigh_R_Joint": -0.0,
+        #     "knee_L_Joint": 0.0,
+        #     "knee_R_Joint": -0.0,
+        #     "wheel_L_Joint": 0.0,
+        #     "wheel_R_Joint": 0.0,
+        #     },
         ),
 
     # Actuators cfg
@@ -192,3 +204,6 @@ class GOATBaseEnvCfg(EnvCfg):
 
     # GOAT cfg
     GOAT_cfg: ArticulationCfg = GOAT_Cfg
+
+    # Torque limit
+    torque_limits: list[float] = [1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]

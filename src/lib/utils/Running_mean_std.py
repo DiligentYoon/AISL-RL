@@ -21,7 +21,7 @@ class RunningMeanStd(nn.Module):
             self.register_buffer("var", torch.ones(self.shape, dtype=torch.float32, device=self.device))
             self.register_buffer("count", torch.tensor(self.epsilon, dtype=torch.float32, device=self.device))
 
-    def standardize(self, x: torch.Tensor, update: bool = False) -> None:
+    def standardize(self, x: torch.Tensor, update: bool = False):
         """
         Update the statistics with a new batch of data.
 

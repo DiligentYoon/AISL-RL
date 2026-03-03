@@ -176,6 +176,10 @@ class Env(gym.Env):
 
         # allocate dictionary to store metrics
         self.extras = {}
+        # allocate viz_data dictionary to information dict
+        self.is_plot = (self.num_envs == 1)
+        if (self.cfg.viz_data is not None) and (self.is_plot):
+            self.extras["viz_data"] = self.cfg.viz_data
 
         # initialize data and constants
         # -- counter for simulation steps
@@ -416,7 +420,11 @@ class Env(gym.Env):
                 self.obs_buf = constant_noise(self.obs_buf, **self.cfg.observation_noise_params)
             else:
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
-            
+        
+        # update viz data
+        if (self.cfg.viz_data is not None) and (self.is_plot):
+            self.extras = self._update_viz_data()
+
         # return observations, rewards, resets and extras
         return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 
@@ -715,3 +723,12 @@ class Env(gym.Env):
         set their visibility into the stage.
         """
         raise NotImplementedError(f"Debug visualization is not implemented for {self.__class__.__name__}.")
+
+    @abstractmethod
+    def _update_viz_data(self) -> Dict:
+        if (self.cfg.viz_data is not None) and (self.is_plot):
+            raise NotImplementedError(
+                f"{self.__class__.__name__}: vizualization option is true, "
+                "so 'update_viz_data must be implemented to update visualization info")
+        else:
+            return self.extras
