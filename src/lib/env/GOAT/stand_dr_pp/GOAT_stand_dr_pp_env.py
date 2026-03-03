@@ -225,8 +225,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Regularization Penalty
         p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
         p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel), dim=1)
-        # p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation), dim=1) # wheel is not included
-        p_joint_deviation_hip = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=-1)
+        p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation), dim=1) # wheel is not included
+        # p_joint_deviation_hip = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=-1)
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
@@ -241,7 +241,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             self.cfg.r_alive_weight * r_alive                       +
             self.cfg.p_lin_vel_weight * p_lin_vel                   +
             self.cfg.p_ang_vel_weight * p_ang_vel                   +
-            self.cfg.p_joint_deviation * p_joint_deviation_hip      +
+            self.cfg.p_joint_deviation * p_joint_deviation      +
             self.cfg.p_joint_limit_weight * p_joint_limit           +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit +
             self.cfg.p_all_torque_weight * p_all_torque             +
@@ -262,7 +262,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             # ==========================================
             "Task Penalty / Lin_Vel"         : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
-            "Task Penalty / Joint_Deviation" : self.cfg.p_joint_deviation * p_joint_deviation_hip, 
+            "Task Penalty / Joint_Deviation" : self.cfg.p_joint_deviation * p_joint_deviation, 
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
             "Task Penalty / Torque"          : self.cfg.p_all_torque_weight * p_all_torque,
@@ -316,7 +316,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
         self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
-        self.joint_deviation = self.joint_pos[:, self.joint_ids] - self._robot.data.default_joint_pos[:, self.joint_ids]
+        self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
         
 
         # Extra Information data

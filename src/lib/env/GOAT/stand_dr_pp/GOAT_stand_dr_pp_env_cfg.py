@@ -146,9 +146,9 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 1.0
-    p_all_torque_limit_weight = 0.1
-    p_all_torque_weight = 0.01
+    p_joint_deviation = 5.0
+    p_all_torque_limit_weight = 0.05
+    p_all_torque_weight = 0.005
     p_joint_velocity_weight = 0.01
     p_action_rate_weight = 0.5
     p_terminated_weight = 100.0
