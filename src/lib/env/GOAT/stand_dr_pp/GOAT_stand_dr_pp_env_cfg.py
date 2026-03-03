@@ -66,14 +66,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.594),
+            pos=(0.0, 0.0, 0.61),
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
-                "thigh_L_Joint": 0.55,
-                "thigh_R_Joint": -0.55,
-                "knee_L_Joint": 0.8,
-                "knee_R_Joint": -0.8,
+                "thigh_L_Joint": 0.25,
+                "thigh_R_Joint": -0.25,
+                "knee_L_Joint": 0.6,
+                "knee_R_Joint": -0.6,
                 "wheel_L_Joint": 0.0,
                 "wheel_R_Joint": 0.0,
                 },
