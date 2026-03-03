@@ -90,10 +90,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[2.0, 2.0, 2.0]])
+    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
     joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
-    wheel_kp = torch.tensor([[2.0]])
-    wheel_ki = torch.tensor([[2.0]])
+    wheel_kp = torch.tensor([[3.0]])
+    wheel_ki = torch.tensor([[3.0]])
     PD_LPF_gain = 0.049
     PI_LPF_gain = 0.049
     action_scale_factor = {"joint" : [1.0, ()],
@@ -105,7 +105,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Whee per legs
-    torque_limits = [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    torque_limits = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
     
     ## ==================== Curriculum parameters ==================== ##
     total_DR_curriculum_level = 5               # Domain Randomization curriculum level
@@ -139,16 +139,16 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     curriculum_level_down_threshold = 0.2
     soft_torque_limit = 0.9
 
-    r_upright_weight = 4.0
+    r_upright_weight = 5.0
     r_height_weight = 2.0
     r_alive_weight = 1.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 5.0
+    p_joint_deviation = 10.0
     p_all_torque_limit_weight = 0.1
-    p_all_torque_weight = 0.005
+    p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.01
     p_action_rate_weight = 0.5
     p_terminated_weight = 100.0
