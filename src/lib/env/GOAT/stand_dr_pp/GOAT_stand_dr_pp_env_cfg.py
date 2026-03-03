@@ -83,7 +83,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
-    decimation = 2                              # 100Hz policy
+    decimation = 1                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 24                      # Observation space
     state_space = 39                            # State space including privilege information
