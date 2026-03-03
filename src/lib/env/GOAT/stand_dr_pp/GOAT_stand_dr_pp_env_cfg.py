@@ -90,7 +90,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
     joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
     wheel_kp = torch.tensor([[3.0]])
     wheel_ki = torch.tensor([[3.0]])
@@ -139,14 +139,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     curriculum_level_down_threshold = 0.2
     soft_torque_limit = 0.9
 
-    r_upright_weight = 5.0
-    r_height_weight = 0.0
+    r_upright_weight = 3.0
+    r_height_weight = 2.0
     r_alive_weight = 1.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 1.0
+    p_joint_deviation = 2.0
     p_all_torque_limit_weight = 0.05
     p_all_torque_weight = 0.005
     p_joint_velocity_weight = 0.01

@@ -32,7 +32,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
                                             kd=self.cfg.joint_kd,
-                                            alpha=0.2,
+                                            alpha=0.3,
                                             pos_margin_factor=self.cfg.pos_margin_factor,
                                             num_envs=self.num_envs,
                                             num_dof=self.cfg.leg_dof,
@@ -45,7 +45,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
-                                              alpha=0.2,
+                                              alpha=0.3,
                                               num_envs=self.num_envs,
                                               num_dof=1,                        # One wheel per legs
                                               num_leg=self.cfg.num_leg,
@@ -241,7 +241,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             self.cfg.r_alive_weight * r_alive                       +
             self.cfg.p_lin_vel_weight * p_lin_vel                   +
             self.cfg.p_ang_vel_weight * p_ang_vel                   +
-            self.cfg.p_joint_deviation * p_joint_deviation      +
+            self.cfg.p_joint_deviation * p_joint_deviation          +
             self.cfg.p_joint_limit_weight * p_joint_limit           +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit +
             self.cfg.p_all_torque_weight * p_all_torque             +
