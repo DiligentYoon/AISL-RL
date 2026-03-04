@@ -251,8 +251,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     w_feet_slide: float = 2.0
     w_flat:       float = 1.0
 
-    w_lin_vel_z:          float = 0.1
-    w_ang_vel_xy:         float = 0.01
+    w_lin_vel_z:          float = 0.5
+    w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6

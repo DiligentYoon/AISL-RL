@@ -157,7 +157,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             Observation space
         """
         # TODO: base의 높이를 알 수 있는 방법이 있는지 check
-        observation = torch.cat((self.base_ang_acceleration,
+        observation = torch.cat((self.gravity_vector,
                                  self.base_ang_vel,
                                  self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
@@ -172,8 +172,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_ang_acceleration,
-                                 self.base_ang_vel,
+        observation = torch.cat((self.base_ang_vel,
                                  self.gravity_vector,
                                  self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
@@ -298,7 +297,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Observation data
         self.base_pos_w = self._robot.data.root_pos_w
         self.base_rot_w = self._robot.data.root_quat_w
-        self.base_ang_acceleration = self._robot.data.body_acc_w[:, 0, 3:]
         self.base_ang_vel = self._robot.data.body_ang_vel_w[:, 0, :3]
         self.gravity_vector = self._robot.data.projected_gravity_b                     
         self.joint_pos = self._robot.data.joint_pos

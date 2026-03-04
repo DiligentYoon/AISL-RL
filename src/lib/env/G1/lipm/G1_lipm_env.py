@@ -221,217 +221,125 @@ class G1LIPMEnv(G1BaseEnv):
 
 
     def _apply_action(self):
-        # Multi Agent
-        arm_actions = self.actions["arm"]
-        leg_actions = self.actions["leg"]
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            arm_actions = self.actions["arm"]
+            leg_actions = self.actions["leg"]
 
-        self._robot.set_joint_position_target(
-            target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                                min=self.arm_joint_limits[:, :, 0],
-                                max=self.arm_joint_limits[:, :, 1]),
-            joint_ids=self.total_arm_joint_ids
-        )
+            self._robot.set_joint_position_target(
+                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
+                                    min=self.arm_joint_limits[:, :, 0],
+                                    max=self.arm_joint_limits[:, :, 1]),
+                joint_ids=self.total_arm_joint_ids
+            )
 
-        self._robot.set_joint_position_target(
-            target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                                min=self.leg_joint_limits[:, :, 0],
-                                max=self.leg_joint_limits[:, :, 1]),
-            joint_ids=self.total_leg_joint_ids)
+            self._robot.set_joint_position_target(
+                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                                    min=self.leg_joint_limits[:, :, 0],
+                                    max=self.leg_joint_limits[:, :, 1]),
+                joint_ids=self.total_leg_joint_ids)
+        else:
+            # Single Agent
+            self._robot.set_joint_position_target(
+                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + self.actions,
+                                   min=self.joint_pos_limits[:, :, 0],
+                                   max=self.joint_pos_limits[:, :, 1]),
+                joint_ids=self._joint_dof_ids)
 
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        # Multi Agent
-        observations = {
-            "arm": torch.cat(
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            observations = {
+                "arm": torch.cat(
+                    [
+                        self.root_pos_w[:, 2:3],
+                        self.root_heading.unsqueeze(-1),
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
+                        self.joint_pos[:, self.total_arm_joint_ids],
+                        self.joint_vel[:, self.total_arm_joint_ids]
+                    ],
+                    dim=-1
+                ),
+                "leg": torch.cat(
+                    [
+                        self.root_pos_w[:, 2:3],
+                        self.root_heading.unsqueeze(-1),
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
+                        self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                        self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                        self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                        self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                        self.joint_pos[:, self.total_leg_joint_ids],
+                        self.joint_vel[:, self.total_leg_joint_ids]
+                    ],
+                    dim=-1
+                )
+            }
+        else:
+            # Single Agent
+            observations = torch.cat(
                 [
                     self.root_pos_w[:, 2:3],
                     self.root_heading.unsqueeze(-1),
-                    self.root_lin_vel_b,
-                    self.root_ang_vel_b,
-                    self.projected_gravity,
-                    self.command_inputs_b,
-                    self.phase_sin.unsqueeze(-1),
-                    self.phase_cos.unsqueeze(-1),
-                    self.joint_pos[:, self.total_arm_joint_ids],
-                    self.joint_vel[:, self.total_arm_joint_ids]
-                ],
-                dim=-1
-            ),
-            "leg": torch.cat(
-                [
-                    self.root_pos_w[:, 2:3],
-                    self.root_heading.unsqueeze(-1),
-                    self.root_lin_vel_b,
-                    self.root_ang_vel_b,
-                    self.projected_gravity,
-                    self.command_inputs_b,
-                    self.phase_sin.unsqueeze(-1),
-                    self.phase_cos.unsqueeze(-1),
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
                     self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
                     self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                    self.joint_pos[:, self.total_leg_joint_ids],
-                    self.joint_vel[:, self.total_leg_joint_ids]
-                ],
-                dim=-1
-            )
-        }
+                    self.joint_pos,                                     # [E, 37]
+                    self.joint_vel,                                     # [E, 37]
+                ], dim=-1) 
 
         return observations
 
 
     def _get_states(self) -> dict[str, torch.Tensor]:
-        # Multi Agent
-        shared_states = torch.cat(
-            [
-                self.root_pos_w[:, 2:3],
-                self.root_heading.unsqueeze(-1),
-                self.root_lin_vel_b,           # [E, 3]
-                self.root_ang_vel_b,           # [E, 3]
-                self.projected_gravity,         # [E, 3]
-                self.command_inputs_b,          # [E, 3]
-                self.phase_sin.unsqueeze(-1),   # [E, 1]
-                self.phase_cos.unsqueeze(-1),   # [E, 1]
-                self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-                self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                self.joint_pos,                 # [E, 37]
-                self.joint_vel,                 # [E, 37]
-            ], dim=-1) 
-        
-        states = {
-            "arm": shared_states,
-            "leg": shared_states
-        }
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            shared_states = torch.cat(
+                [
+                    self.root_pos_w[:, 2:3],
+                    self.root_heading.unsqueeze(-1),
+                    self.root_lin_vel_b,           # [E, 3]
+                    self.root_ang_vel_b,           # [E, 3]
+                    self.projected_gravity,         # [E, 3]
+                    self.command_inputs_b,          # [E, 3]
+                    self.phase_sin.unsqueeze(-1),   # [E, 1]
+                    self.phase_cos.unsqueeze(-1),   # [E, 1]
+                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                    self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                    self.joint_pos,                 # [E, 37]
+                    self.joint_vel,                 # [E, 37]
+                ], dim=-1) 
+            
+            states = {
+                "arm": shared_states,
+                "leg": shared_states
+            }
+        else:
+            # Single Agent
+            states = None
 
         return states
-
-
-    # def _get_observations(self) -> dict[str, torch.Tensor] | torch.Tensor:
-    #     if self.cfg.num_agents > 1:
-    #         # Multi Agent
-    #         observations = {
-    #             "arm": torch.cat(
-    #                 [
-    #                     self.CoM[:, 2:3],                                # [E, 1]
-    #                     self.root_lin_vel_b,                            # [E, 3]
-    #                     self.root_lin_vel_b,                            # [E, 3]
-    #                     self.torso_heading_cos.unsqueeze(-1),            # [E, 1]
-    #                     self.torso_heading_sin.unsqueeze(-1),            # [E, 1]
-    #                     self.root_heading_cos.unsqueeze(-1),
-    #                     self.root_heading_sin.unsqueeze(-1),
-    #                     self.command_heading_cos.unsqueeze(-1),          # [E, 1]
-    #                     self.command_heading_sin.unsqueeze(-1),          # [E, 1]
-    #                     self.projected_gravity,                          # [E, 3]
-    #                     self.command_inputs_b,                           # [E, 3]
-    #                     self.joint_pos[:, self.total_arm_joint_ids],     # [E, 25]
-    #                     self.joint_vel[:, self.total_arm_joint_ids],     # [E, 25]
-    #                     self.actions["arm"]                              # [E, 25]
-    #                 ],
-    #                 dim=-1
-    #             ),
-    #             "leg": torch.cat(
-    #                 [
-    #                     self.CoM[:, 2:3],                                   # [E, 1]
-    #                     self.root_lin_vel_b,                               # [E, 3]
-    #                     self.root_lin_vel_b,                               # [E, 3]
-    #                     self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-    #                     self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-    #                     self.root_heading_cos.unsqueeze(-1),
-    #                     self.root_heading_sin.unsqueeze(-1),
-    #                     self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-    #                     self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-    #                     self.projected_gravity,                             # [E, 3]
-    #                     self.command_inputs_b,                              # [E, 3]
-    #                     self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-    #                     self.z_c.unsqueeze(-1),                             # [E, 1]
-    #                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
-    #                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-    #                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-    #                     self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-    #                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-    #                     self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-    #                     self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-    #                     self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
-    #                     self.actions["leg"]                                 # [E, 12]
-    #                 ],
-    #                 dim=-1
-    #             ),
-    #         }
-    #     else:
-    #         actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
-    #         sorted_actions = actions[:, self.mapping_sort_ids]
-    #         observations = torch.cat(
-    #             [
-    #                 self.CoM[:, 2:3],                                   # [E, 1]
-    #                 self.root_lin_vel_b,                               # [E, 3]
-    #                 self.root_lin_vel_b,                               # [E, 3]
-    #                 self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-    #                 self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-    #                 self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-    #                 self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-    #                 self.projected_gravity,                             # [E, 3]
-    #                 self.command_inputs_b,                              # [E, 3]
-    #                 self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-    #                 self.z_c.unsqueeze(-1),                             # [E, 1]
-    #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
-    #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
-    #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-    #                 self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-    #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-    #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-    #                 self.joint_pos,                                     # [E, 37]
-    #                 self.joint_vel,                                     # [E, 37]
-    #                 sorted_actions                                      # [E, 37]  
-    #             ],
-    #             dim=-1
-    #         )
-
-    #     return observations
-
-    # def _get_states(self) -> dict[str, torch.Tensor] | torch.Tensor:
-    #     if self.cfg.num_agents > 1:
-    #         # Multi Agent
-    #         actions = torch.cat([self.actions["arm"], self.actions["leg"]], dim=-1)
-    #         sorted_actions = actions[:, self.mapping_sort_ids]
-    #         shared_states = torch.cat(
-    #             [
-    #                 self.CoM[:, 2:3],                                   # [E, 1]
-    #                 self.root_lin_vel_b,                               # [E, 3]
-    #                 self.root_lin_vel_b,                               # [E, 3]
-    #                 self.torso_heading_cos.unsqueeze(-1),               # [E, 1]
-    #                 self.torso_heading_sin.unsqueeze(-1),               # [E, 1]
-    #                 self.root_heading_cos.unsqueeze(-1),
-    #                 self.root_heading_sin.unsqueeze(-1),
-    #                 self.command_heading_cos.unsqueeze(-1),             # [E, 1]
-    #                 self.command_heading_sin.unsqueeze(-1),             # [E, 1]
-    #                 self.projected_gravity,                             # [E, 3]
-    #                 self.command_inputs_b,                              # [E, 3]
-    #                 self.full_step_period.unsqueeze(-1) * self.step_dt, # [E, 1]
-    #                 self.z_c.unsqueeze(-1),                             # [E, 1]
-    #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
-    #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
-    #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-    #                 self.foot_rot_yaw_b.view(self.num_envs, -1),        # [E, 2]
-    #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-    #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-    #                 self.joint_pos,                                     # [E, 37]
-    #                 self.joint_vel,                                     # [E, 37]
-    #                 sorted_actions                                      # [E, 37] 
-    #             ], dim=-1) 
-            
-    #         states = {
-    #             "arm": shared_states,
-    #             "leg": shared_states,
-    #         }
-    #     else:
-    #         # Single Agent (Syncronous Actor Critic)
-    #         states = None
-            
-    #     return states
-
+    
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking rewards
@@ -508,11 +416,17 @@ class G1LIPMEnv(G1BaseEnv):
                       self.cfg.w_joint_vel           * joint_vel_penalty_leg           + \
                       self.cfg.w_action_rate         * action_rate_penalty_leg 
 
-        # Dictionary key order (alphabetical order in dictionary)
-        rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            # Dictionary key order (alphabetical order in dictionary)
+            rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
+            # Update Prev Actions
+            self.prev_actions = {k: v.clone() for k, v in self.actions.items()}
+        else:
+            # Single Agent
+            rewards = common_rewards + (arm_rewards - common_rewards) + (leg_rewards - common_rewards)
+            self.prev_actions = self.actions.clone()
 
-        # Update Prev Actions (Multi Agent)
-        self.prev_actions = {k: v.clone() for k, v in self.actions.items()}
 
         # Reward Info for logging
         self.extras["reward"] = {
@@ -586,13 +500,23 @@ class G1LIPMEnv(G1BaseEnv):
         self.foot_on_swing[env_ids, 0] = 1 # Initial swing feet is the left feet
 
         if hasattr(self, "prev_actions"):
-            self.prev_actions["leg"][env_ids] = 0.0
-            self.prev_actions["arm"][env_ids] = 0.0
+            if self.cfg.num_agents > 1:
+                # Multi Agent
+                self.prev_actions["leg"][env_ids] = 0.0
+                self.prev_actions["arm"][env_ids] = 0.0
+            else:
+                # Single Agent
+                self.prev_actions[env_ids] = 0.0
         else:
-            self.prev_actions = {
-                    "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
-                    "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
-            }
+            if self.cfg.num_agents > 1:
+                # Multi Agent
+                self.prev_actions = {
+                        "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
+                        "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
+                }
+            else:
+                # Single Agent
+                self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
 
         # Command resampling
         self.commands.reset(env_ids)
