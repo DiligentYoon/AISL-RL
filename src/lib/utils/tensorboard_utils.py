@@ -43,7 +43,6 @@ def common_scalar_tags(event_files: List[str | Path]) -> List[str]:
 # 1) Event file -> scalar DF
 # -----------------------------
 def read_scalars_from_event_file(event_file: str | Path) -> pd.DataFrame:
-    """(이전과 동일) 단일 파일의 모든 scalar를 long-form DF로."""
     event_file = Path(event_file)
     if not event_file.exists():
         raise FileNotFoundError(event_file)

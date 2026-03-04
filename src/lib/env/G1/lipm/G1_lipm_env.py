@@ -64,8 +64,11 @@ class G1LIPMEnv(G1BaseEnv):
         self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
 
         # Action scale factor
-        self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
-        self.cfg.action_scale_factor["leg"][1] = self.total_leg_joint_ids
+        if self.cfg.num_agents > 1:
+            self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
+            self.cfg.action_scale_factor["leg"][1] = self.total_leg_joint_ids
+        else:
+            self.cfg.action_scale_factor = 1.0
 
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
@@ -241,7 +244,7 @@ class G1LIPMEnv(G1BaseEnv):
         else:
             # Single Agent
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + self.actions,
+                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
                                    min=self.joint_pos_limits[:, :, 0],
                                    max=self.joint_pos_limits[:, :, 1]),
                 joint_ids=self._joint_dof_ids)
@@ -380,13 +383,19 @@ class G1LIPMEnv(G1BaseEnv):
         joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
         joint_torque_penalty_leg        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
         joint_vel_penalty_leg           = -torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
-        action_rate_penalty_leg         = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
+        if self.cfg.num_agents > 1:
+            action_rate_penalty_leg     = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
+        else:
+            action_rate_penalty_leg     = -torch.sum(torch.square(self.actions[:, self.total_leg_joint_ids] - self.prev_actions[:, self.total_leg_joint_ids]), dim=1)
 
         joint_limit_penalty_arm         = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
         joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
         joint_torque_penalty_arm        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
         joint_vel_penalty_arm           = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
-        action_rate_penalty_arm         = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
+        if self.cfg.num_agents > 1:
+            action_rate_penalty_arm     = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
+        else:
+            action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
         common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
                          self.cfg.w_track_heading * heading_rewards     + \
