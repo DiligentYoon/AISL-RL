@@ -216,24 +216,24 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 )                
 
     ## ========== Multi Agent Setting =========== ##
-    # possible_agents = ["arm", "leg"]
-    # action_space = {"arm": 25, "leg": 12}                         
-    # observation_space = {"arm": 94, "leg": 75}                    
-    # state_space = {"arm": 150, "leg": 150}
+    possible_agents = ["arm", "leg"]
+    action_space = {"arm": 25, "leg": 12}                         
+    observation_space = {"arm": 94, "leg": 75}                    
+    state_space = {"arm": 150, "leg": 150}
 
-    # action_space = {"arm": 25, "leg": 12}                         
-    # observation_space = {"arm": 66, "leg": 56}                    
-    # state_space = {"arm": 106, "leg": 106}
-    # num_agents = 2
-    # action_scale_factor = {"arm": [0.5, ()], 
-    #                        "leg": [0.5, ()]}
+    action_space = {"arm": 25, "leg": 12}                         
+    observation_space = {"arm": 66, "leg": 56}                    
+    state_space = {"arm": 106, "leg": 106}
+    num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    action_space = 37                     
-    observation_space = 106                  
-    state_space = 0
-    num_agents = 1
-    action_scale_factor = 0.5
+    # action_space = 37                     
+    # observation_space = 106                  
+    # state_space = 0
+    # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
