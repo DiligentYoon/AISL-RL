@@ -278,10 +278,10 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
-    time_period_max = 0.3
-    dstep_min = 0.2
-    dstep_max = 0.2
+    time_period_min = 0.35
+    time_period_max = 0.35
+    dstep_min = 0.3
+    dstep_max = 0.3
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
     w_foot_loc = 0.4

@@ -609,15 +609,8 @@ class G1LIPMEnv(G1BaseEnv):
             self.support_foot_pos[env_ids] = self.foot_pos_w[env_ids, 1, :3] # Left swing and Right support
             self.support_foot_rot[env_ids] = self.foot_rot_w[env_ids, 1, :4] # Left swing and Right support
             # Initial Target Footstep with command signal
-            # foot_left_w_left = quat_apply(self.foot_rot_w[env_ids, 0], self.left_vec[env_ids])
-            T_half = (self.step_period[env_ids] * self.step_dt) / 2.0
-            forward_offset_x = self.command_inputs_w[env_ids, 0] * T_half
-            forward_offset_y = self.command_inputs_w[env_ids, 1] * T_half
-            self.target_footstep_w[env_ids, 0, 0] = self.foot_pos_w[env_ids, 0, 0] + forward_offset_x # Left swing and Right support
-            self.target_footstep_w[env_ids, 0, 1] = self.foot_pos_w[env_ids, 0, 1] + forward_offset_y # Left swing and Right support
-            self.target_footstep_w[env_ids, 0, 2]  = self.foot_yaw_w[env_ids, 0] # Left swing and Right support
-            self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # Left swing and Right support
-            self.target_footstep_w[env_ids, 1, 2]  = self.foot_yaw_w[env_ids, 1] # Left swing and Right support
+            self.target_footstep_w[env_ids, :, :2] = self.foot_pos_w[env_ids, :, :2]
+            self.target_footstep_w[env_ids, :, 2]  = self.foot_yaw_w[env_ids]
         else:
             # Only progress env
             # Phase update signal
