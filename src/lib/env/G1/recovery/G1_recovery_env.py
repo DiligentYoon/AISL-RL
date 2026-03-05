@@ -26,9 +26,6 @@ class G1LIPMEnv(G1BaseEnv):
     def __init__(self, cfg: G1RecoveryEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
-        # Commands for reference generator
-        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
-
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
 
@@ -104,6 +101,7 @@ class G1LIPMEnv(G1BaseEnv):
 
         # Geometry vector
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
+        self.left_vec = torch.tensor([0.0, 1.0, 0.0], device=self.device).repeat(self.num_envs, 1)
 
         # Visualization
         debug_vis = self.num_envs <= 32
@@ -450,7 +448,6 @@ class G1LIPMEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
@@ -501,9 +498,9 @@ class G1LIPMEnv(G1BaseEnv):
         self.z_c[env_ids] = self.cfg.z_c_min + (self.cfg.z_c_max - self.cfg.z_c_min) * torch.rand(env_ids.shape[0], device=self.device)
         self.phase[env_ids] = 0
         self.phase_count[env_ids] = 0
-        self.update_phase_ids[env_ids] = True
+        self.update_phase_ids[env_ids] = False
         self.command_count[env_ids] = 0
-        self.update_command_ids[env_ids] = True
+        self.update_command_ids[env_ids] = False
 
         # Gait guidance (Foot state)
         self.foot_on_swing[env_ids] = 0
@@ -608,8 +605,9 @@ class G1LIPMEnv(G1BaseEnv):
             # Update only reset env
             self.support_foot_pos[env_ids] = self.foot_pos_w[env_ids, 1, :3] # Left swing and Right support
             self.support_foot_rot[env_ids] = self.foot_rot_w[env_ids, 1, :4] # Left swing and Right support
-            self.target_footstep_w[env_ids, 1, :2] = self.foot_pos_w[env_ids, 1, :2] # Left swing and Right support
-            self.target_footstep_w[env_ids, 1, 2]  = self.foot_yaw_w[env_ids, 1] # Left swing and Right support
+            # Initial Target Footstep with command signal
+            self.target_footstep_w[env_ids, :, :2] = self.foot_pos_w[env_ids, :, :2]
+            self.target_footstep_w[env_ids, :, 2]  = self.foot_yaw_w[env_ids]
         else:
             # Only progress env
             # Phase update signal

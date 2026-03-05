@@ -62,7 +62,7 @@ class EventCfg:
         func=randomizer.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (-0.0, 0.0),
@@ -87,7 +87,7 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(2.0, 2.0),
+        interval_range_s=(2.5, 4.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
             "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
@@ -245,7 +245,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_flat:       float = 1.0
 
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.1
+    w_ang_vel_xy:         float = 0.5
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
@@ -254,24 +254,24 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.1
+    w_deviation_arm:     float = 0.001
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.5
-    termination_ang_vel: float = 15.0
+    termination_gravity: float = 0.7
+    termination_ang_vel: float = 20.0
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.9
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.35
-    time_period_max = 0.35
-    dstep_min = 0.35
-    dstep_max = 0.35
+    time_period_min = 0.3
+    time_period_max = 0.3
+    dstep_min = 0.25
+    dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
     w_foot_loc = 0.4
