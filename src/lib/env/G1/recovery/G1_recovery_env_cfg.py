@@ -58,21 +58,11 @@ class EventCfg:
     # )
 
     # reset
-    # base_external_force_torque = EventTerm(
-    #     func=randomizer.apply_external_force_torque,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "force_range": (0.0, 0.0),
-    #         "torque_range": (-0.0, 0.0),
-    #     },
-    # )
-
     reset_base = EventTerm(
         func=randomizer.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (-0.0, 0.0),
@@ -94,19 +84,19 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 2.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.0, 2.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
+    )
 
 
 
 @configclass
-class G1LIPMEnvCfg(G1BaseEnvCfg):
+class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200
@@ -226,24 +216,24 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
 )                
 
     ## ========== Multi Agent Setting =========== ##
-    possible_agents = ["arm", "leg"]
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 94, "leg": 75}                    
-    state_space = {"arm": 150, "leg": 150}
+    # possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 94, "leg": 75}                    
+    # state_space = {"arm": 150, "leg": 150}
 
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 56}                    
-    state_space = {"arm": 106, "leg": 106}
-    num_agents = 2
-    action_scale_factor = {"arm": [0.5, ()], 
-                           "leg": [0.5, ()]}
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 66, "leg": 56}                    
+    # state_space = {"arm": 106, "leg": 106}
+    # num_agents = 2
+    # action_scale_factor = {"arm": [0.5, ()], 
+    #                        "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
-    # state_space = 0
-    # num_agents = 1
-    # action_scale_factor = 0.5
+    action_space = 37                     
+    observation_space = 106                  
+    state_space = 0
+    num_agents = 1
+    action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
@@ -278,10 +268,10 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
-    time_period_max = 0.3
-    dstep_min = 0.2
-    dstep_max = 0.2
+    time_period_min = 0.35
+    time_period_max = 0.35
+    dstep_min = 0.35
+    dstep_max = 0.35
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
     w_foot_loc = 0.4
