@@ -18,16 +18,13 @@ from isaaclab.sensors import ContactSensor
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
-from lib.env.G1.lipm.G1_lipm_env_cfg import G1LIPMEnvCfg
+from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 
 class G1LIPMEnv(G1BaseEnv):
-    cfg: G1LIPMEnvCfg
+    cfg: G1RecoveryEnvCfg
 
-    def __init__(self, cfg: G1LIPMEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: G1RecoveryEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
-
-        # Commands for reference generator
-        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))

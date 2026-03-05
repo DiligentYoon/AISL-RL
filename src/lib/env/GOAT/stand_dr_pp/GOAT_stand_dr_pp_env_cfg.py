@@ -66,14 +66,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.594),
+            pos=(0.0, 0.0, 0.61),
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
-                "thigh_L_Joint": 0.55,
-                "thigh_R_Joint": -0.55,
-                "knee_L_Joint": 0.8,
-                "knee_R_Joint": -0.8,
+                "thigh_L_Joint": 0.25,
+                "thigh_R_Joint": -0.25,
+                "knee_L_Joint": 0.6,
+                "knee_R_Joint": -0.6,
                 "wheel_L_Joint": 0.0,
                 "wheel_R_Joint": 0.0,
                 },
@@ -90,7 +90,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
     joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
     wheel_kp = torch.tensor([[3.0]])
     wheel_ki = torch.tensor([[3.0]])
@@ -139,19 +139,19 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     curriculum_level_down_threshold = 0.2
     soft_torque_limit = 0.9
 
-    r_upright_weight = 4.0
-    r_height_weight = 2.0
-    r_alive_weight = 1.0
+    r_upright_weight = 3.0
+    r_height_weight = 3.0
+    r_alive_weight = 0.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 1.0
-    p_all_torque_limit_weight = 0.1
-    p_all_torque_weight = 0.005
+    p_joint_deviation = 5.0
+    p_all_torque_limit_weight = 0.01
+    p_all_torque_weight = 0.001
     p_joint_velocity_weight = 0.01
-    p_action_rate_weight = 0.5
-    p_terminated_weight = 100.0
+    p_action_rate_weight = 0.1
+    p_terminated_weight = 200.0
     
 
     ## ==================== Plot variables ==================== ##

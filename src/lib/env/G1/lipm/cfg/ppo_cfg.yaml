@@ -10,7 +10,7 @@ models:
     clip_actions: False
 
   model_type: null
-  shared: True
+  shared: False
   squashed: False
 
 buffer:
@@ -51,4 +51,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 64000
+  timesteps: 96000

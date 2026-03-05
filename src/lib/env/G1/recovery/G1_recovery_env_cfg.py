@@ -58,16 +58,6 @@ class EventCfg:
     # )
 
     # reset
-    # base_external_force_torque = EventTerm(
-    #     func=randomizer.apply_external_force_torque,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "force_range": (0.0, 0.0),
-    #         "torque_range": (-0.0, 0.0),
-    #     },
-    # )
-
     reset_base = EventTerm(
         func=randomizer.reset_root_state_uniform,
         mode="reset",
@@ -94,19 +84,19 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 2.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.5, 4.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
+    )
 
 
 
 @configclass
-class G1LIPMEnvCfg(G1BaseEnvCfg):
+class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200
@@ -226,24 +216,24 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
 )                
 
     ## ========== Multi Agent Setting =========== ##
-    possible_agents = ["arm", "leg"]
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 94, "leg": 75}                    
-    state_space = {"arm": 150, "leg": 150}
+    # possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 94, "leg": 75}                    
+    # state_space = {"arm": 150, "leg": 150}
 
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 56}                    
-    state_space = {"arm": 106, "leg": 106}
-    num_agents = 2
-    action_scale_factor = {"arm": [0.5, ()], 
-                           "leg": [0.5, ()]}
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 66, "leg": 56}                    
+    # state_space = {"arm": 106, "leg": 106}
+    # num_agents = 2
+    # action_scale_factor = {"arm": [0.5, ()], 
+    #                        "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
-    # state_space = 0
-    # num_agents = 1
-    # action_scale_factor = 0.5
+    action_space = 37                     
+    observation_space = 106                  
+    state_space = 0
+    num_agents = 1
+    action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
@@ -255,7 +245,7 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     w_flat:       float = 1.0
 
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.1
+    w_ang_vel_xy:         float = 0.5
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
@@ -264,22 +254,22 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.1
+    w_deviation_arm:     float = 0.001
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.5
-    termination_ang_vel: float = 15.0
+    termination_gravity: float = 0.7
+    termination_ang_vel: float = 20.0
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.9
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.35
-    time_period_max = 0.35
+    time_period_min = 0.3
+    time_period_max = 0.3
     dstep_min = 0.25
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01

@@ -32,7 +32,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
                                             kd=self.cfg.joint_kd,
-                                            alpha=0.059,
+                                            alpha=0.3,
                                             pos_margin_factor=self.cfg.pos_margin_factor,
                                             num_envs=self.num_envs,
                                             num_dof=self.cfg.leg_dof,
@@ -45,7 +45,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
-                                              alpha=0.059,
+                                              alpha=0.3,
                                               num_envs=self.num_envs,
                                               num_dof=1,                        # One wheel per legs
                                               num_leg=self.cfg.num_leg,
@@ -53,6 +53,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               dt=self.cfg.sim_dt,
                                               joint_vel_limits=self.joint_vel_limits,
                                               torque_limits=self.torque_limits)
+
+        # Joint ids
+        self.hip_joint_ids, _  = self._robot.find_joints(["hip_.*"])
 
         # Curriculum Info
         self.extras["Curriculum"] = {}
@@ -154,7 +157,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             Observation space
         """
         # TODO: base의 높이를 알 수 있는 방법이 있는지 check
-        observation = torch.cat((self.base_ang_acceleration,
+        observation = torch.cat((self.gravity_vector,
                                  self.base_ang_vel,
                                  self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
@@ -169,8 +172,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_ang_acceleration,
-                                 self.base_ang_vel,
+        observation = torch.cat((self.base_ang_vel,
                                  self.gravity_vector,
                                  self.base_rot_w,
                                  self.joint_pos[:, self.joint_ids],
@@ -222,7 +224,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Regularization Penalty
         p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
         p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel), dim=1)
-        p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation), dim=1) # wheel is not included
+        p_joint_deviation   = -torch.sum(torch.square(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
+        # p_joint_deviation_hip = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=-1)
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
@@ -294,8 +297,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Observation data
         self.base_pos_w = self._robot.data.root_pos_w
         self.base_rot_w = self._robot.data.root_quat_w
-        self.base_ang_vel = self._robot.data.root_ang_vel_w
-        self.base_ang_acceleration = self._robot.data.body_acc_w[:, 0, 3:]
         self.base_ang_vel = self._robot.data.body_ang_vel_w[:, 0, :3]
         self.gravity_vector = self._robot.data.projected_gravity_b                     
         self.joint_pos = self._robot.data.joint_pos
@@ -313,7 +314,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                     (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
         self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
-        self.joint_deviation = self.joint_pos[:, self.joint_ids] - self._robot.data.default_joint_pos[:, self.joint_ids]
+        self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
         
 
         # Extra Information data
@@ -328,7 +329,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         applied_target = torch.cat([joint_cmd_deg, wheel_vel_cmd_rpm], dim=-1)
         applied_torque = self._robot.data.applied_torque
-
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["left_hip_torque (Nm)"]    = applied_torque[:, 0]
