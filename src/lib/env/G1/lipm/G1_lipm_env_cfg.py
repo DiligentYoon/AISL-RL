@@ -284,8 +284,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
-    w_foot_loc = 0.4
-    w_foot_rot = 0.4
+    w_foot_loc = 0.2
+    w_foot_rot = 0.2
 
 
     # Simulation

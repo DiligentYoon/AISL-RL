@@ -20,11 +20,14 @@ from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 
-class G1LIPMEnv(G1BaseEnv):
+class G1RecoveryEnv(G1BaseEnv):
     cfg: G1RecoveryEnvCfg
 
     def __init__(self, cfg: G1RecoveryEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
+
+        # Commands for reference generator
+        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
@@ -317,18 +320,18 @@ class G1LIPMEnv(G1BaseEnv):
                 [
                     self.root_pos_w[:, 2:3],
                     self.root_heading.unsqueeze(-1),
-                    self.root_lin_vel_b,           # [E, 3]
-                    self.root_ang_vel_b,           # [E, 3]
-                    self.projected_gravity,         # [E, 3]
-                    self.command_inputs_b,          # [E, 3]
-                    self.phase_sin.unsqueeze(-1),   # [E, 1]
-                    self.phase_cos.unsqueeze(-1),   # [E, 1]
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
                     self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
                     self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
                     self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                    self.joint_pos,                 # [E, 37]
-                    self.joint_vel,                 # [E, 37]
+                    self.joint_pos,                                     # [E, 37]
+                    self.joint_vel,                                     # [E, 37]
                 ], dim=-1) 
             
             states = {
