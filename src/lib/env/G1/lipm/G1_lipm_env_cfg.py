@@ -128,19 +128,17 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4, fix_root_link=False
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.706), # knee = 0.6 rad
-        pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
+        # pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
+        pos=(0.0, 0.0, 0.676), # knee = 0.8 rad
         joint_pos={
-            ".*_hip_pitch_joint": -0.35,
-            ".*_knee_joint": 0.7,
-            ".*_ankle_pitch_joint": -0.35,
-            # ".*_hip_pitch_joint": -0.10,
-            # ".*_knee_joint": 0.30,
-            # ".*_ankle_pitch_joint": -0.20,
+            ".*_hip_pitch_joint": -0.4,
+            ".*_knee_joint": 0.8,
+            ".*_ankle_pitch_joint": -0.4,
             
             ".*_elbow_pitch_joint": 0.87,
             "left_shoulder_roll_joint": 0.16,

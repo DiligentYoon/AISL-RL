@@ -123,14 +123,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.706), # knee = 0.6 rad
-        pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
+        # pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
+        pos=(0.0, 0.0, 0.676), # knee = 0.8 rad
         joint_pos={
-            ".*_hip_pitch_joint": -0.35,
-            ".*_knee_joint": 0.7,
-            ".*_ankle_pitch_joint": -0.35,
-            # ".*_hip_pitch_joint": -0.10,
-            # ".*_knee_joint": 0.30,
-            # ".*_ankle_pitch_joint": -0.20,
+            ".*_hip_pitch_joint": -0.4,
+            ".*_knee_joint": 0.8,
+            ".*_ankle_pitch_joint": -0.4,
             
             ".*_elbow_pitch_joint": 0.87,
             "left_shoulder_roll_joint": 0.16,

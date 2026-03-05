@@ -249,6 +249,8 @@ class G1LIPMEnv(G1BaseEnv):
                                    min=self.joint_pos_limits[:, :, 0],
                                    max=self.joint_pos_limits[:, :, 1]),
                 joint_ids=self._joint_dof_ids)
+        
+        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
 
 
     def _get_observations(self) -> dict[str, torch.Tensor]:

@@ -15,7 +15,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-lipm", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_lipm/2026-03-01_21-14-25_mappo/agent_48000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
