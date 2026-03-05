@@ -280,8 +280,8 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     self_collision_threshold = 0.2
     time_period_min = 0.35
     time_period_max = 0.35
-    dstep_min = 0.3
-    dstep_max = 0.3
+    dstep_min = 0.25
+    dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
     w_foot_loc = 0.4
