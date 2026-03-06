@@ -238,11 +238,11 @@ def main():
     cumulative_rewards = None
     cumulative_timesteps = None
     tracking_data = collections.defaultdict(list)
-    track_rewards = collections.deque(maxlen=500)
-    track_timesteps = collections.deque(maxlen=500)
-    CLI_track_rewards = collections.deque(maxlen=500)
-    CLI_track_timesteps = collections.deque(maxlen=500)
-    CLI_step_reward_means = collections.deque(maxlen=500)
+    track_rewards = collections.deque(maxlen=env.num_envs)
+    track_timesteps = collections.deque(maxlen=env.num_envs)
+    CLI_track_rewards = collections.deque(maxlen=env.num_envs)
+    CLI_track_timesteps = collections.deque(maxlen=env.num_envs)
+    CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
     # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0

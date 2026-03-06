@@ -216,10 +216,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 94, "leg": 75}                    
-    state_space = {"arm": 150, "leg": 150}
-
-    action_space = {"arm": 25, "leg": 12}                         
     observation_space = {"arm": 66, "leg": 56}                    
     state_space = {"arm": 106, "leg": 106}
     num_agents = 2
@@ -234,16 +230,16 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 6.0
-    w_track_heading: float = 1.0
+    w_track_lin_vel: float = 4.0
+    w_track_heading: float = 2.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 3.0
+    w_feet_gait:  float = 4.0
     w_feet_slide: float = 2.0
     w_flat:       float = 2.0
 
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 2.0
+    w_ang_vel_xy:         float = 0.5
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
@@ -252,7 +248,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 0.1
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
@@ -266,8 +262,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.3
-    time_period_max = 0.3
+    time_period_min = 0.35
+    time_period_max = 0.35
     dstep_min = 0.25
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01

@@ -226,10 +226,6 @@ class G1LIPMEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 94, "leg": 75}                    
-    state_space = {"arm": 150, "leg": 150}
-
-    action_space = {"arm": 25, "leg": 12}                         
     observation_space = {"arm": 66, "leg": 56}                    
     state_space = {"arm": 106, "leg": 106}
     num_agents = 2
