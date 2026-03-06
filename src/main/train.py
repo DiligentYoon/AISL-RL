@@ -93,6 +93,17 @@ def main():
     cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
+    # wrap for video recording
+    if args_cli.video:
+        video_kwargs = {
+            "video_folder": os.path.join(log_dir, "videos", "train"),
+            "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            "video_length": args_cli.video_length,
+            "disable_logger": True,
+        }
+        print("[INFO] Recording videos during training.")
+        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+
     # Get environment (step) dt for real-time evaluation
     try:
         dt = env.step_dt
