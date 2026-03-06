@@ -84,14 +84,14 @@ class EventCfg:
     )
 
     # interval
-    push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(2.5, 4.0),
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
-    )
+    # push_robot = EventTerm(
+    #     func=randomizer.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(2.5, 4.0),
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+    #         "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
+    # )
 
 
 
@@ -234,16 +234,16 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 4.0
+    w_track_lin_vel: float = 6.0
     w_track_heading: float = 1.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 4.0
+    w_feet_gait:  float = 3.0
     w_feet_slide: float = 2.0
-    w_flat:       float = 1.0
+    w_flat:       float = 2.0
 
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.5
+    w_ang_vel_xy:         float = 2.0
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
