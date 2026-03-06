@@ -54,6 +54,7 @@ from datetime import datetime
 import lib
 
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
+from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
@@ -102,7 +103,7 @@ def main():
             "disable_logger": True,
         }
         print("[INFO] Recording videos during training.")
-        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+        env = RecordVideo(env, **video_kwargs)
 
     # Get environment (step) dt for real-time evaluation
     try:
