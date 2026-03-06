@@ -356,7 +356,7 @@ class RecordVideo(
         self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         """Steps through the environment using action, recording observations if :attr:`self.recording`."""
-        obs, rew, terminated, truncated, info = self.env.step(action)
+        obs, states, rew, terminated, truncated, info = self.env.step(action)
         self.step_id += 1
 
         if self.step_trigger and self.step_trigger(self.step_id):
@@ -367,7 +367,7 @@ class RecordVideo(
             if len(self.recorded_frames) > self.video_length:
                 self.stop_recording()
 
-        return obs, rew, terminated, truncated, info
+        return obs, states, rew, terminated, truncated, info
 
     def render(self) -> RenderFrame | list[RenderFrame]:
         """Compute the render frames as specified by render_mode attribute during initialization of the environment."""
