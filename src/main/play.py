@@ -12,6 +12,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-lipm", help="Name of the task.")
@@ -51,6 +52,7 @@ import lib
 from lib.utils.plot_utils import PyQtLivePlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
+from wrapper.record_wrapper import RecordVideo
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -77,6 +79,19 @@ def main():
     env_cfg.seed = cfg.get("seed", None)
     cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # wrap for video recording
+    if args_cli.video:
+        log_dir = os.path.dirname(args_cli.checkpoint)
+        args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
+        video_kwargs = {
+            "video_folder": os.path.join(log_dir, "videos", "train"),
+            "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            "video_length": args_cli.video_length,
+            "disable_logger": True,
+        }
+        print("[INFO] Recording videos during training.")
+        env = RecordVideo(env, **video_kwargs)
 
     # get environment (step) dt for real-time evaluation
     try:
