@@ -96,7 +96,7 @@ class EventCfg:
 
 
 @configclass
-class G1RecoveryEnvCfg(G1BaseEnvCfg):
+class G1GaitEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200

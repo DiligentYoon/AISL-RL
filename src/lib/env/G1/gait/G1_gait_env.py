@@ -18,12 +18,12 @@ from isaaclab.sensors import ContactSensor
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
-from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
+from lib.env.G1.gait.G1_gait_env_cfg import G1GaitEnvCfg
 
-class G1RecoveryEnv(G1BaseEnv):
-    cfg: G1RecoveryEnvCfg
+class G1GaitEnv(G1BaseEnv):
+    cfg: G1GaitEnvCfg
 
-    def __init__(self, cfg: G1RecoveryEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: G1GaitEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # Commands for reference generator
