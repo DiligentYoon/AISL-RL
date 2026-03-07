@@ -49,6 +49,8 @@ from datetime import datetime
 
 import lib
 
+from isaaclab.envs.common import ViewerCfg
+
 from lib.utils.plot_utils import PyQtLivePlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
@@ -75,6 +77,16 @@ def main():
     # =========================================== Env Spawn & Wrapper Test =======================================================
     # ============================================================================================================================
 
+    # cfg for viewpoint control
+    viewer_cfg = ViewerCfg(
+        origin_type="asset_root",
+        asset_name="robot",
+        env_index=0,
+        eye=(0.0, 4.0, 0.5),
+        lookat=(0.0, 0.0, 0.0)
+    )
+    env_cfg.viewer = viewer_cfg
+
     # create isaac environment
     env_cfg.seed = cfg.get("seed", None)
     cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
@@ -100,7 +112,9 @@ def main():
         dt = env.unwrapped.step_dt
 
     # wrap around environment
-    env = IsaacLabWrapper(env)  
+    env = IsaacLabWrapper(env)
+
+
 
     # configure and instantiate the skrl runner
     cfg["agent"]["experiment"]["write_interval"] = 0  
