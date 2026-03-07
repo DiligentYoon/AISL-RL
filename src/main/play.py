@@ -97,7 +97,7 @@ def main():
         log_dir = os.path.dirname(args_cli.checkpoint)
         args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
         video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "train"),
+            "video_folder": os.path.join(log_dir, "videos", "play"),
             "step_trigger": lambda step: step % args_cli.video_interval == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
