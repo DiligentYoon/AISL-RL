@@ -268,7 +268,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
-    w_foot_loc = 0.4
+    w_foot_loc = 1.0
     w_foot_rot = 0.4
 
 

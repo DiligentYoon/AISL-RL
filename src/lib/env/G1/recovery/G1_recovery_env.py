@@ -408,9 +408,9 @@ class G1RecoveryEnv(G1BaseEnv):
                                  torch.cat([self.target_footstep_w[self.foot_on_swing][:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1))
         loc_error = torch.sum(loc_error, dim=-1)
         rot_error = torch.abs(wrap_to_pi(self.target_footstep_w[self.foot_on_swing][:, 2] - self.foot_yaw_w[self.foot_on_swing]))
-        footstep_loc_rewards = torch.exp(-loc_error / 0.5**2)
-        footstep_rot_rewards = torch.exp(-rot_error / 0.5**2)
-        gait_reward = (diff * s) * (1 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
+        footstep_loc_rewards = torch.exp(-loc_error / 0.3**2)
+        footstep_rot_rewards = torch.exp(-rot_error / 0.3**2)
+        gait_reward = (diff * s) * (0.3 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
