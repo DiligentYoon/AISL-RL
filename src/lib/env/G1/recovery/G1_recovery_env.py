@@ -393,7 +393,7 @@ class G1RecoveryEnv(G1BaseEnv):
         lin_vel_error = torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2])
         lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_b[:, :2], dim=-1)).unsqueeze(-1)
         lin_vel_error = torch.sum(lin_vel_error, dim=-1)
-        heading_error = torch.abs(wrap_to_pi(self.command_heading - self.root_heading))
+        heading_error = torch.abs(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
         height_error  = torch.square(self.root_pos_w[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
         heading_rewards = torch.exp(-heading_error / 0.5**2)
@@ -595,7 +595,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.CoM[i] = (self._robot.data.body_link_pos_w[i] * self.robot_mass[i].unsqueeze(-1)).sum(dim=1) / self.total_mass[i].unsqueeze(-1)
         # Heading
         forward_root_w = quat_apply(self._robot.data.root_quat_w[i], self.forward_vec[i])
-        self.root_heading[i] = torch.atan2(forward_root_w[:, 1], forward_root_w[:, 0])
+        self.root_heading[i] = torch.atan2(forward_root_w[:, 1], forward_root_w[:, 0]).unsqueeze(-1)
         # Attitude
         self.projected_gravity[i] = self._robot.data.projected_gravity_b[i]
         # Joint Angle & Velocity
@@ -605,14 +605,14 @@ class G1RecoveryEnv(G1BaseEnv):
         self.command_inputs_w[i] = self.commands.command_w[i]
         self.command_heading[i] = self.commands.heading[i]
         # Information related to Contact
-        self.air_time[i] = self.contact_sensors.data.current_air_time[i, self.ankle_contact_roll_link_ids] # [Left, Right]
-        self.contact_time[i] = self.contact_sensors.data.current_contact_time[i, self.ankle_contact_roll_link_ids] # [Left, Right]
+        self.air_time[i] = self.contact_sensors.data.current_air_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
+        self.contact_time[i] = self.contact_sensors.data.current_contact_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
 
         # Gait guidance (Foot state)
         # Foot pos in world frame
-        self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i, self.ankle_x_link_ids] # [Left, Right]
-        self.foot_rot_w[i] = self._robot.data.body_link_quat_w[i, self.ankle_x_link_ids] # [Left, Right]
+        self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]
+        self.foot_rot_w[i] = self._robot.data.body_link_quat_w[i][:, self.ankle_x_link_ids] # [Left, Right]
         # Foot pos in body frame
         left_foot_pos_b = quat_apply_inverse(self.root_rot_w[i], self.foot_pos_w[i, 0, :3] - self.root_pos_w[i]) 
         right_foot_pos_b = quat_apply_inverse(self.root_rot_w[i], self.foot_pos_w[i, 1, :3] - self.root_pos_w[i])
@@ -627,7 +627,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.foot_yaw_w[i] = torch.atan2(foot_forward_w[..., 1], foot_forward_w[..., 0]) # [Left, Right] = [E, 2]
         self.foot_yaw_b[i] = torch.atan2(foot_forward_b[..., 1], foot_forward_b[..., 0]) # [Left, Right] = [E, 2]
         # Feet Slide
-        self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+        self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
 
         # Gait guidance (Phase scheduler)
         if env_ids is not None:
@@ -719,10 +719,10 @@ class G1RecoveryEnv(G1BaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
-        self.deviation_hip_xz[i]     = self.joint_pos[i, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i, self.hip_xz_joint_ids]
-        self.deviation_arms[i]       = self.joint_pos[i, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i, self.arm_all_joint_ids]
-        self.deviation_fingers[i]    = self.joint_pos[i, self.finger_all_joint_ids] - self._robot.data.default_joint_pos[i, self.finger_all_joint_ids]
-        self.deviation_torso[i]      = self.joint_pos[i, self.torso_joint_ids] - self._robot.data.default_joint_pos[i, self.torso_joint_ids]
+        self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
+        self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
+        self.deviation_fingers[i]    = self.joint_pos[i][:, self.finger_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.finger_all_joint_ids]
+        self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
 
 
 
