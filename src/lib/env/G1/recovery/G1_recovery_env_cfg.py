@@ -216,8 +216,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 56}                    
-    state_space = {"arm": 106, "leg": 106}
+    observation_space = {"arm": 66, "leg": 42}                    
+    state_space = {"arm": 92, "leg": 92}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -268,8 +268,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
-    w_foot_loc = 1.0
-    w_foot_rot = 0.4
+    w_foot_loc = 0.0
+    w_foot_rot = 0.0
 
 
     # Simulation

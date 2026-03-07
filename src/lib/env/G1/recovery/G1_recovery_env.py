@@ -323,10 +323,10 @@ class G1RecoveryEnv(G1BaseEnv):
                         self.command_inputs_b,
                         self.phase_sin.unsqueeze(-1),
                         self.phase_cos.unsqueeze(-1),
-                        self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                        self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-                        self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                        self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                        # self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                        # self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                        # self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                        # self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
                         self.joint_pos[:, self.total_leg_joint_ids],
                         self.joint_vel[:, self.total_leg_joint_ids]
                     ],
@@ -369,10 +369,10 @@ class G1RecoveryEnv(G1BaseEnv):
                     self.command_inputs_b,                              # [E, 3]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                    self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                    # self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                    # self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                    # self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                    # self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
                     self.joint_pos,                                     # [E, 37]
                     self.joint_vel,                                     # [E, 37]
                 ], dim=-1) 
@@ -410,7 +410,7 @@ class G1RecoveryEnv(G1BaseEnv):
         rot_error = torch.abs(wrap_to_pi(self.target_footstep_w[self.foot_on_swing][:, 2] - self.foot_yaw_w[self.foot_on_swing]))
         footstep_loc_rewards = torch.exp(-loc_error / 0.3**2)
         footstep_rot_rewards = torch.exp(-rot_error / 0.3**2)
-        gait_reward = (diff * s) * (0.3 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
+        gait_reward = (diff * s) * (1.0 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
