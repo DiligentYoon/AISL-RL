@@ -148,7 +148,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.deviation_fingers      = torch.zeros((self.num_envs, len(self.finger_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
-
         # Visualization
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
