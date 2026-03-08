@@ -440,11 +440,8 @@ class G1RecoveryEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
-                         self.cfg.w_track_heading * heading_rewards     + \
-                         self.cfg.w_track_height  * height_rewards      + \
+        common_rewards = self.cfg.w_track_heading * heading_rewards     + \
                          self.cfg.w_flat          * flat_rewards        + \
-                         self.cfg.w_lin_vel_z     * lin_vel_z_penalty   + \
                          self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
                          self.cfg.w_termination   * terminate_penalty
         
@@ -459,6 +456,9 @@ class G1RecoveryEnv(G1BaseEnv):
                       self.cfg.w_action_rate        * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                   + \
+                      self.cfg.w_track_height        * height_rewards                  + \
+                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
+                      self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
@@ -485,11 +485,11 @@ class G1RecoveryEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Linear_Velocity" : self.cfg.w_track_lin_vel * lin_vel_rewards,
             "Task Reward / Common_Heading"         : self.cfg.w_track_heading * heading_rewards,
-            "Task Reward / Common_Height"          : self.cfg.w_track_height  * height_rewards,
             "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
             "Task Reward / Leg_Gait"               : self.cfg.w_feet_gait     * gait_reward,
+            "Task Reward / Leg_Height"             : self.cfg.w_track_height  * height_rewards,
+            "Task Reward / Leg_Linear_Velocity"    : self.cfg.w_track_lin_vel * lin_vel_rewards,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
@@ -502,6 +502,7 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
+            "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
