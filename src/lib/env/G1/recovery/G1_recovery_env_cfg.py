@@ -87,10 +87,10 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(2.0, 2.5),
+        interval_range_s=(2.0, 3.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0)}},
+            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0)}, "yaw": (-0.5, 0.5)},
     )
 
 
@@ -287,7 +287,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(1.0, 1.5), lin_vel_y=(-0.5, 0.5), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
         is_body_frame=False,
     )
