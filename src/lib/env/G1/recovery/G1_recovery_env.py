@@ -416,7 +416,7 @@ class G1RecoveryEnv(G1BaseEnv):
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) 
+        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
         joint_deviation_penalty_fingers    = -torch.sum(torch.abs(self.deviation_fingers), dim=1)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
@@ -494,6 +494,7 @@ class G1RecoveryEnv(G1BaseEnv):
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
+            "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
             "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers,
