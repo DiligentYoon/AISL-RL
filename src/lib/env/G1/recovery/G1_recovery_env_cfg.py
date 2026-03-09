@@ -90,7 +90,7 @@ class EventCfg:
         interval_range_s=(2.0, 3.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0), "yaw": (-0.5, 0.5)}},
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.0, 3.0), "pitch": (-5.0, 5.0)}},
     )
 
 
@@ -248,7 +248,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 0.3
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 

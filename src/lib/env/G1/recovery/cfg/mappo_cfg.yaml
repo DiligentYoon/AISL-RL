@@ -10,7 +10,7 @@ models:
     clip_actions: False
 
   model_type: null
-  shared: True
+  shared: False
   squashed: False
 
 buffer:
