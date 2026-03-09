@@ -90,7 +90,7 @@ class EventCfg:
         interval_range_s=(2.0, 3.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.0, 3.0), "pitch": (-5.0, 5.0)}},
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-5.0, 5.0), "pitch": (-5.0, 5.0)}},
     )
 
 
