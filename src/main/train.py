@@ -10,6 +10,7 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent.")
+parser.add_argument("--seed", type=int, default=None, help="Seed of RL environment")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
@@ -90,8 +91,12 @@ def main():
     # ============================ Env & Wrapper Spawn ================================
 
     # Create isaac environment
-    env_cfg.seed = cfg.get("seed", None)
-    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    if args_cli.seed is not None:
+        env_cfg.seed = args_cli.seed
+        cfg["agent"]["seed"] = args_cli.seed
+    else:
+        env_cfg.seed = cfg.get("seed", None)
+        cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
