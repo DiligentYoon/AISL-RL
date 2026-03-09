@@ -214,20 +214,20 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
 )                
 
     ## ========== Multi Agent Setting =========== ##
-    possible_agents = ["arm", "leg"]
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 40}                    
-    state_space = {"arm": 90, "leg": 90}
-    num_agents = 2
-    action_scale_factor = {"arm": [0.5, ()], 
-                           "leg": [0.5, ()]}
+    # possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 25, "leg": 12}                         
+    # observation_space = {"arm": 66, "leg": 40}                    
+    # state_space = {"arm": 90, "leg": 90}
+    # num_agents = 2
+    # action_scale_factor = {"arm": [0.5, ()], 
+    #                        "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
-    # state_space = 0
-    # num_agents = 1
-    # action_scale_factor = 0.5
+    action_space = 37                     
+    observation_space = 90                  
+    state_space = 0
+    num_agents = 1
+    action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
