@@ -15,7 +15,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
@@ -24,6 +24,12 @@ parser.add_argument("--algorithm",
                     default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
+
+parser.add_argument("--model",
+                    type=str,
+                    default="None",
+                    choices=["None", "MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -62,6 +68,7 @@ from lib.model.model_factory import ModelFactory
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
+model = args_cli.model.lower()
 
 def main():
     """
@@ -177,6 +184,10 @@ def main():
         act_size = buffer.tensors["actions"].shape[-1]
 
     # ====================== Model Spawn  ==========================
+    # Overwrite cfg by cli argument
+    if model is not "none":
+        cfg["models"]["model_type"] = model
+    
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
     if model_manager.model_type is None:
         models = model_manager.generate_mlp_models(observation_size=obs_size,

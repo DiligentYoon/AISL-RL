@@ -4,7 +4,7 @@ import gymnasium as gym
 from typing import Union, Any
 
 from lib.model.MLP import Actor, Critic, SharedActor, JointActor
-from lib.model.attention_net import AttentionActor
+from lib.model.MLP_test import SuperConnectedActor, CommunetActor
 from lib.model.NerveNet import NerveNetPolicy
 from lib.utils.graph_utils import Mapping
 from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
@@ -23,12 +23,20 @@ class ModelFactory:
         """
 
         self.model_cfg = cfg
-        self.is_shared = self.model_cfg.get("shared", False)
-        self.is_joint  = self.model_cfg.get("joint", False)
+        
+        # Load model cfg
+        # self.is_shared = self.model_cfg.get("shared", False)
+        # self.is_joint  = self.model_cfg.get("joint", False)
+        self.is_shared = False                                          # NOTE: 이거 최적화해야할지도?
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
-        
         self.model_type = self.model_cfg["policy"].get("type", None)
+        
+        if self.model_type is None:
+            self.model_type_lower = "mlp"
+        
+        else:
+            self.model_type_lower = self.model_type.lower()
 
         self.device = device
 
@@ -42,41 +50,60 @@ class ModelFactory:
         if (possible_agents is None) and (self.is_multi_agent):
             raise RuntimeError("Please confirm the cfg file whether multi_agent is assigned true or false")
 
-        if self.model_type is not None:
-            raise RuntimeError(f"MLP model can't reflect the {self.model_type} type.")
-
         if self.is_multi_agent:
+            # Multi agent
             models = {}
-            if self.is_shared:
-                # Multi Agent : Shared network
-                if self.is_joint:
-                    actor = AttentionActor(possible_agents=possible_agents,
-                                           num_observations=observation_size,
-                                           num_actions=action_size,
-                                           encoder_hidden_dim=128,
-                                           attn_hidden_dim=128,
-                                           RMA_hidden_dim=0,
-                                           min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                           max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                           squash=self.is_squashed,
-                                           device=self.device)
-                else:
-                    actor = SharedActor(possible_agents=possible_agents,
-                                        num_observations=observation_size,
-                                        num_actions=action_size,
-                                        encoder_hidden_dim=128,
-                                        RMA_hidden_dim=0,
-                                        min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                        max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                        squash=self.is_squashed,
-                                        device=self.device)
+            if self.model_type_lower == "joint":
+                self.is_shared = True
+                actor = JointActor(possible_agents=possible_agents,
+                                    num_observations=observation_size,
+                                    num_actions=action_size,
+                                    encoder_hidden_dim=128,
+                                    RMA_hidden_dim=0,
+                                    min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                    max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                    squash=self.is_squashed,
+                                    device=self.device)
                 
+            elif self.model_type_lower == "shared":
+                self.is_shared = True
+                actor = SharedActor(possible_agents=possible_agents,
+                                    num_observations=observation_size,
+                                    num_actions=action_size,
+                                    encoder_hidden_dim=128,
+                                    RMA_hidden_dim=0,
+                                    min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                    max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                    squash=self.is_squashed,
+                                    device=self.device)
+            
+            elif self.model_type_lower == "superconnected":
+                self.is_shared = True
+                actor = SuperConnectedActor(possible_agents=possible_agents,
+                                            num_observations=observation_size,
+                                            num_actions=action_size,
+                                            min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                            max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                            squash=self.is_squashed,
+                                            device=self.device)
+            
+            elif self.model_type_lower == "communet":
+                self.is_shared = False
+                actor = CommunetActor(possible_agents=possible_agents,
+                                      num_observations=observation_size, 
+                                      num_actions=action_size,
+                                      hidden_dim=128,
+                                      communet_depth=4,
+                                      min_log_std=self.model_cfg["policy"]["min_log_std"], 
+                                      max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                      squash=self.is_squashed, 
+                                      device=self.device)
+            
+            # Critic initialization
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
-                if self.is_shared:
-                    critic = Critic(num_states=state_size[uid],
-                                    device=self.device)
-                else:
+                if self.model_type_lower == "mlp":
+                    self.is_shared = False
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -86,22 +113,27 @@ class ModelFactory:
                     critic = Critic(num_states=state_size[uid],
                                     device=self.device)
                 
+                else:
+                    critic = Critic(num_states=state_size[uid],
+                                    device=self.device)
+                
                 models[uid] = {
                     'actor': actor,
                     'critic': critic}
-            
-        else:
+
+        elif self.is_multi_agent is False:
             # Single Agent
-            actor = Actor(num_observations=observation_size,
-                            num_actions=action_size,
-                            min_log_std=self.model_cfg["policy"]["min_log_std"],
-                            max_log_std=self.model_cfg["policy"]["max_log_std"],
-                            squash=self.is_squashed,
-                            device=self.device)
-            critic = Critic(num_states=state_size,
-                            device=self.device)
+            if self.model_type_lower == "mlp":
+                self.is_shared = False
+                actor = Actor(num_observations=observation_size,
+                                num_actions=action_size,
+                                min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                squash=self.is_squashed,
+                                device=self.device)
+                critic = Critic(num_states=state_size,
+                                device=self.device)
                 
-            
             models = {
                 'actor': actor,
                 'critic': critic}
@@ -116,8 +148,7 @@ class ModelFactory:
                             node_cfg: dict = None,
                             mapping_cfg: dict = None):
         
-        model_type_lower = self.model_type.lower()
-        if model_type_lower == "nervenet":
+        if self.model_type_lower == "nervenet":
             actor = NerveNetPolicy(
                     observation_space=observation_space,
                     action_space=action_space,
@@ -136,7 +167,7 @@ class ModelFactory:
             critic = Critic(num_states=state_size,
                             device=self.device)
 
-        elif model_type_lower == "bodytransformer":
+        elif self.model_type_lower == "bodytransformer":
             mapping = Mapping(mapping_cfg)
             use_mlp = self.model_cfg.get("use_mlp", False)
             action_detokenizer = ActionDetokenizer(mapping=mapping,
