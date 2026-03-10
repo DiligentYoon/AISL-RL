@@ -27,6 +27,7 @@ class ModelFactory:
         # Load model cfg
         # self.is_shared = self.model_cfg.get("shared", False)
         # self.is_joint  = self.model_cfg.get("joint", False)
+        self.is_shared = False                                          # NOTE: 이거 최적화해야할지도?
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
         self.model_type = self.model_cfg["policy"].get("type", None)
@@ -53,6 +54,7 @@ class ModelFactory:
             # Multi agent
             models = {}
             if self.model_type_lower == "joint":
+                self.is_shared = True
                 actor = JointActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
@@ -64,6 +66,7 @@ class ModelFactory:
                                     device=self.device)
                 
             elif self.model_type_lower == "shared":
+                self.is_shared = True
                 actor = SharedActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
@@ -75,6 +78,7 @@ class ModelFactory:
                                     device=self.device)
             
             elif self.model_type_lower == "superconnected":
+                self.is_shared = True
                 actor = SuperConnectedActor(possible_agents=possible_agents,
                                             num_observations=observation_size,
                                             num_actions=action_size,
@@ -84,6 +88,7 @@ class ModelFactory:
                                             device=self.device)
             
             elif self.model_type_lower == "communet":
+                self.is_shared = False
                 actor = CommunetActor(possible_agents=possible_agents,
                                       num_observations=observation_size, 
                                       num_actions=action_size,
@@ -98,6 +103,7 @@ class ModelFactory:
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
                 if self.model_type_lower == "mlp":
+                    self.is_shared = False
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -118,6 +124,7 @@ class ModelFactory:
         elif self.is_multi_agent is False:
             # Single Agent
             if self.model_type_lower == "mlp":
+                self.is_shared = False
                 actor = Actor(num_observations=observation_size,
                                 num_actions=action_size,
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
