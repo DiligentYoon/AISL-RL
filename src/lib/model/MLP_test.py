@@ -215,7 +215,6 @@ class SuperConnectedActor(Model):
                  possible_agents: list[str],
                  num_observations: int, 
                  num_actions: dict[str, int],
-                 hidden_dim: int,
                  min_log_std: float, 
                  max_log_std: float,
                  squash: bool, 
@@ -229,6 +228,7 @@ class SuperConnectedActor(Model):
         self.device = device
         self.num_observations = num_observations
         self.num_actions = num_actions
+        self.possible_agents = possible_agents
         
         # Action Squashing
         self.squash = squash
