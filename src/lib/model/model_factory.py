@@ -30,7 +30,12 @@ class ModelFactory:
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
         self.model_type = self.model_cfg["policy"].get("type", None)
-        self.model_type_lower = self.model_type.lower()
+        
+        if self.model_type is None:
+            self.model_type_lower = "mlp"
+        
+        else:
+            self.model_type_lower = self.model_type.lower()
 
         self.device = device
 
@@ -92,7 +97,7 @@ class ModelFactory:
             # Critic initialization
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
-                if self.model_type is None | self.model_type_lower == "mlp":
+                if self.model_type_lower == "mlp":
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -112,7 +117,7 @@ class ModelFactory:
 
         elif self.is_multi_agent is False:
             # Single Agent
-            if self.model_type is None | self.model_type_lower == "mlp":
+            if self.model_type_lower == "mlp":
                 actor = Actor(num_observations=observation_size,
                                 num_actions=action_size,
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
