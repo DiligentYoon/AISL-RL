@@ -30,8 +30,8 @@ class CommunetActor(Model):
         self.device = device
         self.num_observations = num_observations
         self.num_actions = num_actions
-        self.arm_module_list = nn.ModuleList
-        self.leg_module_list = nn.ModuleList
+        self.arm_module_list = nn.ModuleList()
+        self.leg_module_list = nn.ModuleList()
 
         # Running mean, standard deviation standardizer
         self.actor_standardizer = nn.ModuleDict()
@@ -116,11 +116,11 @@ class CommunetActor(Model):
         arm_input = self.actor_standardizer["arm"].standardize(observations["arm"], update=update_rms)
         leg_input = self.actor_standardizer["leg"].standardize(observations["leg"], update=update_rms)
 
-        for i in len(self.arm_module_list):
+        for i in range(len(self.arm_module_list)):
             arm_output = self.arm_module_list[i](arm_input)
             leg_output = self.leg_module_list[i](leg_input)
-            arm_input = arm_output + leg_output
-            leg_input = leg_output + arm_output
+            arm_input = torch.cat([arm_output, leg_output], dim=-1)
+            leg_input = torch.cat([leg_output, arm_output], dim=-1)
     
         # 5. Action
         mean_action_arm = arm_output
@@ -229,7 +229,7 @@ class SuperConnectedActor(Model):
         self.num_observations = num_observations
         self.num_actions = num_actions
         self.possible_agents = possible_agents
-        
+
         # Action Squashing
         self.squash = squash
 
