@@ -8,6 +8,7 @@ gym.register(
         # Environment-Specific Entry Point for Env Cfg Class
         "env_cfg_entry_point": f"{__name__}.G1_gait_env_cfg:G1GaitEnvCfg",
         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
+        "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml"
     }
 )
 

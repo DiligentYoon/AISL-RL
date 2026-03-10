@@ -10,7 +10,7 @@ models:
     clip_actions: False
 
   model_type: null
-  shared: True
+  shared: False
   squashed: False
 
 buffer:
@@ -44,7 +44,7 @@ agent:
 
   # logging and checkpoint
   experiment:
-    directory: "g1_gait"
+    directory: "g1_lipm"
     experiment_name: ""
     evaluation_interval: auto
     write_interval: auto

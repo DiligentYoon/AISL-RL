@@ -10,16 +10,18 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent.")
+parser.add_argument("--seed", type=int, default=None, help="Seed of RL environment")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -53,6 +55,7 @@ from datetime import datetime
 import lib
 
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
+from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
@@ -88,9 +91,25 @@ def main():
     # ============================ Env & Wrapper Spawn ================================
 
     # Create isaac environment
-    env_cfg.seed = cfg.get("seed", None)
-    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    if args_cli.seed is not None:
+        env_cfg.seed = args_cli.seed
+        cfg["agent"]["seed"] = args_cli.seed
+    else:
+        env_cfg.seed = cfg.get("seed", None)
+        cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # wrap for video recording
+    if args_cli.video:
+        args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
+        video_kwargs = {
+            "video_folder": os.path.join(log_dir, "videos", "train"),
+            "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            "video_length": args_cli.video_length,
+            "disable_logger": True,
+        }
+        print("[INFO] Recording videos during training.")
+        env = RecordVideo(env, **video_kwargs)
 
     # Get environment (step) dt for real-time evaluation
     try:
@@ -238,11 +257,11 @@ def main():
     cumulative_rewards = None
     cumulative_timesteps = None
     tracking_data = collections.defaultdict(list)
-    track_rewards = collections.deque(maxlen=500)
-    track_timesteps = collections.deque(maxlen=500)
-    CLI_track_rewards = collections.deque(maxlen=500)
-    CLI_track_timesteps = collections.deque(maxlen=500)
-    CLI_step_reward_means = collections.deque(maxlen=500)
+    track_rewards = collections.deque(maxlen=env.num_envs)
+    track_timesteps = collections.deque(maxlen=env.num_envs)
+    CLI_track_rewards = collections.deque(maxlen=env.num_envs)
+    CLI_track_timesteps = collections.deque(maxlen=env.num_envs)
+    CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
     # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0

@@ -3,7 +3,7 @@ import gymnasium as gym
 
 from typing import Union, Any
 
-from lib.model.MLP import Actor, Critic, SharedBackbone, SharedActor
+from lib.model.MLP import Actor, Critic, SharedActor, JointActor
 from lib.model.NerveNet import NerveNetPolicy
 from lib.utils.graph_utils import Mapping
 from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
@@ -23,6 +23,7 @@ class ModelFactory:
 
         self.model_cfg = cfg
         self.is_shared = self.model_cfg.get("shared", False)
+        self.is_joint  = self.model_cfg.get("joint", False)
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
         
@@ -47,15 +48,26 @@ class ModelFactory:
             models = {}
             if self.is_shared:
                 # Multi Agent : Shared network
-                actor = SharedActor(possible_agents=possible_agents,
-                                    num_observations=observation_size,
-                                    num_actions=action_size,
-                                    encoder_hidden_dim=128,
-                                    RMA_hidden_dim=0,
-                                    min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                    max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                    squash=self.is_squashed,
-                                    device=self.device)
+                if self.is_joint:
+                    actor = JointActor(possible_agents=possible_agents,
+                                       num_observations=observation_size,
+                                       num_actions=action_size,
+                                       encoder_hidden_dim=128,
+                                       RMA_hidden_dim=0,
+                                       min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                       max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                       squash=self.is_squashed,
+                                       device=self.device)
+                else:
+                    actor = SharedActor(possible_agents=possible_agents,
+                                        num_observations=observation_size,
+                                        num_actions=action_size,
+                                        encoder_hidden_dim=128,
+                                        RMA_hidden_dim=0,
+                                        min_log_std=self.model_cfg["policy"]["min_log_std"],
+                                        max_log_std=self.model_cfg["policy"]["max_log_std"],
+                                        squash=self.is_squashed,
+                                        device=self.device)
                 
             for uid in possible_agents:
                 # Multi Agent : Per-agent network

@@ -311,7 +311,7 @@ class Env(gym.Env):
                 self.sim.render()
 
         # return observations
-        return self._get_observations(), self._get_states(),  self.extras
+        return self._get_observations(), self._get_states(), self.extras
 
     def step(self, action: Union[torch.Tensor | Dict[str, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
@@ -384,7 +384,6 @@ class Env(gym.Env):
 
         if self.cfg.commands is not None and hasattr(self, "commands"):
             self.commands.update()
-
 
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs

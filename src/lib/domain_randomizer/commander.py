@@ -159,7 +159,7 @@ class UniformVelocityCommand():
     @property
     def heading(self) -> torch.Tensor:
         """(num_envs, 1): yaw angle"""
-        return torch.atan2(self.command_w[:, 1], self.command_w[:, 0])
+        return torch.atan2(self.command_w[:, 1], self.command_w[:, 0]).unsqueeze(-1)
 
     def reset(self, env_ids: Sequence[int] | torch.Tensor | None = None) -> dict[str, float]:
         """Call this when those envs are reset."""

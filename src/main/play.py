@@ -10,12 +10,14 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent.")
+parser.add_argument("--seed", type=int, default=None, help="Seed of RL environment")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-lipm", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_lipm/2026-03-01_21-14-25_mappo/agent_48000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -48,9 +50,12 @@ from datetime import datetime
 
 import lib
 
+from isaaclab.envs.common import ViewerCfg
+
 from lib.utils.plot_utils import PyQtLivePlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
+from wrapper.record_wrapper import RecordVideo
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -73,10 +78,37 @@ def main():
     # =========================================== Env Spawn & Wrapper Test =======================================================
     # ============================================================================================================================
 
+    # cfg for viewpoint control
+    viewer_cfg = ViewerCfg(
+        origin_type="asset_root",
+        asset_name="robot",
+        env_index=0,
+        eye=(0.0, 4.0, 0.5),
+        lookat=(0.0, 0.0, 0.0)
+    )
+    env_cfg.viewer = viewer_cfg
+
     # create isaac environment
-    env_cfg.seed = cfg.get("seed", None)
-    cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    if args_cli.seed is not None:
+        env_cfg.seed = args_cli.seed
+        cfg["agent"]["seed"] = args_cli.seed
+    else:
+        env_cfg.seed = cfg.get("seed", None)
+        cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # wrap for video recording
+    if args_cli.video:
+        log_dir = os.path.dirname(args_cli.checkpoint)
+        args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
+        video_kwargs = {
+            "video_folder": os.path.join(log_dir, "videos", "play"),
+            "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            "video_length": args_cli.video_length,
+            "disable_logger": True,
+        }
+        print("[INFO] Recording videos during training.")
+        env = RecordVideo(env, **video_kwargs)
 
     # get environment (step) dt for real-time evaluation
     try:
@@ -85,7 +117,9 @@ def main():
         dt = env.unwrapped.step_dt
 
     # wrap around environment
-    env = IsaacLabWrapper(env)  
+    env = IsaacLabWrapper(env)
+
+
 
     # configure and instantiate the skrl runner
     cfg["agent"]["experiment"]["write_interval"] = 0  

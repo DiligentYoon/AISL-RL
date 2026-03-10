@@ -11,6 +11,7 @@ models:
 
   model_type: null
   shared: True
+  joint: True
   squashed: False
 
 buffer:
@@ -51,4 +52,4 @@ agent:
     checkpoint_interval: auto
 
 train:
-  timesteps: 96000
+  timesteps: 72000
