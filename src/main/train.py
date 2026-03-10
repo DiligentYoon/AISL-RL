@@ -189,20 +189,20 @@ def main():
         cfg["models"]["model_type"] = model
     
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
-    if model_manager.model_type is None:
+    if model_manager.model_class is "mlp":
         models = model_manager.generate_mlp_models(observation_size=obs_size,
                                                    state_size=state_size,
                                                    action_size=act_size,
                                                    possible_agents=possible_agents)
-    else:
+    elif model_manager.model_class is "gnn":
         node_cfg = None
         mapping_cfg = None
-        if model_manager.model_type.lower() == "nervenet":
+        if model_manager.model_type == "nervenet":
             node_cfg = {'node_info': env._unwrapped.cfg.node_info,
                         'num_nodes': env._unwrapped.cfg.num_nodes,
                         'num_actuated_nodes': env._unwrapped.cfg.num_actuated_nodes}
             
-        elif model_manager.model_type.lower() == "bodytransformer":
+        elif model_manager.model_type == "bodytransformer":
             mapping_cfg = env._unwrapped.cfg.map_info
 
         else:
@@ -213,6 +213,8 @@ def main():
                                                    action_space=action_space,
                                                    node_cfg=node_cfg,
                                                    mapping_cfg=mapping_cfg)
+    else:
+        raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
     # Scale Factor
