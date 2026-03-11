@@ -216,11 +216,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 40}                    
+    observation_space = {"arm": 50, "leg": 24}                    
     state_space = {"arm": 90, "leg": 90}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
+    shared_observation_space = 16
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     

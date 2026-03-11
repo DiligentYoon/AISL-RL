@@ -27,7 +27,7 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default=None,
+                    default="Joint",
                     choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 

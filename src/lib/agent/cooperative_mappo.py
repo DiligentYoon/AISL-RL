@@ -57,6 +57,7 @@ class CooperativeMAPPO(MAPPO):
         self.optimizer_schedulers["critic"] = {}
 
         self.is_rma = self.shared_actor.is_rma
+        self.is_shared = hasattr(self.shared_actor, "num_shared")
         
         arm_params = []
         arm_params += list(self.shared_actor.encoder["arm"].parameters())
@@ -124,6 +125,12 @@ class CooperativeMAPPO(MAPPO):
         if self.is_rma:
             self.tensors_names.append("infos")
             self.tensors_name_for_update.append("infos")
+        
+        if self.is_shared:
+            self.tensors_names.append("shared_infos")
+            self.tensors_name_for_update.append("shared_infos")
+            for uid in self.possible_agents:
+                self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
 
 
     def save(self, path: str, path_jit: str | None = None):
@@ -257,33 +264,54 @@ class CooperativeMAPPO(MAPPO):
             if self.time_limit_bootstrap:
                 rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
-            # Additional Info check
-            if self.is_rma:
+            if self.is_shared:
                 # Additional Info Extraction
-                rma_infos = infos.get("rma", None)
-                self.buffer[uid].create_tensor("infos", rma_infos.shape[-1])
-                self.buffer[uid].add_samples(infos=rma_infos)
+                shared_infos = infos.get("shared_infos")
 
             if self.is_async_actor_critic:
-                self.buffer[uid].add_samples(observations=observations[uid],
-                                             states=states[uid],
-                                             actions=actions[uid],
-                                             rewards=rewards[:, i].unsqueeze(-1),
-                                             next_observations=next_observations[uid],
-                                             next_states=next_states[uid],
-                                             truncated=truncated,
-                                             terminated=terminated,
-                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds=value_preds)
+                if self.is_shared:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                states=states[uid],
+                                                actions=actions[uid],
+                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                next_states=next_states[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds,
+                                                shared_infos=shared_infos)
+                else:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                states=states[uid],
+                                                actions=actions[uid],
+                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                next_states=next_states[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds)
             else:
-                self.buffer[uid].add_samples(observations=observations[uid],
-                                             actions=actions[uid],
-                                             rewards=rewards[:, i].unsqueeze(-1),
-                                             next_observations=next_observations[uid],
-                                             truncated=truncated,
-                                             terminated=terminated,
-                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds = value_preds)
+                if self.is_shared:
+                     self.buffer[uid].add_samples(observations=observations[uid],
+                                                  actions=actions[uid],
+                                                  rewards=rewards[:, i].unsqueeze(-1),
+                                                  next_observations=next_observations[uid],
+                                                  truncated=truncated,
+                                                  terminated=terminated,
+                                                  action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                  value_preds=value_preds,
+                                                  shared_infos=shared_infos)
+                else:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                actions=actions[uid],
+                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds)
 
 
     def update(self) -> float:
@@ -341,7 +369,7 @@ class CooperativeMAPPO(MAPPO):
             for mb_a, mb_l in zip(mini_batches_a, mini_batches_l):
                 # (mini batch size, Data-specific)
                 if self.is_async_actor_critic:
-                    if self.is_rma:
+                    if self.is_shared:
                         (sampled_observations_a,
                         sampled_states_a,
                         sampled_actions_a,
@@ -392,7 +420,7 @@ class CooperativeMAPPO(MAPPO):
                     }  
                 
                 else:
-                    if self.is_rma:
+                    if self.is_shared:
                         (sampled_observations_a,
                         sampled_actions_a,
                         sampled_action_log_probs_a,

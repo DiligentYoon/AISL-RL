@@ -5,6 +5,7 @@ from typing import Union, Any
 
 from lib.model.MLP import Actor, Critic, SharedActor, JointActor
 from lib.model.MLP_test import SuperConnectedActor, CommunetActor
+from lib.model.attention_net import AttentionActor
 from lib.model.NerveNet import NerveNetPolicy
 from lib.utils.graph_utils import Mapping
 from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
@@ -55,6 +56,7 @@ class ModelFactory:
                 actor = JointActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
+                                    num_shared=16,
                                     encoder_hidden_dim=128,
                                     RMA_hidden_dim=0,
                                     min_log_std=self.model_cfg["policy"]["min_log_std"],
