@@ -62,6 +62,11 @@ class CommunetMAPPO(MAPPO):
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
 
+        self.checkpoint_modules["shared"] = {
+            "actor": self.communet_actor,
+            "actor_optimizer": self.optimizers["actor"]
+        }
+
         for uid in self.possible_agents:
             self.checkpoint_modules[uid] = {
                 "critic": self.critics[uid],
@@ -96,6 +101,12 @@ class CommunetMAPPO(MAPPO):
 
     def save(self, path: str, path_jit: str | None = None):
         modules = {}
+        
+        shared_module = {}
+        for name, module in self.checkpoint_modules["shared"].items():
+            shared_module[name] = module.state_dict()
+        modules["shared"] = shared_module
+
         for uid in self.possible_agents:
             uid_module = {}
             for name, module in self.checkpoint_modules[uid].items():
@@ -109,6 +120,14 @@ class CommunetMAPPO(MAPPO):
 
     def load(self, path):
         modules = torch.load(path, map_location=self.device)
+
+        if "shared" in modules:
+            for name, data in modules["shared"].items():
+                module = self.checkpoint_modules["shared"].get(name, None)
+                if module is not None:
+                    module.load_state_dict(data)
+                else:
+                    print(f"Cannot load the {name} module. The agent doesn't have such an instance")
 
         # Independent modules
         if type(modules) is dict:
