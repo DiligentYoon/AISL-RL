@@ -93,12 +93,16 @@ class AttentionActor(SharedActor):
         # x_arm = [z_arm, h_arm], x_leg = [z_leg, h_leg]
         self.head = nn.ModuleDict()
         self.head["arm"] = nn.Sequential(
-            nn.Linear(2 * encoder_hidden_dim, 128),
+            nn.Linear(2 * encoder_hidden_dim, 256),
+            nn.ELU(),
+            nn.Linear(256, 128),
             nn.ELU(),
             nn.Linear(128, self.num_actions["arm"])
         )
         self.head["leg"] = nn.Sequential(
-            nn.Linear(2 * encoder_hidden_dim, 128),
+            nn.Linear(2 * encoder_hidden_dim, 256),
+            nn.ELU(),
+            nn.Linear(256, 128),
             nn.ELU(),
             nn.Linear(128, self.num_actions["leg"])
         )

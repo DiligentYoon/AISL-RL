@@ -27,8 +27,8 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default="None",
-                    choices=["None", "MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    default=None,
+                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -68,7 +68,7 @@ from lib.model.model_factory import ModelFactory
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
-model = args_cli.model.lower()
+model = args_cli.model.lower() if args_cli.model is not None else None
 
 def main():
     """
@@ -185,16 +185,16 @@ def main():
 
     # ====================== Model Spawn  ==========================
     # Overwrite cfg by cli argument
-    if model is not "none":
+    if model is not None:
         cfg["models"]["model_type"] = model
     
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
-    if model_manager.model_class is "mlp":
+    if model_manager.model_class == "mlp":
         models = model_manager.generate_mlp_models(observation_size=obs_size,
                                                    state_size=state_size,
                                                    action_size=act_size,
                                                    possible_agents=possible_agents)
-    elif model_manager.model_class is "gnn":
+    elif model_manager.model_class == "gnn":
         node_cfg = None
         mapping_cfg = None
         if model_manager.model_type == "nervenet":
