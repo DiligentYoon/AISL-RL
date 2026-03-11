@@ -214,27 +214,27 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
 )                
 
     ## ========== Multi Agent Setting =========== ##
-    # possible_agents = ["arm", "leg"]
-    # action_space = {"arm": 25, "leg": 12}                         
-    # observation_space = {"arm": 66, "leg": 40}                    
-    # state_space = {"arm": 90, "leg": 90}
-    # num_agents = 2
-    # action_scale_factor = {"arm": [0.5, ()], 
-    #                        "leg": [0.5, ()]}
+    possible_agents = ["arm", "leg"]
+    action_space = {"arm": 25, "leg": 12}                         
+    observation_space = {"arm": 66, "leg": 40}                    
+    state_space = {"arm": 90, "leg": 90}
+    num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    action_space = 37                     
-    observation_space = 90                  
-    state_space = 0
-    num_agents = 1
-    action_scale_factor = 0.5
+    # action_space = 37                     
+    # observation_space = 90                  
+    # state_space = 0
+    # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 4.0
+    w_feet_gait:  float = 6.0
     w_feet_slide: float = 2.0
     w_flat:       float = 2.0
 
@@ -248,7 +248,7 @@ class G1GaitEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 0.3
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 

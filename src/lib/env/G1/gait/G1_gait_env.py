@@ -330,14 +330,20 @@ class G1GaitEnv(G1BaseEnv):
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
-        gait_reward = (diff * s)
+        loc_error = torch.square(self.foot_pos_w[self.foot_on_swing, :3] - \
+                                 torch.cat([self.target_footstep_w[self.foot_on_swing][:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1))
+        loc_error = torch.sum(loc_error, dim=-1)
+        rot_error = torch.abs(wrap_to_pi(self.target_footstep_w[self.foot_on_swing][:, 2] - self.foot_yaw_w[self.foot_on_swing]))
+        footstep_loc_rewards = torch.exp(-loc_error / 0.3**2)
+        footstep_rot_rewards = torch.exp(-rot_error / 0.3**2)
+        gait_reward = (diff * s) * (1.0 + self.cfg.w_foot_loc * footstep_loc_rewards + self.cfg.w_foot_rot * footstep_rot_rewards)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) 
+        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
         joint_deviation_penalty_fingers    = -torch.sum(torch.abs(self.deviation_fingers), dim=1)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
@@ -361,11 +367,8 @@ class G1GaitEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_lin_vel * lin_vel_rewards     + \
-                         self.cfg.w_track_heading * heading_rewards     + \
-                         self.cfg.w_track_height  * height_rewards      + \
+        common_rewards = self.cfg.w_track_heading * heading_rewards     + \
                          self.cfg.w_flat          * flat_rewards        + \
-                         self.cfg.w_lin_vel_z     * lin_vel_z_penalty   + \
                          self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
                          self.cfg.w_termination   * terminate_penalty
         
@@ -380,6 +383,9 @@ class G1GaitEnv(G1BaseEnv):
                       self.cfg.w_action_rate        * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                   + \
+                      self.cfg.w_track_height        * height_rewards                  + \
+                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
+                      self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
@@ -406,15 +412,16 @@ class G1GaitEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Linear_Velocity" : self.cfg.w_track_lin_vel * lin_vel_rewards,
             "Task Reward / Common_Heading"         : self.cfg.w_track_heading * heading_rewards,
-            "Task Reward / Common_Height"          : self.cfg.w_track_height  * height_rewards,
             "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
             "Task Reward / Leg_Gait"               : self.cfg.w_feet_gait     * gait_reward,
+            "Task Reward / Leg_Height"             : self.cfg.w_track_height  * height_rewards,
+            "Task Reward / Leg_Linear_Velocity"    : self.cfg.w_track_lin_vel * lin_vel_rewards,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
+            "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
             "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers,
@@ -423,6 +430,7 @@ class G1GaitEnv(G1BaseEnv):
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
+            "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
