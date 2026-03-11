@@ -201,8 +201,8 @@ class MAPPO(MultiAgent):
             states = unflatten_tensorized_space(self.state_space, states)
             next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
-        action_log_probs = action_log_probs.view(-1, self.num_agents)
-        rewards = rewards.view(-1, self.num_agents)
+        action_log_probs = action_log_probs.view(-1, self.num_agents).clone()
+        rewards = rewards.view(-1, self.num_agents).clone()
         
 
         critic_inputs = states if states is not None else observations

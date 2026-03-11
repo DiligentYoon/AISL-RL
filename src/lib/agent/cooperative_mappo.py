@@ -244,8 +244,8 @@ class CooperativeMAPPO(MAPPO):
             states = unflatten_tensorized_space(self.state_space, states)
             next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
-        action_log_probs = action_log_probs.view(-1, self.num_agents)
-        rewards = rewards.view(-1, self.num_agents)
+        buffer_action_log_probs = action_log_probs.view(-1, self.num_agents).clone()
+        buffer_rewards = rewards.view(-1, self.num_agents).clone()
         
         critic_inputs = states if states is not None else observations
 
@@ -257,7 +257,7 @@ class CooperativeMAPPO(MAPPO):
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
-                rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
+                buffer_rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
             if self.is_shared:
                 # Additional Info Extraction
@@ -268,44 +268,44 @@ class CooperativeMAPPO(MAPPO):
                     self.buffer[uid].add_samples(observations=observations[uid],
                                                 states=states[uid],
                                                 actions=actions[uid],
-                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
                                                 next_observations=next_observations[uid],
                                                 next_states=next_states[uid],
                                                 truncated=truncated,
                                                 terminated=terminated,
-                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
                                                 value_preds=value_preds,
                                                 shared_infos=shared_infos)
                 else:
                     self.buffer[uid].add_samples(observations=observations[uid],
                                                 states=states[uid],
                                                 actions=actions[uid],
-                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
                                                 next_observations=next_observations[uid],
                                                 next_states=next_states[uid],
                                                 truncated=truncated,
                                                 terminated=terminated,
-                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
                                                 value_preds=value_preds)
             else:
                 if self.is_shared:
                      self.buffer[uid].add_samples(observations=observations[uid],
                                                   actions=actions[uid],
-                                                  rewards=rewards[:, i].unsqueeze(-1),
+                                                  rewards=buffer_rewards[:, i].unsqueeze(-1),
                                                   next_observations=next_observations[uid],
                                                   truncated=truncated,
                                                   terminated=terminated,
-                                                  action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                  action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
                                                   value_preds=value_preds,
                                                   shared_infos=shared_infos)
                 else:
                     self.buffer[uid].add_samples(observations=observations[uid],
                                                 actions=actions[uid],
-                                                rewards=rewards[:, i].unsqueeze(-1),
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
                                                 next_observations=next_observations[uid],
                                                 truncated=truncated,
                                                 terminated=terminated,
-                                                action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
                                                 value_preds=value_preds)
 
 
