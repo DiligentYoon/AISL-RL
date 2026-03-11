@@ -25,18 +25,15 @@ class ModelFactory:
         self.model_cfg = cfg
         
         # Load model cfg
-        # self.is_shared = self.model_cfg.get("shared", False)
-        # self.is_joint  = self.model_cfg.get("joint", False)
         self.is_shared = False                                          # NOTE: 이거 최적화해야할지도?
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
-        self.model_type = self.model_cfg["policy"].get("type", None)
-        
-        if self.model_type is None:
-            self.model_type_lower = "mlp"
-        
+        self.model_type = self.model_cfg.get("model_type", "mlp").lower()
+
+        if self.model_type == "nervenet" or self.model_type == "bodytransformer":
+            self.model_class = "gnn"
         else:
-            self.model_type_lower = self.model_type.lower()
+            self.model_class = "mlp"
 
         self.device = device
 
@@ -53,7 +50,7 @@ class ModelFactory:
         if self.is_multi_agent:
             # Multi agent
             models = {}
-            if self.model_type_lower == "joint":
+            if self.model_type == "joint":
                 self.is_shared = True
                 actor = JointActor(possible_agents=possible_agents,
                                    num_observations=observation_size,
@@ -65,7 +62,7 @@ class ModelFactory:
                                    squash=self.is_squashed,
                                    device=self.device)
                 
-            elif self.model_type_lower == "shared":
+            elif self.model_type == "shared":
                 self.is_shared = True
                 actor = SharedActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
@@ -77,7 +74,7 @@ class ModelFactory:
                                     squash=self.is_squashed,
                                     device=self.device)
             
-            elif self.model_type_lower == "superconnected":
+            elif self.model_type == "superconnected":
                 self.is_shared = True
                 actor = SuperConnectedActor(possible_agents=possible_agents,
                                             num_observations=observation_size,
@@ -102,7 +99,7 @@ class ModelFactory:
             # Critic initialization
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
-                if self.model_type_lower == "mlp":
+                if self.model_type == "mlp":
                     self.is_shared = False
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
@@ -123,7 +120,7 @@ class ModelFactory:
 
         elif self.is_multi_agent is False:
             # Single Agent
-            if self.model_type_lower == "mlp":
+            if self.model_type == "mlp":
                 self.is_shared = False
                 actor = Actor(num_observations=observation_size,
                                 num_actions=action_size,
@@ -148,7 +145,7 @@ class ModelFactory:
                             node_cfg: dict = None,
                             mapping_cfg: dict = None):
         
-        if self.model_type_lower == "nervenet":
+        if self.model_type == "nervenet":
             actor = NerveNetPolicy(
                     observation_space=observation_space,
                     action_space=action_space,
@@ -167,7 +164,7 @@ class ModelFactory:
             critic = Critic(num_states=state_size,
                             device=self.device)
 
-        elif self.model_type_lower == "bodytransformer":
+        elif self.model_type == "bodytransformer":
             mapping = Mapping(mapping_cfg)
             use_mlp = self.model_cfg.get("use_mlp", False)
             action_detokenizer = ActionDetokenizer(mapping=mapping,
@@ -227,9 +224,6 @@ class ModelFactory:
                                         device=self.device),
                     detokenizer=value_detokenizer,
                     device=self.device)
-
-        else:
-            raise ValueError(f"Unknown model type specified in cfg: {self.model_type}")
 
         models = {
             'actor': actor, 
