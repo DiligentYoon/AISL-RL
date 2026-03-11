@@ -226,6 +226,7 @@ class SuperConnectedActor(Model):
         # Define instances 
         self.device = device
         self.is_rma = False
+        self.head = {}
         self.num_observations = num_observations["arm"]
         self.num_actions = num_actions
         self.possible_agents = possible_agents
@@ -237,7 +238,10 @@ class SuperConnectedActor(Model):
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Superconnected backbone
-        self.sharedbackbone = SharedBackbone(self.num_observations, self.num_actions["arm"], self.num_actions["leg"])
+        self.shared_backbone = SharedBackbone(self.num_observations, self.num_actions["arm"], self.num_actions["leg"])
+
+        self.head["arm"] = self.shared_backbone.head_arm
+        self.head["leg"] = self.shared_backbone.head_leg
 
         # Log std parameter initialization
         self.log_std_parameter = nn.ParameterDict()
