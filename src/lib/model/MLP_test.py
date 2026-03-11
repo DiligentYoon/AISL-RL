@@ -225,6 +225,7 @@ class SuperConnectedActor(Model):
         
         # Define instances 
         self.device = device
+        self.is_rma = False
         self.num_observations = num_observations["arm"]
         self.num_actions = num_actions
         self.possible_agents = possible_agents
