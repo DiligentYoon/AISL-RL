@@ -212,7 +212,7 @@ class SharedBackbone(Model):
 class SuperConnectedActor(Model):
     def __init__(self, 
                  possible_agents: list[str],
-                 num_observations: int, 
+                 num_observations: dict[str, int], 
                  num_actions: dict[str, int],
                  min_log_std: float, 
                  max_log_std: float,
@@ -225,7 +225,7 @@ class SuperConnectedActor(Model):
         
         # Define instances 
         self.device = device
-        self.num_observations = num_observations
+        self.num_observations = num_observations["arm"]
         self.num_actions = num_actions
         self.possible_agents = possible_agents
 
