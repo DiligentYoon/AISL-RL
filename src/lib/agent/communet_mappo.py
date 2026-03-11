@@ -62,12 +62,6 @@ class CommunetMAPPO(MAPPO):
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
 
-        # Checkpoint Modules
-        self.checkpoint_modules["shared"] = {
-            "actor": self.shared_actor,
-            "actor_optimizer": self.optimizers["actor"]
-        }
-
         for uid in self.possible_agents:
             self.checkpoint_modules[uid] = {
                 "critic": self.critics[uid],
