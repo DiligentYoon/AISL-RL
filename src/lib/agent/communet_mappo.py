@@ -26,7 +26,7 @@ class CommunetMAPPO(MAPPO):
                  buffer: Dict[str, RolloutBuffer],
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
-        """Communet Multi Agent Proximal Policy Optimization with parameter-shared backbone
+        """Communet Multi Agent Proximal Policy Optimization
 
         This architecture is expanded version of MAPPO for cooperative behaviors.
 
@@ -92,21 +92,10 @@ class CommunetMAPPO(MAPPO):
             self.tensors_name_for_update = ["observations", 
                                             "actions", "action_log_probs",
                                             "value_preds", "returns", "advantages"]
-            
-        if self.is_rma:
-            self.tensors_names.append("infos")
-            self.tensors_name_for_update.append("infos")
 
 
     def save(self, path: str, path_jit: str | None = None):
         modules = {}
-        # Shared module
-        shared_module = {}
-        for name, module in self.checkpoint_modules["shared"].items():
-            shared_module[name] = module.state_dict()
-        modules["shared"] = shared_module
-
-        # Independent modules
         for uid in self.possible_agents:
             uid_module = {}
             for name, module in self.checkpoint_modules[uid].items():
@@ -120,13 +109,6 @@ class CommunetMAPPO(MAPPO):
 
     def load(self, path):
         modules = torch.load(path, map_location=self.device)
-        # Shared module
-        for name, data in modules["shared"].items():
-            module = self.checkpoint_modules["shared"].get(name, None)
-            if module is not None:
-                module.load_state_dict(data)
-            else:
-                print(f"Cannot load the {name} module. The agent doesn't have such an instance")
 
         # Independent modules
         if type(modules) is dict:
@@ -160,7 +142,7 @@ class CommunetMAPPO(MAPPO):
         # From Tensor to Dict
         observations = unflatten_tensorized_space(self.observation_space, observations)
 
-        # Shared Action Processing
+        # Action Processing
         non_scaled_actions, log_probs, entropies = self.communet_actor(observations=observations,
                                                                        taken_actions=None,
                                                                        deterministic=deterministic,
@@ -228,12 +210,6 @@ class CommunetMAPPO(MAPPO):
                 rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
             # Additional Info check
-            if self.is_rma:
-                # Additional Info Extraction
-                rma_infos = infos.get("rma", None)
-                self.buffer[uid].create_tensor("infos", rma_infos.shape[-1])
-                self.buffer[uid].add_samples(infos=rma_infos)
-
             if self.is_async_actor_critic:
                 self.buffer[uid].add_samples(observations=observations[uid],
                                              states=states[uid],
