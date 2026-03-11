@@ -25,6 +25,12 @@ parser.add_argument("--algorithm",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
+parser.add_argument("--model",
+                    type=str,
+                    default=None,
+                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    help="The NN model used for training the agent.")
+
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -59,6 +65,7 @@ from wrapper.record_wrapper import RecordVideo
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
+model = args_cli.model.lower() if args_cli.model is not None else None
 
 def main():
 
@@ -185,21 +192,25 @@ def main():
     # ==========================================================================================================================
     from lib.model.model_factory import ModelFactory
     # ====================== Model Spawn  ==========================
+    # Overwrite cfg by cli argument
+    if model is not None:
+        cfg["models"]["model_type"] = model
+        
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
-    if model_manager.model_type is None:
+    if model_manager.model_class == "mlp":
         models = model_manager.generate_mlp_models(observation_size=obs_size,
                                                    state_size=state_size,
                                                    action_size=act_size,
                                                    possible_agents=possible_agents)
-    else:
+    elif model_manager.model_class == "gnn":
         node_cfg = None
         mapping_cfg = None
-        if model_manager.model_type.lower() == "nervenet":
+        if model_manager.model_type == "nervenet":
             node_cfg = {'node_info': env._unwrapped.cfg.node_info,
                         'num_nodes': env._unwrapped.cfg.num_nodes,
                         'num_actuated_nodes': env._unwrapped.cfg.num_actuated_nodes}
             
-        elif model_manager.model_type.lower() == "bodytransformer":
+        elif model_manager.model_type == "bodytransformer":
             mapping_cfg = env._unwrapped.cfg.map_info
 
         else:
@@ -210,6 +221,8 @@ def main():
                                                    action_space=action_space,
                                                    node_cfg=node_cfg,
                                                    mapping_cfg=mapping_cfg)
+    else:
+        raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
     # Scale Factor
