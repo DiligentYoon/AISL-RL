@@ -105,7 +105,6 @@ class CommunetActor(Model):
 
     def forward(self, 
                 observations: torch.Tensor | dict[str, torch.Tensor],
-                shared_infos: torch.Tensor | None,
                 taken_actions: torch.Tensor | dict[str, torch.Tensor] | None, 
                 deterministic: bool = False, 
                 update_rms: bool = False):
