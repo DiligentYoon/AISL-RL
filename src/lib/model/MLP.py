@@ -44,6 +44,8 @@ class JointBackBone(Model):
         self.shared = nn.Sequential(nn.Linear(in_dim, 256), 
                                     nn.ELU(),
                                     nn.Linear(256, 256), 
+                                    nn.ELU(),
+                                    nn.Linear(256, 256), 
                                     nn.ELU())
         
     def forward(self, x):
