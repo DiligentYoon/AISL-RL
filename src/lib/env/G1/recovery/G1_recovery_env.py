@@ -95,9 +95,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.foot_yaw_w         = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.foot_yaw_b         = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
 
-        # Common observations
-        self.extras["shared_infos"] = torch.zeros((self.num_envs, self.cfg.shared_observation_space), dtype=torch.float, device=self.device)
-
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
@@ -302,14 +299,14 @@ class G1RecoveryEnv(G1BaseEnv):
             observations = {
                 "arm": torch.cat(
                     [
-                        # self.root_pos_w[:, 2:3],
-                        # self.root_heading,
-                        # self.root_lin_vel_b,
-                        # self.root_ang_vel_b,
-                        # self.projected_gravity,
-                        # self.command_inputs_b,
-                        # self.phase_sin.unsqueeze(-1),
-                        # self.phase_cos.unsqueeze(-1),
+                        self.root_pos_w[:, 2:3],
+                        self.root_heading,
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
                         self.joint_pos[:, self.total_arm_joint_ids],
                         self.joint_vel[:, self.total_arm_joint_ids]
                     ],
@@ -317,14 +314,14 @@ class G1RecoveryEnv(G1BaseEnv):
                 ),
                 "leg": torch.cat(
                     [
-                        # self.root_pos_w[:, 2:3],
-                        # self.root_heading,
-                        # self.root_lin_vel_b,
-                        # self.root_ang_vel_b,
-                        # self.projected_gravity,
-                        # self.command_inputs_b,
-                        # self.phase_sin.unsqueeze(-1),
-                        # self.phase_cos.unsqueeze(-1),
+                        self.root_pos_w[:, 2:3],
+                        self.root_heading,
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
                         self.joint_pos[:, self.total_leg_joint_ids],
                         self.joint_vel[:, self.total_leg_joint_ids]
                     ],
@@ -715,16 +712,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_fingers[i]    = self.joint_pos[i][:, self.finger_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.finger_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
-
-        self.extras["shared_infos"][i] = torch.cat([self.root_pos_w[i, 2:3],
-                                                    self.root_heading[i],
-                                                    self.root_lin_vel_b[i],
-                                                    self.root_ang_vel_b[i],
-                                                    self.projected_gravity[i],
-                                                    self.command_inputs_b[i],
-                                                    self.phase_sin[i].unsqueeze(-1),
-                                                    self.phase_cos[i].unsqueeze(-1),], dim=-1)
-
 
 
     def compute_target_footstep(self):
