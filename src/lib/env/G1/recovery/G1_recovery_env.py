@@ -294,81 +294,21 @@ class G1RecoveryEnv(G1BaseEnv):
 
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        # if self.cfg.num_agents > 1:
-        #     # Multi Agent
-        #     observations = {
-        #         "arm": torch.cat(
-        #             [
-        #                 self.root_pos_w[:, 2:3],
-        #                 self.root_heading,
-        #                 self.root_lin_vel_b,
-        #                 self.root_ang_vel_b,
-        #                 self.projected_gravity,
-        #                 self.command_inputs_b,
-        #                 self.phase_sin.unsqueeze(-1),
-        #                 self.phase_cos.unsqueeze(-1),
-        #                 self.joint_pos[:, self.total_arm_joint_ids],
-        #                 self.joint_vel[:, self.total_arm_joint_ids]
-        #             ],
-        #             dim=-1
-        #         ),
-        #         "leg": torch.cat(
-        #             [
-        #                 self.root_pos_w[:, 2:3],
-        #                 self.root_heading,
-        #                 self.root_lin_vel_b,
-        #                 self.root_ang_vel_b,
-        #                 self.projected_gravity,
-        #                 self.command_inputs_b,
-        #                 self.phase_sin.unsqueeze(-1),
-        #                 self.phase_cos.unsqueeze(-1),
-        #                 # self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-        #                 # self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-        #                 # self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-        #                 # self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-        #                 self.joint_pos[:, self.total_leg_joint_ids],
-        #                 self.joint_vel[:, self.total_leg_joint_ids]
-        #             ],
-        #             dim=-1
-        #         )
-        #     }
-        # else:
-        #     # Single Agent
-        #     observations = torch.cat(
-        #         [
-        #             self.root_pos_w[:, 2:3],
-        #             self.root_heading,
-        #             self.root_lin_vel_b,                                # [E, 3]
-        #             self.root_ang_vel_b,                                # [E, 3]
-        #             self.projected_gravity,                             # [E, 3]
-        #             self.command_inputs_b,                              # [E, 3]
-        #             self.phase_sin.unsqueeze(-1),                       # [E, 1]
-        #             self.phase_cos.unsqueeze(-1),                       # [E, 1]
-        #             self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-        #             self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-        #             self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-        #             self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-        #             self.joint_pos,                                     # [E, 37]
-        #             self.joint_vel,                                     # [E, 37]
-        #         ], dim=-1) 
-        
-        #### ========================= Test ========================= ####
-        observations = {"arm": torch.cat(
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            observations = {
+                "arm": torch.cat(
                     [
                         self.root_pos_w[:, 2:3],
                         self.root_heading,
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                        self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-                        self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                        self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                        self.joint_pos,                                     # [E, 37]
-                        self.joint_vel,                                     # [E, 37]
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
+                        self.joint_pos[:, self.total_arm_joint_ids],
+                        self.joint_vel[:, self.total_arm_joint_ids]
                     ],
                     dim=-1
                 ),
@@ -376,22 +316,82 @@ class G1RecoveryEnv(G1BaseEnv):
                     [
                         self.root_pos_w[:, 2:3],
                         self.root_heading,
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
-                        self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
-                        self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
-                        self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
-                        self.joint_pos,                                     # [E, 37]
-                        self.joint_vel,                                     # [E, 37]
+                        self.root_lin_vel_b,
+                        self.root_ang_vel_b,
+                        self.projected_gravity,
+                        self.command_inputs_b,
+                        self.phase_sin.unsqueeze(-1),
+                        self.phase_cos.unsqueeze(-1),
+                        # self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                        # self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                        # self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                        # self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                        self.joint_pos[:, self.total_leg_joint_ids],
+                        self.joint_vel[:, self.total_leg_joint_ids]
                     ],
                     dim=-1
                 )
             }
+        else:
+            # Single Agent
+            observations = torch.cat(
+                [
+                    self.root_pos_w[:, 2:3],
+                    self.root_heading,
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                    self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+                    self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+                    self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+                    self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+                    self.joint_pos,                                     # [E, 37]
+                    self.joint_vel,                                     # [E, 37]
+                ], dim=-1) 
+        
+        #### ========================= Test ========================= ####
+        # observations = {"arm": torch.cat(
+        #             [
+        #                 self.root_pos_w[:, 2:3],
+        #                 self.root_heading,
+        #                 self.root_lin_vel_b,                                # [E, 3]
+        #                 self.root_ang_vel_b,                                # [E, 3]
+        #                 self.projected_gravity,                             # [E, 3]
+        #                 self.command_inputs_b,                              # [E, 3]
+        #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
+        #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
+        #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+        #                 self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+        #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+        #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+        #                 self.joint_pos,                                     # [E, 37]
+        #                 self.joint_vel,                                     # [E, 37]
+        #             ],
+        #             dim=-1
+        #         ),
+        #         "leg": torch.cat(
+        #             [
+        #                 self.root_pos_w[:, 2:3],
+        #                 self.root_heading,
+        #                 self.root_lin_vel_b,                                # [E, 3]
+        #                 self.root_ang_vel_b,                                # [E, 3]
+        #                 self.projected_gravity,                             # [E, 3]
+        #                 self.command_inputs_b,                              # [E, 3]
+        #                 self.phase_sin.unsqueeze(-1),                       # [E, 1]
+        #                 self.phase_cos.unsqueeze(-1),                       # [E, 1]
+        #                 self.foot_pos_b.view(self.num_envs, -1),            # [E, 6]
+        #                 self.foot_yaw_b.view(self.num_envs, -1),            # [E, 2]
+        #                 self.target_footstep_b.view(self.num_envs, -1),     # [E, 6] 
+        #                 self.target_footstep_yaw_b.view(self.num_envs, -1), # [E, 2] 
+        #                 self.joint_pos,                                     # [E, 37]
+        #                 self.joint_vel,                                     # [E, 37]
+        #             ],
+        #             dim=-1
+        #         )
+        #     }
 
         return observations
 
