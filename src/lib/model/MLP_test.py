@@ -272,7 +272,7 @@ class SuperConnectedActor(Model):
         # eps
         eps = 1e-6
         # Input standardization
-        standardized_input = self.actor_standardizer.standardize(observations, update=update_rms)
+        standardized_input = self.actor_standardizer.standardize(observations["arm"], update=update_rms)
 
         # 5. Action
         mean_action_arm = self.sharedbackbone(standardized_input, role="arm")
