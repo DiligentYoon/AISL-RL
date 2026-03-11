@@ -84,7 +84,7 @@ class ModelFactory:
                                             squash=self.is_squashed,
                                             device=self.device)
             
-            elif self.model_type_lower == "communet":
+            elif self.model_type == "communet":
                 self.is_shared = True
                 actor = CommunetActor(possible_agents=possible_agents,
                                       num_observations=observation_size, 
