@@ -275,8 +275,8 @@ class SuperConnectedActor(Model):
         standardized_input = self.actor_standardizer.standardize(observations["arm"], update=update_rms)
 
         # 5. Action
-        mean_action_arm = self.sharedbackbone(standardized_input, role="arm")
-        mean_action_leg = self.sharedbackbone(standardized_input, role="leg")
+        mean_action_arm = self.shared_backbone(standardized_input, role="arm")
+        mean_action_leg = self.shared_backbone(standardized_input, role="leg")
         mean_action = {
             "arm": mean_action_arm,
             "leg": mean_action_leg}
