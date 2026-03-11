@@ -56,7 +56,6 @@ class CooperativeMAPPO(MAPPO):
         self.optimizer_schedulers["actor"] = {}
         self.optimizer_schedulers["critic"] = {}
 
-        self.is_rma = self.shared_actor.is_rma
         self.is_shared = hasattr(self.shared_actor, "num_shared")
         
         arm_params = []
@@ -121,10 +120,6 @@ class CooperativeMAPPO(MAPPO):
             self.tensors_name_for_update = ["observations", 
                                             "actions", "action_log_probs",
                                             "value_preds", "returns", "advantages"]
-            
-        if self.is_rma:
-            self.tensors_names.append("infos")
-            self.tensors_name_for_update.append("infos")
         
         if self.is_shared:
             self.tensors_names.append("shared_infos")
@@ -551,8 +546,8 @@ class CooperativeMAPPO(MAPPO):
                 shared_params = list(self.shared_actor.shared_backbone.parameters())
 
                 # Total Loss
-                policy_total = 0.7*(policy_losses["arm"] + entropy_losses["arm"]) + \
-                               1.0*(policy_losses["leg"] + entropy_losses["leg"])
+                policy_total = (policy_losses["arm"] + entropy_losses["arm"]) + \
+                               (policy_losses["leg"] + entropy_losses["leg"])
 
                 value_total  = value_losses["arm"] + value_losses["leg"]
 

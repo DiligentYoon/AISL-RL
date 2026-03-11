@@ -8,7 +8,7 @@ from lib.model.model import Model
 
 
 class SharedBackbone(Model):
-    def __init__(self, in_dim, d_arm=64, d_leg=64):
+    def __init__(self, in_dim, d_arm=128, d_leg=128):
         super().__init__()
 
         self.d_arm = d_arm
@@ -61,7 +61,6 @@ class SharedActor(Model):
                  num_observations: dict[str, int], 
                  num_actions: dict[str, int],
                  encoder_hidden_dim: int,
-                 RMA_hidden_dim: int,
                  min_log_std: float, 
                  max_log_std: float,
                  squash: bool, 
@@ -87,9 +86,6 @@ class SharedActor(Model):
         # Action Squashing
         self.squash = squash
 
-        # RMA
-        self.is_rma = RMA_hidden_dim > 0
-
         # Encoder
         self.encoder = nn.ModuleDict()
         self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], 128),
@@ -102,7 +98,7 @@ class SharedActor(Model):
                                             nn.ELU())
         
         # Shared Backbone
-        self.shared_backbone = SharedBackbone(in_dim=encoder_hidden_dim+encoder_hidden_dim+RMA_hidden_dim)
+        self.shared_backbone = SharedBackbone(in_dim=encoder_hidden_dim+encoder_hidden_dim)
         self.shared_output_dim = {
             "arm": self.shared_backbone.d_arm,
             "leg": self.shared_backbone.d_leg}
@@ -144,12 +140,8 @@ class SharedActor(Model):
         z_leg = self.encoder["leg"](standardized_input_leg)
 
         # 2. Shared info concat
-        if self.is_rma:
-            x_arm = torch.cat([z_arm, z_leg.detach(), shared_infos], dim=-1)
-            x_leg = torch.cat([z_leg, z_arm.detach(), shared_infos], dim=-1)
-        else:
-            x_arm = torch.cat([z_arm, z_leg.detach()], dim=-1)
-            x_leg = torch.cat([z_leg, z_arm.detach()], dim=-1)
+        x_arm = torch.cat([z_arm, z_leg.detach()], dim=-1)
+        x_leg = torch.cat([z_leg, z_arm.detach()], dim=-1)
 
         # 3. Shared info encoding
         h_arm = self.shared_backbone(x_arm, role="arm")
@@ -224,7 +216,6 @@ class JointActor(SharedActor):
                  num_actions: dict[str, int],
                  num_shared: int,
                  encoder_hidden_dim: int,
-                 RMA_hidden_dim: int,
                  min_log_std: float, 
                  max_log_std: float,
                  squash: bool, 
@@ -233,7 +224,6 @@ class JointActor(SharedActor):
                          num_observations=num_observations,
                          num_actions=num_actions,
                          encoder_hidden_dim=encoder_hidden_dim,
-                         RMA_hidden_dim=RMA_hidden_dim,
                          min_log_std=min_log_std,
                          max_log_std=max_log_std,
                          squash=squash,
@@ -252,7 +242,7 @@ class JointActor(SharedActor):
                                                nn.ELU())
 
         # Shared Backbone
-        self.shared_backbone = JointBackBone(in_dim=encoder_hidden_dim+encoder_hidden_dim+RMA_hidden_dim)
+        self.shared_backbone = JointBackBone(in_dim=encoder_hidden_dim+encoder_hidden_dim)
         self.shared_output_dim = self.shared_backbone.out_dim
 
         # Output Head
@@ -300,10 +290,7 @@ class JointActor(SharedActor):
         z_shared = self.encoder["shared"](standardized_input_shared)
 
         # 2. JointBackbone
-        if self.is_rma:
-            x_joint = torch.cat([z_arm, z_leg, shared_infos], dim=-1)
-        else:
-            x_joint = torch.cat([z_arm, z_leg], dim=-1)
+        x_joint = torch.cat([z_arm, z_leg], dim=-1)
 
         # 3. Joint shared encoding
         z_joint = self.shared_backbone(x_joint)
