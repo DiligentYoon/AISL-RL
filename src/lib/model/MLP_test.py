@@ -253,6 +253,7 @@ class SuperConnectedActor(Model):
 
     def forward(self, 
                 observations: torch.Tensor, 
+                shared_infos: torch.Tensor | None,
                 taken_actions: torch.Tensor | None, 
                 deterministic: bool = False, 
                 update_rms: bool = False):
