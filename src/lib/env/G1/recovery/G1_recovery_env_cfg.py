@@ -252,7 +252,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
-    w_termination: float = 100
+    w_termination: float = 200
     termination_height: float = 0.3
     termination_gravity: float = 0.5
     termination_ang_vel: float = 15.0
