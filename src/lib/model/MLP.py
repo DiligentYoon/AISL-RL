@@ -14,16 +14,16 @@ class SharedBackbone(Model):
         self.d_arm = d_arm
         self.d_leg = d_leg
 
-        self.shared = nn.Sequential(nn.Linear(in_dim, 256), 
+        self.shared = nn.Sequential(nn.Linear(in_dim, 128), 
                                     nn.ELU(),
-                                    nn.Linear(256, 256), 
+                                    nn.Linear(128, 128), 
                                     nn.ELU())
         
-        self.head_arm = nn.Sequential(nn.Linear(256, 128), 
+        self.head_arm = nn.Sequential(nn.Linear(128, 128), 
                                       nn.ELU(), 
                                       nn.Linear(128, d_arm))
         
-        self.head_leg = nn.Sequential(nn.Linear(256, 128), 
+        self.head_leg = nn.Sequential(nn.Linear(128, 128), 
                                       nn.ELU(), 
                                       nn.Linear(128, d_leg))
 
@@ -88,13 +88,13 @@ class SharedActor(Model):
 
         # Encoder
         self.encoder = nn.ModuleDict()
-        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], 128),
+        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], 256),
                                             nn.ELU(),
-                                            nn.Linear(128, encoder_hidden_dim),
+                                            nn.Linear(256, encoder_hidden_dim),
                                             nn.ELU())
-        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], 128),
+        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], 256),
                                             nn.ELU(),
-                                            nn.Linear(128, encoder_hidden_dim),
+                                            nn.Linear(256, encoder_hidden_dim),
                                             nn.ELU())
         
         # Shared Backbone
@@ -107,11 +107,15 @@ class SharedActor(Model):
         self.head = nn.ModuleDict()
         self.head["arm"] = nn.Sequential(nn.Linear(encoder_hidden_dim + self.shared_output_dim["arm"], 128),
                                          nn.ELU(),
-                                         nn.Linear(128, self.num_actions["arm"]))
+                                         nn.Linear(128, 64),
+                                         nn.ELU(),
+                                         nn.Linear(64, self.num_actions["arm"]))
         
         self.head["leg"] = nn.Sequential(nn.Linear(encoder_hidden_dim + self.shared_output_dim["leg"], 128),
                                          nn.ELU(),
-                                         nn.Linear(128, self.num_actions["leg"]))
+                                         nn.Linear(128, 64),
+                                         nn.ELU(),
+                                         nn.Linear(64, self.num_actions["leg"]))
 
         
         self.log_std_parameter = nn.ParameterDict()
