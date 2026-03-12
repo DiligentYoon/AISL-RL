@@ -140,8 +140,8 @@ class SharedActor(Model):
         z_leg = self.encoder["leg"](standardized_input_leg)
 
         # 2. Shared info concat
-        x_arm = torch.cat([z_arm, z_leg.detach()], dim=-1)
-        x_leg = torch.cat([z_leg, z_arm.detach()], dim=-1)
+        x_arm = torch.cat([z_arm, z_leg], dim=-1)
+        x_leg = torch.cat([z_leg, z_arm], dim=-1)
 
         # 3. Shared info encoding
         h_arm = self.shared_backbone(x_arm, role="arm")
