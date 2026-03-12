@@ -192,10 +192,9 @@ def main():
     # ==========================================================================================================================
     from lib.model.model_factory import ModelFactory
     # ====================== Model Spawn  ==========================
-    # Overwrite cfg by cli argument
     if model is not None:
         cfg["models"]["model_type"] = model
-        
+    
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
     if model_manager.model_class == "mlp":
         models = model_manager.generate_mlp_models(observation_size=obs_size,
@@ -257,8 +256,7 @@ def main():
                     cfg=cfg["agent"],
                     shared=model_manager.is_shared)
     
-
-    # 2. Checkpoint
+    # Checkpoint
     if args_cli.checkpoint is not None:
         resume_path = os.path.abspath(args_cli.checkpoint)
         agent.load(resume_path)
