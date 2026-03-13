@@ -9,7 +9,7 @@ models:
   value: 
     clip_actions: False
 
-  model_type: "communet"
+  model_type: "joint"
   squashed: False
 
 buffer:

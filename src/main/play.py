@@ -16,19 +16,19 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
+parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--model",
                     type=str,
-                    default=None,
-                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    default="MLP",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -86,14 +86,14 @@ def main():
     # ============================================================================================================================
 
     # cfg for viewpoint control
-    # viewer_cfg = ViewerCfg(
-    #     origin_type="asset_root",
-    #     asset_name="robot",
-    #     env_index=0,
-    #     eye=(0.0, 4.0, 0.5),
-    #     lookat=(0.0, 0.0, 0.0)
-    # )
-    # env_cfg.viewer = viewer_cfg
+    viewer_cfg = ViewerCfg(
+        origin_type="asset_root",
+        asset_name="robot",
+        env_index=0,
+        eye=(0.0, 4.0, 0.5),
+        lookat=(0.0, 0.0, 0.0)
+    )
+    env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:
@@ -125,8 +125,6 @@ def main():
 
     # wrap around environment
     env = IsaacLabWrapper(env)
-
-
 
     # configure and instantiate the skrl runner
     cfg["agent"]["experiment"]["write_interval"] = 0  
@@ -192,7 +190,6 @@ def main():
     # ==========================================================================================================================
     from lib.model.model_factory import ModelFactory
     # ====================== Model Spawn  ==========================
-    # Overwrite cfg by cli argument
     if model is not None:
         cfg["models"]["model_type"] = model
     
@@ -228,29 +225,7 @@ def main():
     # Scale Factor
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
-        if model_manager.is_shared:
-            if cfg["models"]["model_type"] == "communet":
-                from lib.agent.communet_mappo import CommunetMAPPO
-                agent = CommunetMAPPO(observation_space=env.observation_space,
-                                      state_space=env.state_space,
-                                      action_space=env.action_space,
-                                      possible_agents=possible_agents,
-                                      model=models,
-                                      buffer=buffers,
-                                      device=env.device,
-                                      cfg=cfg["agent"])
-            else:
-                from lib.agent.cooperative_mappo import CooperativeMAPPO
-                agent = CooperativeMAPPO(observation_space=env.observation_space,
-                                        state_space=env.state_space,
-                                        action_space=env.action_space,
-                                        possible_agents=possible_agents,
-                                        model=models,
-                                        buffer=buffers,
-                                        device=env.device,
-                                        cfg=cfg["agent"])
-                
-        else:
+        if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,
                           state_space=env.state_space,
@@ -260,17 +235,40 @@ def main():
                           buffer=buffers,
                           device=env.device,
                           cfg=cfg["agent"])
+            
+        elif model_manager.model_type == "communet":
+            from lib.agent.communet_mappo import CommunetMAPPO
+            agent = CommunetMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        else:
+            raise RuntimeError("Unvalid model type.")
+
     else:
-        from lib.agent.ppo_scaled import PPO
-        # Agent initialization
+        from lib.agent.ppo import PPO
         agent = PPO(model=models,
                     buffer=buffer, 
                     device=env.device,
-                    cfg=cfg["agent"],
-                    shared=model_manager.is_shared)
+                    cfg=cfg["agent"])
     
-
-    # 2. Checkpoint
+    # Checkpoint
     if args_cli.checkpoint is not None:
         resume_path = os.path.abspath(args_cli.checkpoint)
         agent.load(resume_path)

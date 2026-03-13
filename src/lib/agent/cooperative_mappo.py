@@ -55,8 +55,6 @@ class CooperativeMAPPO(MAPPO):
         self.optimizer_schedulers = {}
         self.optimizer_schedulers["actor"] = {}
         self.optimizer_schedulers["critic"] = {}
-
-        self.is_rma = self.shared_actor.is_rma
         
         arm_params = []
         leg_params = []
@@ -124,10 +122,15 @@ class CooperativeMAPPO(MAPPO):
             self.tensors_name_for_update = ["observations", 
                                             "actions", "action_log_probs",
                                             "value_preds", "returns", "advantages"]
-            
-        if self.is_rma:
-            self.tensors_names.append("infos")
-            self.tensors_name_for_update.append("infos")
+        
+        # Shared Info 
+        self.shared_infos = False
+
+        if self.shared_infos:
+            self.tensors_names.append("shared_infos")
+            self.tensors_name_for_update.append("shared_infos")
+            for uid in self.possible_agents:
+                self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
 
 
     def save(self, path: str, path_jit: str | None = None):
@@ -246,8 +249,8 @@ class CooperativeMAPPO(MAPPO):
             states = unflatten_tensorized_space(self.state_space, states)
             next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
-        action_log_probs = action_log_probs.view(-1, self.num_agents)
-        rewards = rewards.view(-1, self.num_agents)
+        buffer_action_log_probs = action_log_probs.view(-1, self.num_agents).clone()
+        buffer_rewards = rewards.view(-1, self.num_agents).clone()
         
         critic_inputs = states if states is not None else observations
 
@@ -259,35 +262,56 @@ class CooperativeMAPPO(MAPPO):
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
-                rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
+                buffer_rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
-            # Additional Info check
-            if self.is_rma:
+            if self.shared_infos:
                 # Additional Info Extraction
-                rma_infos = infos.get("rma", None)
-                self.buffer[uid].create_tensor("infos", rma_infos.shape[-1])
-                self.buffer[uid].add_samples(infos=rma_infos)
+                shared_infos = infos.get("shared_infos")
 
             if self.is_async_actor_critic:
-                self.buffer[uid].add_samples(observations=observations[uid],
-                                             states=states[uid],
-                                             actions=actions[uid],
-                                             rewards=rewards[:, i].unsqueeze(-1),
-                                             next_observations=next_observations[uid],
-                                             next_states=next_states[uid],
-                                             truncated=truncated,
-                                             terminated=terminated,
-                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds=value_preds)
+                if self.shared_infos:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                states=states[uid],
+                                                actions=actions[uid],
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                next_states=next_states[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds,
+                                                shared_infos=shared_infos)
+                else:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                states=states[uid],
+                                                actions=actions[uid],
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                next_states=next_states[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds)
             else:
-                self.buffer[uid].add_samples(observations=observations[uid],
-                                             actions=actions[uid],
-                                             rewards=rewards[:, i].unsqueeze(-1),
-                                             next_observations=next_observations[uid],
-                                             truncated=truncated,
-                                             terminated=terminated,
-                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
-                                             value_preds = value_preds)
+                if self.shared_infos:
+                     self.buffer[uid].add_samples(observations=observations[uid],
+                                                  actions=actions[uid],
+                                                  rewards=buffer_rewards[:, i].unsqueeze(-1),
+                                                  next_observations=next_observations[uid],
+                                                  truncated=truncated,
+                                                  terminated=terminated,
+                                                  action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
+                                                  value_preds=value_preds,
+                                                  shared_infos=shared_infos)
+                else:
+                    self.buffer[uid].add_samples(observations=observations[uid],
+                                                actions=actions[uid],
+                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
+                                                next_observations=next_observations[uid],
+                                                truncated=truncated,
+                                                terminated=terminated,
+                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
+                                                value_preds=value_preds)
 
 
     def update(self) -> float:
@@ -345,7 +369,7 @@ class CooperativeMAPPO(MAPPO):
             for mb_a, mb_l in zip(mini_batches_a, mini_batches_l):
                 # (mini batch size, Data-specific)
                 if self.is_async_actor_critic:
-                    if self.is_rma:
+                    if self.shared_infos:
                         (sampled_observations_a,
                         sampled_states_a,
                         sampled_actions_a,
@@ -396,7 +420,7 @@ class CooperativeMAPPO(MAPPO):
                     }  
                 
                 else:
-                    if self.is_rma:
+                    if self.shared_infos:
                         (sampled_observations_a,
                         sampled_actions_a,
                         sampled_action_log_probs_a,
@@ -531,8 +555,8 @@ class CooperativeMAPPO(MAPPO):
                 shared_params = list(self.shared_actor.shared_backbone.parameters())
 
                 # Total Loss
-                policy_total = 0.7*(policy_losses["arm"] + entropy_losses["arm"]) + \
-                               1.0*(policy_losses["leg"] + entropy_losses["leg"])
+                policy_total = (policy_losses["arm"] + entropy_losses["arm"]) + \
+                               (policy_losses["leg"] + entropy_losses["leg"])
 
                 value_total  = value_losses["arm"] + value_losses["leg"]
 

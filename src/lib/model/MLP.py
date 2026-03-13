@@ -8,24 +8,22 @@ from lib.model.model import Model
 
 
 class SharedBackbone(Model):
-    def __init__(self, in_dim, d_arm=64, d_leg=64):
+    def __init__(self, in_dim, d_arm=128, d_leg=128):
         super().__init__()
 
         self.d_arm = d_arm
         self.d_leg = d_leg
 
-        self.shared = nn.Sequential(nn.Linear(in_dim, 256), 
+        self.shared = nn.Sequential(nn.Linear(in_dim, 128), 
                                     nn.ELU(),
-                                    nn.Linear(256, 256), 
+                                    nn.Linear(128, 128), 
                                     nn.ELU())
         
-        self.head_arm = nn.Sequential(nn.Linear(256, 128), 
-                                      nn.ELU(), 
-                                      nn.Linear(128, d_arm))
+        self.head_arm = nn.Sequential(nn.Linear(128, d_arm), 
+                                      nn.ELU())
         
-        self.head_leg = nn.Sequential(nn.Linear(256, 128), 
-                                      nn.ELU(), 
-                                      nn.Linear(128, d_leg))
+        self.head_leg = nn.Sequential(nn.Linear(128, d_arm), 
+                                      nn.ELU())
 
     def forward(self, x, role):
         g = self.shared(x)
@@ -35,24 +33,7 @@ class SharedBackbone(Model):
         else:
             h_leg = self.head_leg(g)
             return h_leg
-
-
-class JointBackBone(Model):
-    def __init__(self, in_dim):
-        super().__init__()
-
-        self.shared = nn.Sequential(nn.Linear(in_dim, 256), 
-                                    nn.ELU(),
-                                    nn.Linear(256, 256), 
-                                    nn.ELU(),
-                                    nn.Linear(256, 256), 
-                                    nn.ELU())
         
-    def forward(self, x):
-        g = self.shared(x)
-
-        return g
-
 
 class SharedActor(Model):
     def __init__(self,
@@ -60,7 +41,6 @@ class SharedActor(Model):
                  num_observations: dict[str, int], 
                  num_actions: dict[str, int],
                  encoder_hidden_dim: int,
-                 RMA_hidden_dim: int,
                  min_log_std: float, 
                  max_log_std: float,
                  squash: bool, 
@@ -86,22 +66,15 @@ class SharedActor(Model):
         # Action Squashing
         self.squash = squash
 
-        # RMA
-        self.is_rma = RMA_hidden_dim > 0
-
         # Encoder
         self.encoder = nn.ModuleDict()
-        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], 128),
-                                            nn.ELU(),
-                                            nn.Linear(128, encoder_hidden_dim),
+        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], encoder_hidden_dim),
                                             nn.ELU())
-        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], 128),
-                                            nn.ELU(),
-                                            nn.Linear(128, encoder_hidden_dim),
+        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], encoder_hidden_dim),
                                             nn.ELU())
         
         # Shared Backbone
-        self.shared_backbone = SharedBackbone(in_dim=encoder_hidden_dim+encoder_hidden_dim+RMA_hidden_dim)
+        self.shared_backbone = SharedBackbone(in_dim=encoder_hidden_dim+encoder_hidden_dim)
         self.shared_output_dim = {
             "arm": self.shared_backbone.d_arm,
             "leg": self.shared_backbone.d_leg}
@@ -110,11 +83,15 @@ class SharedActor(Model):
         self.head = nn.ModuleDict()
         self.head["arm"] = nn.Sequential(nn.Linear(encoder_hidden_dim + self.shared_output_dim["arm"], 128),
                                          nn.ELU(),
-                                         nn.Linear(128, self.num_actions["arm"]))
+                                         nn.Linear(128, 64),
+                                         nn.ELU(),
+                                         nn.Linear(64, self.num_actions["arm"]))
         
         self.head["leg"] = nn.Sequential(nn.Linear(encoder_hidden_dim + self.shared_output_dim["leg"], 128),
                                          nn.ELU(),
-                                         nn.Linear(128, self.num_actions["leg"]))
+                                         nn.Linear(128, 64),
+                                         nn.ELU(),
+                                         nn.Linear(64, self.num_actions["leg"]))
 
         
         self.log_std_parameter = nn.ParameterDict()
@@ -143,12 +120,8 @@ class SharedActor(Model):
         z_leg = self.encoder["leg"](standardized_input_leg)
 
         # 2. Shared info concat
-        if self.is_rma:
-            x_arm = torch.cat([z_arm, z_leg.detach(), shared_infos], dim=-1)
-            x_leg = torch.cat([z_leg, z_arm.detach(), shared_infos], dim=-1)
-        else:
-            x_arm = torch.cat([z_arm, z_leg.detach()], dim=-1)
-            x_leg = torch.cat([z_leg, z_arm.detach()], dim=-1)
+        x_arm = torch.cat([z_arm, z_leg], dim=-1)
+        x_leg = torch.cat([z_leg, z_arm], dim=-1)
 
         # 3. Shared info encoding
         h_arm = self.shared_backbone(x_arm, role="arm")
@@ -157,136 +130,6 @@ class SharedActor(Model):
         # 4. Final input
         x_arm = torch.cat([z_arm, h_arm], dim=-1)
         x_leg = torch.cat([z_leg, h_leg], dim=-1)
-
-        # 5. Action
-        mean_action_arm = self.head["arm"](x_arm)
-        mean_action_leg = self.head["leg"](x_leg)
-        mean_action = {
-            "arm": mean_action_arm,
-            "leg": mean_action_leg}
-
-        # log std
-        log_std_arm = torch.clamp(self.log_std_parameter["arm"], self.min_log_std, self.max_log_std)
-        log_std_leg = torch.clamp(self.log_std_parameter["leg"], self.min_log_std, self.max_log_std)
-        log_std = {
-            "arm": log_std_arm,
-            "leg": log_std_leg}
-
-        # Action Processing
-        actions = {}
-        log_probs = {}
-        entropies = {}
-        for uid in self.possible_agents:
-            action_distribution = Normal(mean_action[uid], log_std[uid].exp())
-
-            if deterministic:
-                raw_actions = mean_action[uid]
-            else:
-                # Sample using the reparameterization trick
-                raw_actions = action_distribution.rsample()
-
-            # Log of the probability density function
-            if self.squash:
-                # tanh squasing with log probability dorrection
-                action = torch.tanh(raw_actions)
-                if taken_actions is not None:
-                    taken_actions[uid] = torch.clip(taken_actions[uid], -1.0 + eps, 1.0 - eps)
-                    raw_taken_actions = torch.atanh(taken_actions[uid])
-                    log_prob = action_distribution.log_prob(raw_taken_actions) - torch.log(1 - taken_actions[uid].pow(2) + eps)
-                else:
-                    log_prob = action_distribution.log_prob(raw_actions) - torch.log(1 - action.pow(2) + eps)
-
-            else:
-                # no squasing without correction
-                action = raw_actions
-                if taken_actions is not None:
-                    log_prob = action_distribution.log_prob(taken_actions[uid])
-                else:
-                    log_prob = action_distribution.log_prob(action)
-
-            log_prob = log_prob.sum(dim=-1)
-
-            # Entropy : mean of (Batch, Action) dimension
-            entropy = action_distribution.entropy().mean()
-
-            actions[uid] = action
-            log_probs[uid] = log_prob
-            entropies[uid] = entropy
-
-        return actions, log_probs, entropies
-
-
-class JointActor(SharedActor):
-    def __init__(self,
-                 possible_agents: list[str],
-                 num_observations: dict[str, int], 
-                 num_actions: dict[str, int],
-                 encoder_hidden_dim: int,
-                 RMA_hidden_dim: int,
-                 min_log_std: float, 
-                 max_log_std: float,
-                 squash: bool, 
-                 device: torch.device):
-        super().__init__(possible_agents=possible_agents,
-                         num_observations=num_observations,
-                         num_actions=num_actions,
-                         encoder_hidden_dim=encoder_hidden_dim,
-                         RMA_hidden_dim=RMA_hidden_dim,
-                         min_log_std=min_log_std,
-                         max_log_std=max_log_std,
-                         squash=squash,
-                         device=device)
-
-        # Shared Backbone
-        self.shared_backbone = JointBackBone(in_dim=encoder_hidden_dim+encoder_hidden_dim+RMA_hidden_dim)
-
-        # Output Head
-        self.head = nn.ModuleDict()
-        self.head["arm"] = nn.Sequential(nn.Linear(encoder_hidden_dim + 256, 128),
-                                         nn.ELU(),
-                                         nn.Linear(128, self.num_actions["arm"]))
-        
-        self.head["leg"] = nn.Sequential(nn.Linear(encoder_hidden_dim + 256, 128),
-                                         nn.ELU(),
-                                         nn.Linear(128, self.num_actions["leg"]))
-        
-        self.log_std_parameter = nn.ParameterDict()
-        self.log_std_parameter["arm"] = nn.Parameter(torch.zeros(self.num_actions["arm"], device=device), requires_grad=True) # State independent log std
-        self.log_std_parameter["leg"] = nn.Parameter(torch.zeros(self.num_actions["leg"], device=device), requires_grad=True) # State independent log std
-
-        self.init_weights()
-        self.init_biases(val=0)
-
-    
-    def forward(self, 
-                observations: torch.Tensor | dict[str, torch.Tensor],
-                shared_infos: torch.Tensor | None,
-                taken_actions: torch.Tensor | dict[str, torch.Tensor] | None, 
-                deterministic: bool = False, 
-                update_rms: bool = False):
-        # eps
-        eps = 1e-6
-        # Input standardization
-        standardized_input_arm = self.actor_standardizer["arm"].standardize(observations["arm"], update=update_rms)
-        standardized_input_leg = self.actor_standardizer["leg"].standardize(observations["leg"], update=update_rms)
-        # forward propagation
-
-        # 1. Encoding
-        z_arm = self.encoder["arm"](standardized_input_arm) 
-        z_leg = self.encoder["leg"](standardized_input_leg)
-
-        # 2. JointBackbone
-        if self.is_rma:
-            x_joint = torch.cat([z_arm, z_leg, shared_infos], dim=-1)
-        else:
-            x_joint = torch.cat([z_arm, z_leg], dim=-1)
-
-        # 3. Joint shared encoding
-        z_joint = self.shared_backbone(x_joint)
-
-        # 4. Final input
-        x_arm = torch.cat([z_arm, z_joint], dim=-1)
-        x_leg = torch.cat([z_leg, z_joint], dim=-1)
 
         # 5. Action
         mean_action_arm = self.head["arm"](x_arm)

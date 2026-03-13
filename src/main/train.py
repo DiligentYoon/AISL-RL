@@ -27,8 +27,8 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default=None,
-                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    default="Shared",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -220,29 +220,7 @@ def main():
     # Scale Factor
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
-        if model_manager.is_shared:
-            if cfg["models"]["model_type"] == "communet":
-                from lib.agent.communet_mappo import CommunetMAPPO
-                agent = CommunetMAPPO(observation_space=env.observation_space,
-                                      state_space=env.state_space,
-                                      action_space=env.action_space,
-                                      possible_agents=possible_agents,
-                                      model=models,
-                                      buffer=buffers,
-                                      device=env.device,
-                                      cfg=cfg["agent"])
-            else:
-                from lib.agent.cooperative_mappo import CooperativeMAPPO
-                agent = CooperativeMAPPO(observation_space=env.observation_space,
-                                        state_space=env.state_space,
-                                        action_space=env.action_space,
-                                        possible_agents=possible_agents,
-                                        model=models,
-                                        buffer=buffers,
-                                        device=env.device,
-                                        cfg=cfg["agent"])
-                
-        else:
+        if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,
                           state_space=env.state_space,
@@ -252,14 +230,38 @@ def main():
                           buffer=buffers,
                           device=env.device,
                           cfg=cfg["agent"])
+            
+        elif model_manager.model_type == "communet":
+            from lib.agent.communet_mappo import CommunetMAPPO
+            agent = CommunetMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        else:
+            raise RuntimeError("Unvalid model type.")
+
     else:
-        from lib.agent.ppo_scaled import PPO
-        # Agent initialization
+        from lib.agent.ppo import PPO
         agent = PPO(model=models,
                     buffer=buffer, 
                     device=env.device,
-                    cfg=cfg["agent"],
-                    shared=model_manager.is_shared)
+                    cfg=cfg["agent"])
     
     # Checkpoint
     if args_cli.checkpoint is not None:
@@ -287,7 +289,6 @@ def main():
     CLI_track_rewards = collections.deque(maxlen=env.num_envs)
     CLI_track_timesteps = collections.deque(maxlen=env.num_envs)
     CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
-    # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
@@ -411,12 +412,10 @@ def main():
             per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
-            # avg_ep_srate = float(np.mean(CLI_episode_success_rate)) if len(CLI_episode_success_rate) else float ("nan")
 
             ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
-            # ep_srate = "-" if np.isnan(avg_ep_srate) else f"{avg_ep_srate:6.3f} %"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)

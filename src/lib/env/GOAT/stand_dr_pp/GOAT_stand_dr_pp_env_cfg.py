@@ -66,14 +66,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.61),
+            pos=(0.0, 0.0, 0.53),
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
-                "thigh_L_Joint": 0.25,
-                "thigh_R_Joint": -0.25,
-                "knee_L_Joint": 0.6,
-                "knee_R_Joint": -0.6,
+                "thigh_L_Joint": 0.738,
+                "thigh_R_Joint": -0.738,
+                "knee_L_Joint": 1.462,
+                "knee_R_Joint": -1.462,
                 "wheel_L_Joint": 0.0,
                 "wheel_R_Joint": 0.0,
                 },
@@ -86,7 +86,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 24                      # Observation space
-    state_space = 39                            # State space including privilege information
+    state_space = 36                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##

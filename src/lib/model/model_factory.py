@@ -3,7 +3,7 @@ import gymnasium as gym
 
 from typing import Union, Any
 
-from lib.model.MLP import Actor, Critic, SharedActor, JointActor
+from lib.model.MLP import Actor, Critic, SharedActor
 from lib.model.MLP_test import SuperConnectedActor, CommunetActor
 from lib.model.NerveNet import NerveNetPolicy
 from lib.utils.graph_utils import Mapping
@@ -25,16 +25,15 @@ class ModelFactory:
         self.model_cfg = cfg
         
         # Load model cfg
-        self.is_shared = False                                          # NOTE: 이거 최적화해야할지도?
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
         self.model_type = self.model_cfg.get("model_type", "mlp").lower()
 
-        if self.model_type == "nervenet" or self.model_type == "bodytransformer":
+        if (self.model_type == "nervenet") or (self.model_type == "bodytransformer"):
             self.model_class = "gnn"
         else:
             self.model_class = "mlp"
-
+        
         self.device = device
 
 
@@ -49,33 +48,18 @@ class ModelFactory:
 
         if self.is_multi_agent:
             # Multi agent
-            models = {}
-            if self.model_type == "joint":
-                self.is_shared = True
-                actor = JointActor(possible_agents=possible_agents,
-                                   num_observations=observation_size,
-                                   num_actions=action_size,
-                                   encoder_hidden_dim=128,
-                                   RMA_hidden_dim=0,
-                                   min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                   max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                   squash=self.is_squashed,
-                                   device=self.device)
-                
-            elif self.model_type == "shared":
-                self.is_shared = True
+            models = {}     
+            if self.model_type == "shared":
                 actor = SharedActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
                                     encoder_hidden_dim=128,
-                                    RMA_hidden_dim=0,
                                     min_log_std=self.model_cfg["policy"]["min_log_std"],
                                     max_log_std=self.model_cfg["policy"]["max_log_std"],
                                     squash=self.is_squashed,
                                     device=self.device)
             
             elif self.model_type == "superconnected":
-                self.is_shared = True
                 actor = SuperConnectedActor(possible_agents=possible_agents,
                                             num_observations=observation_size,
                                             num_actions=action_size,
@@ -85,7 +69,6 @@ class ModelFactory:
                                             device=self.device)
             
             elif self.model_type == "communet":
-                self.is_shared = True
                 actor = CommunetActor(possible_agents=possible_agents,
                                       num_observations=observation_size, 
                                       num_actions=action_size,
@@ -100,7 +83,6 @@ class ModelFactory:
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
                 if self.model_type == "mlp":
-                    self.is_shared = False
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -121,7 +103,6 @@ class ModelFactory:
         elif self.is_multi_agent is False:
             # Single Agent
             if self.model_type == "mlp":
-                self.is_shared = False
                 actor = Actor(num_observations=observation_size,
                                 num_actions=action_size,
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -173,57 +154,28 @@ class ModelFactory:
             value_detokenizer = ValueDetokenizer(mapping=mapping,
                                                 use_mlp=use_mlp, 
                                                 device=self.device)
-            if self.is_shared:
-                if state_space is not None:
-                    raise RuntimeError("Shared structure can't use state space different from observation sapce.")
-                
-                tokenizer = ObsTokenizer(mapping=mapping,
-                                        device=self.device)
-                trunk = BodyTransformer(mapping=mapping,
-                                        device=self.device)
-
-                actor = BodyLevelActor(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    mapping=mapping,
-                    tokenizer=tokenizer,
-                    trunk=trunk,
-                    detokenizer=action_detokenizer,
-                    device=self.device,
-                    min_log_std=self.model_cfg['policy']['min_log_std'],
-                    max_log_std=self.model_cfg['policy']['max_log_std'],)
-                
-                critic = BodyLevelCritic(
-                    state_space=observation_space,
-                    mapping=mapping,
-                    tokenizer=tokenizer,
-                    trunk=trunk,
-                    detokenizer=value_detokenizer,
-                    device=self.device)
-                
-            else:
-                actor = BodyLevelActor(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    mapping=mapping,
-                    tokenizer=ObsTokenizer(mapping=mapping,
-                                        device=self.device),
-                    trunk=BodyTransformer(mapping=mapping,
-                                        device=self.device),
-                    detokenizer=action_detokenizer,
-                    device=self.device,
-                    min_log_std=self.model_cfg['policy']['min_log_std'],
-                    max_log_std=self.model_cfg['policy']['max_log_std'],)
-                
-                critic = BodyLevelCritic(
-                    state_space=observation_space if state_space is None else state_space,
-                    mapping=mapping,
-                    tokenizer=ObsTokenizer(mapping=mapping,
-                                        device=self.device),
-                    trunk=BodyTransformer(mapping=mapping,
-                                        device=self.device),
-                    detokenizer=value_detokenizer,
-                    device=self.device)
+            actor = BodyLevelActor(
+                observation_space=observation_space,
+                action_space=action_space,
+                mapping=mapping,
+                tokenizer=ObsTokenizer(mapping=mapping,
+                                    device=self.device),
+                trunk=BodyTransformer(mapping=mapping,
+                                    device=self.device),
+                detokenizer=action_detokenizer,
+                device=self.device,
+                min_log_std=self.model_cfg['policy']['min_log_std'],
+                max_log_std=self.model_cfg['policy']['max_log_std'],)
+            
+            critic = BodyLevelCritic(
+                state_space=observation_space if state_space is None else state_space,
+                mapping=mapping,
+                tokenizer=ObsTokenizer(mapping=mapping,
+                                    device=self.device),
+                trunk=BodyTransformer(mapping=mapping,
+                                    device=self.device),
+                detokenizer=value_detokenizer,
+                device=self.device)
 
         models = {
             'actor': actor, 
