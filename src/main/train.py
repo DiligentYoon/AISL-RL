@@ -221,15 +221,27 @@ def main():
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.is_shared:
-            from lib.agent.cooperative_mappo import CooperativeMAPPO
-            agent = CooperativeMAPPO(observation_space=env.observation_space,
-                                     state_space=env.state_space,
-                                     action_space=env.action_space,
-                                     possible_agents=possible_agents,
-                                     model=models,
-                                     buffer=buffers,
-                                     device=env.device,
-                                     cfg=cfg["agent"])
+            if cfg["models"]["model_type"] == "communet":
+                from lib.agent.communet_mappo import CommunetMAPPO
+                agent = CommunetMAPPO(observation_space=env.observation_space,
+                                      state_space=env.state_space,
+                                      action_space=env.action_space,
+                                      possible_agents=possible_agents,
+                                      model=models,
+                                      buffer=buffers,
+                                      device=env.device,
+                                      cfg=cfg["agent"])
+            else:
+                from lib.agent.cooperative_mappo import CooperativeMAPPO
+                agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                        state_space=env.state_space,
+                                        action_space=env.action_space,
+                                        possible_agents=possible_agents,
+                                        model=models,
+                                        buffer=buffers,
+                                        device=env.device,
+                                        cfg=cfg["agent"])
+                
         else:
             from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,

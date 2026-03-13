@@ -15,7 +15,8 @@ from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 from lib.utils.wrapper_utils import unflatten_tensorized_space
 
-class CooperativeMAPPO(MAPPO):
+
+class CommunetMAPPO(MAPPO):
     def __init__(self,
                  observation_space: gym.Space,
                  state_space: gym.Space,
@@ -25,7 +26,7 @@ class CooperativeMAPPO(MAPPO):
                  buffer: Dict[str, RolloutBuffer],
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
-        """Cooperative Multi Agent Proximal Policy Optimization with parameter-shared backbone
+        """Communet Multi Agent Proximal Policy Optimization
 
         This architecture is expanded version of MAPPO for cooperative behaviors.
 
@@ -40,8 +41,8 @@ class CooperativeMAPPO(MAPPO):
             cfg: Configuration dictionary
         """
         super().__init__(observation_space, state_space, action_space, possible_agents, model, buffer, device, cfg)
-        # Shared
-        self.shared_actor = self.actors["arm"]
+        # Actor(arm, leg are same)
+        self.communet_actor = self.actors["arm"]
 
         # Checkpoint Module
         self.checkpoint_modules = {}
@@ -56,49 +57,21 @@ class CooperativeMAPPO(MAPPO):
         self.optimizer_schedulers["actor"] = {}
         self.optimizer_schedulers["critic"] = {}
 
-        self.is_shared = hasattr(self.shared_actor, "num_shared")
-        
-        arm_params = []
-        leg_params = []
-
-        if hasattr(self.shared_actor, "encoder"):
-            arm_params += list(self.shared_actor.encoder["arm"].parameters())
-            leg_params += list(self.shared_actor.encoder["leg"].parameters())
-
-        if hasattr(self.shared_actor, "head"):
-            arm_params += list(self.shared_actor.head["arm"].parameters())
-            leg_params += list(self.shared_actor.head["leg"].parameters())
-
-        arm_params += [self.shared_actor.log_std_parameter["arm"]]
-        leg_params += [self.shared_actor.log_std_parameter["leg"]]
-
-        shared_params = list(self.shared_actor.shared_backbone.parameters())
-
-        self.optimizers["actor"]["arm"] = torch.optim.Adam(arm_params, lr=self.learning_rate)
-        self.optimizers["actor"]["leg"] = torch.optim.Adam(leg_params, lr=self.learning_rate)
-        self.optimizers["actor"]["shared"] = torch.optim.Adam(shared_params, lr=self.learning_rate)
+        self.optimizers["actor"] = torch.optim.Adam(self.communet_actor.parameters(), lr=self.learning_rate)
 
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
 
-        # self.optimizer_schedulers["actor"]["arm"] = KLAdaptiveLR(self.optimizers["actor"]["arm"])
-        # self.optimizer_schedulers["actor"]["leg"] = KLAdaptiveLR(self.optimizers["actor"]["leg"])
-        # self.optimizer_schedulers["actor"]["shared"] = KLAdaptiveLR(self.optimizers["actor"]["shared"])
-        # self.optimizer_schedulers["critic"]["arm"] = KLAdaptiveLR(self.optimizers["critic"]["arm"])
-        # self.optimizer_schedulers["critic"]["leg"] = KLAdaptiveLR(self.optimizers["critic"]["leg"])
-
-
-        # Checkpoint Modules
         self.checkpoint_modules["shared"] = {
-            "actor": self.shared_actor,
-            "actor_optimizer": self.optimizers["actor"]["shared"]
+            "actor": self.communet_actor,
+            "actor_optimizer": self.optimizers["actor"]
         }
 
         for uid in self.possible_agents:
             self.checkpoint_modules[uid] = {
                 "critic": self.critics[uid],
                 "value_standardizer": self.value_standardizers[uid],
-                "actor_optimizer": self.optimizers["actor"][uid],
+                "actor_optimizer": self.optimizers["actor"],
                 "critic_optimizer": self.optimizers["critic"][uid]
             }
 
@@ -124,23 +97,16 @@ class CooperativeMAPPO(MAPPO):
             self.tensors_name_for_update = ["observations", 
                                             "actions", "action_log_probs",
                                             "value_preds", "returns", "advantages"]
-        
-        if self.is_shared:
-            self.tensors_names.append("shared_infos")
-            self.tensors_name_for_update.append("shared_infos")
-            for uid in self.possible_agents:
-                self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
 
 
     def save(self, path: str, path_jit: str | None = None):
         modules = {}
-        # Shared module
+        
         shared_module = {}
         for name, module in self.checkpoint_modules["shared"].items():
             shared_module[name] = module.state_dict()
         modules["shared"] = shared_module
 
-        # Independent modules
         for uid in self.possible_agents:
             uid_module = {}
             for name, module in self.checkpoint_modules[uid].items():
@@ -154,13 +120,14 @@ class CooperativeMAPPO(MAPPO):
 
     def load(self, path):
         modules = torch.load(path, map_location=self.device)
-        # Shared module
-        for name, data in modules["shared"].items():
-            module = self.checkpoint_modules["shared"].get(name, None)
-            if module is not None:
-                module.load_state_dict(data)
-            else:
-                print(f"Cannot load the {name} module. The agent doesn't have such an instance")
+
+        if "shared" in modules:
+            for name, data in modules["shared"].items():
+                module = self.checkpoint_modules["shared"].get(name, None)
+                if module is not None:
+                    module.load_state_dict(data)
+                else:
+                    print(f"Cannot load the {name} module. The agent doesn't have such an instance")
 
         # Independent modules
         if type(modules) is dict:
@@ -194,18 +161,16 @@ class CooperativeMAPPO(MAPPO):
         # From Tensor to Dict
         observations = unflatten_tensorized_space(self.observation_space, observations)
 
-        # Shared Action Processing
-        non_scaled_actions, log_probs, entropies = self.shared_actor(observations=observations,
-                                                                     shared_infos=infos,
-                                                                     taken_actions=None,
-                                                                     deterministic=deterministic,
-                                                                     update_rms=update_rms)
+        # Action Processing
+        non_scaled_actions, log_probs, entropies = self.communet_actor(observations=observations,
+                                                                       taken_actions=None,
+                                                                       deterministic=deterministic,
+                                                                       update_rms=update_rms)
         # From Dict to Tensor
         data = []
         for uid in self.possible_agents:
             actions = non_scaled_actions[uid].clone() * self.action_scale_factor[uid][0]
             data.append((actions, non_scaled_actions[uid], log_probs[uid], entropies[uid]))
-
         
         actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
         nonscaled_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
@@ -248,8 +213,8 @@ class CooperativeMAPPO(MAPPO):
             states = unflatten_tensorized_space(self.state_space, states)
             next_states = unflatten_tensorized_space(self.state_space, next_states)
         # Reshape for multi agent scale [B * N, 1] -> [B, N]
-        buffer_action_log_probs = action_log_probs.view(-1, self.num_agents).clone()
-        buffer_rewards = rewards.view(-1, self.num_agents).clone()
+        action_log_probs = action_log_probs.view(-1, self.num_agents)
+        rewards = rewards.view(-1, self.num_agents)
         
         critic_inputs = states if states is not None else observations
 
@@ -261,56 +226,29 @@ class CooperativeMAPPO(MAPPO):
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
-                buffer_rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
+                rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
-            if self.is_shared:
-                # Additional Info Extraction
-                shared_infos = infos.get("shared_infos")
-
+            # Additional Info check
             if self.is_async_actor_critic:
-                if self.is_shared:
-                    self.buffer[uid].add_samples(observations=observations[uid],
-                                                states=states[uid],
-                                                actions=actions[uid],
-                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
-                                                next_observations=next_observations[uid],
-                                                next_states=next_states[uid],
-                                                truncated=truncated,
-                                                terminated=terminated,
-                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
-                                                value_preds=value_preds,
-                                                shared_infos=shared_infos)
-                else:
-                    self.buffer[uid].add_samples(observations=observations[uid],
-                                                states=states[uid],
-                                                actions=actions[uid],
-                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
-                                                next_observations=next_observations[uid],
-                                                next_states=next_states[uid],
-                                                truncated=truncated,
-                                                terminated=terminated,
-                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
-                                                value_preds=value_preds)
+                self.buffer[uid].add_samples(observations=observations[uid],
+                                             states=states[uid],
+                                             actions=actions[uid],
+                                             rewards=rewards[:, i].unsqueeze(-1),
+                                             next_observations=next_observations[uid],
+                                             next_states=next_states[uid],
+                                             truncated=truncated,
+                                             terminated=terminated,
+                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                             value_preds=value_preds)
             else:
-                if self.is_shared:
-                     self.buffer[uid].add_samples(observations=observations[uid],
-                                                  actions=actions[uid],
-                                                  rewards=buffer_rewards[:, i].unsqueeze(-1),
-                                                  next_observations=next_observations[uid],
-                                                  truncated=truncated,
-                                                  terminated=terminated,
-                                                  action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
-                                                  value_preds=value_preds,
-                                                  shared_infos=shared_infos)
-                else:
-                    self.buffer[uid].add_samples(observations=observations[uid],
-                                                actions=actions[uid],
-                                                rewards=buffer_rewards[:, i].unsqueeze(-1),
-                                                next_observations=next_observations[uid],
-                                                truncated=truncated,
-                                                terminated=terminated,
-                                                action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
-                                                value_preds=value_preds)
+                self.buffer[uid].add_samples(observations=observations[uid],
+                                             actions=actions[uid],
+                                             rewards=rewards[:, i].unsqueeze(-1),
+                                             next_observations=next_observations[uid],
+                                             truncated=truncated,
+                                             terminated=terminated,
+                                             action_log_probs=action_log_probs[:, i].unsqueeze(-1),
+                                             value_preds = value_preds)
 
 
     def update(self) -> float:
@@ -363,50 +301,25 @@ class CooperativeMAPPO(MAPPO):
             mini_batches=self.mini_batches
         )
 
-    
         for epoch in range(self.learning_epochs):
             for mb_a, mb_l in zip(mini_batches_a, mini_batches_l):
                 # (mini batch size, Data-specific)
                 if self.is_async_actor_critic:
-                    if self.is_shared:
-                        (sampled_observations_a,
-                        sampled_states_a,
-                        sampled_actions_a,
-                        sampled_action_log_probs_a,
-                        sampled_value_preds_a,
-                        sampled_returns_a,
-                        sampled_advantages_a,
-                        sampled_infos_a) = mb_a
-                        
-                        (sampled_observations_l,
-                        sampled_states_l,
-                        sampled_actions_l,
-                        sampled_action_log_probs_l,
-                        sampled_value_preds_l,
-                        sampled_returns_l,
-                        sampled_advantages_l,
-                        sampled_infos_l) = mb_l
-
-                        shared_info = sampled_infos_a 
-
-                    else:
-                        (sampled_observations_a,
-                        sampled_states_a,
-                        sampled_actions_a,
-                        sampled_action_log_probs_a,
-                        sampled_value_preds_a,
-                        sampled_returns_a,
-                        sampled_advantages_a) = mb_a
-                        
-                        (sampled_observations_l,
-                        sampled_states_l,
-                        sampled_actions_l,
-                        sampled_action_log_probs_l,
-                        sampled_value_preds_l,
-                        sampled_returns_l,
-                        sampled_advantages_l) = mb_l
-
-                        shared_info = {}
+                    (sampled_observations_a,
+                    sampled_states_a,
+                    sampled_actions_a,
+                    sampled_action_log_probs_a,
+                    sampled_value_preds_a,
+                    sampled_returns_a,
+                    sampled_advantages_a) = mb_a
+                    
+                    (sampled_observations_l,
+                    sampled_states_l,
+                    sampled_actions_l,
+                    sampled_action_log_probs_l,
+                    sampled_value_preds_l,
+                    sampled_returns_l,
+                    sampled_advantages_l) = mb_l
 
                     actor_input = {
                         "arm": sampled_observations_a,
@@ -419,42 +332,20 @@ class CooperativeMAPPO(MAPPO):
                     }  
                 
                 else:
-                    if self.is_shared:
-                        (sampled_observations_a,
-                        sampled_actions_a,
-                        sampled_action_log_probs_a,
-                        sampled_value_preds_a,
-                        sampled_returns_a,
-                        sampled_advantages_a,
-                        sampled_infos_a) = mb_a
+                    (sampled_observations_a,
+                    sampled_actions_a,
+                    sampled_action_log_probs_a,
+                    sampled_value_preds_a,
+                    sampled_returns_a,
+                    sampled_advantages_a) = mb_a
 
-                        (sampled_observations_l,
-                        sampled_actions_l,
-                        sampled_action_log_probs_l,
-                        sampled_value_preds_l,
-                        sampled_returns_l,
-                        sampled_advantages_l,
-                        sampled_infos_l) = mb_l
+                    (sampled_observations_l,
+                    sampled_actions_l,
+                    sampled_action_log_probs_l,
+                    sampled_value_preds_l,
+                    sampled_returns_l,
+                    sampled_advantages_l) = mb_l
 
-                        shared_info = sampled_infos_a
-
-                    else:
-                        (sampled_observations_a,
-                        sampled_actions_a,
-                        sampled_action_log_probs_a,
-                        sampled_value_preds_a,
-                        sampled_returns_a,
-                        sampled_advantages_a) = mb_a
-
-                        (sampled_observations_l,
-                        sampled_actions_l,
-                        sampled_action_log_probs_l,
-                        sampled_value_preds_l,
-                        sampled_returns_l,
-                        sampled_advantages_l) = mb_l
-
-                        shared_info = {}
-            
                     actor_input = {
                         "arm": sampled_observations_a,
                         "leg": sampled_observations_l
@@ -491,11 +382,11 @@ class CooperativeMAPPO(MAPPO):
                 }
 
 
-                _, new_log_probs, new_entropy = self.shared_actor(observations=actor_input,
-                                                                  shared_infos=shared_info,
-                                                                  taken_actions=sampled_actions,
-                                                                  deterministic=False,
-                                                                  update_rms = not epoch)
+                _, new_log_probs, new_entropy = self.communet_actor(observations=actor_input,
+                                                                    taken_actions=sampled_actions,
+                                                                    deterministic=False,
+                                                                    update_rms = not epoch)
+                
                 # Loss calculation
                 policy_losses = {}
                 value_losses = {}
@@ -536,33 +427,14 @@ class CooperativeMAPPO(MAPPO):
                     policy_losses[uid] = policy_loss
                     value_losses[uid] = value_loss
 
-                # Parameter setting
-                arm_params = []
-                leg_params = []
-
-                if hasattr(self.shared_actor, "encoder"):
-                    arm_params += list(self.shared_actor.encoder["arm"].parameters())
-                    leg_params += list(self.shared_actor.encoder["leg"].parameters())
-
-                if hasattr(self.shared_actor, "head"):
-                    arm_params += list(self.shared_actor.head["arm"].parameters())
-                    leg_params += list(self.shared_actor.head["leg"].parameters())
-
-                arm_params += [self.shared_actor.log_std_parameter["arm"]]
-                leg_params += [self.shared_actor.log_std_parameter["leg"]]
-
-                shared_params = list(self.shared_actor.shared_backbone.parameters())
-
                 # Total Loss
-                policy_total = (policy_losses["arm"] + entropy_losses["arm"]) + \
-                               (policy_losses["leg"] + entropy_losses["leg"])
+                policy_total = 0.7*(policy_losses["arm"] + entropy_losses["arm"]) + \
+                               1.0*(policy_losses["leg"] + entropy_losses["leg"])
 
                 value_total  = value_losses["arm"] + value_losses["leg"]
 
                 # Optimizer Step
-                self.optimizers["actor"]["arm"].zero_grad(set_to_none=True)
-                self.optimizers["actor"]["leg"].zero_grad(set_to_none=True)
-                self.optimizers["actor"]["shared"].zero_grad(set_to_none=True)
+                self.optimizers["actor"].zero_grad(set_to_none=True)
                 self.optimizers["critic"]["arm"].zero_grad(set_to_none=True)
                 self.optimizers["critic"]["leg"].zero_grad(set_to_none=True)
 
@@ -572,16 +444,12 @@ class CooperativeMAPPO(MAPPO):
 
                 # Grad Clipping
                 if self.grad_norm_clip > 0:
-                    nn.utils.clip_grad_norm_(arm_params, self.grad_norm_clip)
-                    nn.utils.clip_grad_norm_(leg_params, self.grad_norm_clip)
-                    nn.utils.clip_grad_norm_(shared_params, self.grad_norm_clip)
+                    nn.utils.clip_grad_norm_(self.communet_actor.parameters(), self.grad_norm_clip)
                     nn.utils.clip_grad_norm_(self.critics["arm"].parameters(), self.grad_norm_clip)
                     nn.utils.clip_grad_norm_(self.critics["leg"].parameters(), self.grad_norm_clip)
 
                 # Step
-                self.optimizers["actor"]["arm"].step()
-                self.optimizers["actor"]["leg"].step()
-                self.optimizers["actor"]["shared"].step()
+                self.optimizers["actor"].step()
                 self.optimizers["critic"]["arm"].step()
                 self.optimizers["critic"]["leg"].step()
 
