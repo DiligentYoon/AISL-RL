@@ -19,13 +19,11 @@ class SharedBackbone(Model):
                                     nn.Linear(128, 128), 
                                     nn.ELU())
         
-        self.head_arm = nn.Sequential(nn.Linear(128, 128), 
-                                      nn.ELU(), 
-                                      nn.Linear(128, d_arm))
+        self.head_arm = nn.Sequential(nn.Linear(128, d_arm), 
+                                      nn.ELU())
         
-        self.head_leg = nn.Sequential(nn.Linear(128, 128), 
-                                      nn.ELU(), 
-                                      nn.Linear(128, d_leg))
+        self.head_leg = nn.Sequential(nn.Linear(128, d_arm), 
+                                      nn.ELU())
 
     def forward(self, x, role):
         g = self.shared(x)
@@ -88,13 +86,9 @@ class SharedActor(Model):
 
         # Encoder
         self.encoder = nn.ModuleDict()
-        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], 256),
-                                            nn.ELU(),
-                                            nn.Linear(256, encoder_hidden_dim),
+        self.encoder["arm"] = nn.Sequential(nn.Linear(self.num_observations["arm"], encoder_hidden_dim),
                                             nn.ELU())
-        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], 256),
-                                            nn.ELU(),
-                                            nn.Linear(256, encoder_hidden_dim),
+        self.encoder["leg"] = nn.Sequential(nn.Linear(self.num_observations["leg"], encoder_hidden_dim),
                                             nn.ELU())
         
         # Shared Backbone
