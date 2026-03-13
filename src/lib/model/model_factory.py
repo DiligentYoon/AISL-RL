@@ -33,13 +33,7 @@ class ModelFactory:
             self.model_class = "gnn"
         else:
             self.model_class = "mlp"
-
-        if (self.model_type == "mlp") and (self.model_class != "gnn"):
-            self.is_shared = False
-        else:
-            self.is_shared = True
         
-
         self.device = device
 
 
@@ -160,57 +154,28 @@ class ModelFactory:
             value_detokenizer = ValueDetokenizer(mapping=mapping,
                                                 use_mlp=use_mlp, 
                                                 device=self.device)
-            if self.is_shared:
-                if state_space is not None:
-                    raise RuntimeError("Shared structure can't use state space different from observation sapce.")
-                
-                tokenizer = ObsTokenizer(mapping=mapping,
-                                        device=self.device)
-                trunk = BodyTransformer(mapping=mapping,
-                                        device=self.device)
-
-                actor = BodyLevelActor(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    mapping=mapping,
-                    tokenizer=tokenizer,
-                    trunk=trunk,
-                    detokenizer=action_detokenizer,
-                    device=self.device,
-                    min_log_std=self.model_cfg['policy']['min_log_std'],
-                    max_log_std=self.model_cfg['policy']['max_log_std'],)
-                
-                critic = BodyLevelCritic(
-                    state_space=observation_space,
-                    mapping=mapping,
-                    tokenizer=tokenizer,
-                    trunk=trunk,
-                    detokenizer=value_detokenizer,
-                    device=self.device)
-                
-            else:
-                actor = BodyLevelActor(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    mapping=mapping,
-                    tokenizer=ObsTokenizer(mapping=mapping,
-                                        device=self.device),
-                    trunk=BodyTransformer(mapping=mapping,
-                                        device=self.device),
-                    detokenizer=action_detokenizer,
-                    device=self.device,
-                    min_log_std=self.model_cfg['policy']['min_log_std'],
-                    max_log_std=self.model_cfg['policy']['max_log_std'],)
-                
-                critic = BodyLevelCritic(
-                    state_space=observation_space if state_space is None else state_space,
-                    mapping=mapping,
-                    tokenizer=ObsTokenizer(mapping=mapping,
-                                        device=self.device),
-                    trunk=BodyTransformer(mapping=mapping,
-                                        device=self.device),
-                    detokenizer=value_detokenizer,
-                    device=self.device)
+            actor = BodyLevelActor(
+                observation_space=observation_space,
+                action_space=action_space,
+                mapping=mapping,
+                tokenizer=ObsTokenizer(mapping=mapping,
+                                    device=self.device),
+                trunk=BodyTransformer(mapping=mapping,
+                                    device=self.device),
+                detokenizer=action_detokenizer,
+                device=self.device,
+                min_log_std=self.model_cfg['policy']['min_log_std'],
+                max_log_std=self.model_cfg['policy']['max_log_std'],)
+            
+            critic = BodyLevelCritic(
+                state_space=observation_space if state_space is None else state_space,
+                mapping=mapping,
+                tokenizer=ObsTokenizer(mapping=mapping,
+                                    device=self.device),
+                trunk=BodyTransformer(mapping=mapping,
+                                    device=self.device),
+                detokenizer=value_detokenizer,
+                device=self.device)
 
         models = {
             'actor': actor, 

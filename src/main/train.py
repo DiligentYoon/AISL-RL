@@ -220,29 +220,7 @@ def main():
     # Scale Factor
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
-        if model_manager.is_shared:
-            if cfg["models"]["model_type"] == "communet":
-                from lib.agent.communet_mappo import CommunetMAPPO
-                agent = CommunetMAPPO(observation_space=env.observation_space,
-                                      state_space=env.state_space,
-                                      action_space=env.action_space,
-                                      possible_agents=possible_agents,
-                                      model=models,
-                                      buffer=buffers,
-                                      device=env.device,
-                                      cfg=cfg["agent"])
-            else:
-                from lib.agent.cooperative_mappo import CooperativeMAPPO
-                agent = CooperativeMAPPO(observation_space=env.observation_space,
-                                        state_space=env.state_space,
-                                        action_space=env.action_space,
-                                        possible_agents=possible_agents,
-                                        model=models,
-                                        buffer=buffers,
-                                        device=env.device,
-                                        cfg=cfg["agent"])
-                
-        else:
+        if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,
                           state_space=env.state_space,
@@ -252,14 +230,38 @@ def main():
                           buffer=buffers,
                           device=env.device,
                           cfg=cfg["agent"])
+            
+        elif model_manager.model_type == "communet":
+            from lib.agent.communet_mappo import CommunetMAPPO
+            agent = CommunetMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
+            agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                    state_space=env.state_space,
+                                    action_space=env.action_space,
+                                    possible_agents=possible_agents,
+                                    model=models,
+                                    buffer=buffers,
+                                    device=env.device,
+                                    cfg=cfg["agent"])
+        
+        else:
+            raise RuntimeError("Unvalid model type.")
+
     else:
         from lib.agent.ppo import PPO
-        # Agent initialization
         agent = PPO(model=models,
                     buffer=buffer, 
                     device=env.device,
-                    cfg=cfg["agent"],
-                    shared=model_manager.is_shared)
+                    cfg=cfg["agent"])
     
     # Checkpoint
     if args_cli.checkpoint is not None:

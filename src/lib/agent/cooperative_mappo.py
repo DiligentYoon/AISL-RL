@@ -55,8 +55,6 @@ class CooperativeMAPPO(MAPPO):
         self.optimizer_schedulers = {}
         self.optimizer_schedulers["actor"] = {}
         self.optimizer_schedulers["critic"] = {}
-
-        self.is_shared = hasattr(self.shared_actor, "num_shared")
         
         arm_params = []
         leg_params = []
@@ -125,7 +123,10 @@ class CooperativeMAPPO(MAPPO):
                                             "actions", "action_log_probs",
                                             "value_preds", "returns", "advantages"]
         
-        if self.is_shared:
+        # Shared Info 
+        self.shared_infos = False
+
+        if self.shared_infos:
             self.tensors_names.append("shared_infos")
             self.tensors_name_for_update.append("shared_infos")
             for uid in self.possible_agents:
@@ -263,12 +264,12 @@ class CooperativeMAPPO(MAPPO):
             if self.time_limit_bootstrap:
                 buffer_rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
-            if self.is_shared:
+            if self.shared_infos:
                 # Additional Info Extraction
                 shared_infos = infos.get("shared_infos")
 
             if self.is_async_actor_critic:
-                if self.is_shared:
+                if self.shared_infos:
                     self.buffer[uid].add_samples(observations=observations[uid],
                                                 states=states[uid],
                                                 actions=actions[uid],
@@ -292,7 +293,7 @@ class CooperativeMAPPO(MAPPO):
                                                 action_log_probs=buffer_action_log_probs[:, i].unsqueeze(-1),
                                                 value_preds=value_preds)
             else:
-                if self.is_shared:
+                if self.shared_infos:
                      self.buffer[uid].add_samples(observations=observations[uid],
                                                   actions=actions[uid],
                                                   rewards=buffer_rewards[:, i].unsqueeze(-1),
@@ -368,7 +369,7 @@ class CooperativeMAPPO(MAPPO):
             for mb_a, mb_l in zip(mini_batches_a, mini_batches_l):
                 # (mini batch size, Data-specific)
                 if self.is_async_actor_critic:
-                    if self.is_shared:
+                    if self.shared_infos:
                         (sampled_observations_a,
                         sampled_states_a,
                         sampled_actions_a,
@@ -419,7 +420,7 @@ class CooperativeMAPPO(MAPPO):
                     }  
                 
                 else:
-                    if self.is_shared:
+                    if self.shared_infos:
                         (sampled_observations_a,
                         sampled_actions_a,
                         sampled_action_log_probs_a,
