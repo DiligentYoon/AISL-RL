@@ -212,7 +212,7 @@ class SharedBackbone(Model):
 class SuperConnectedActor(Model):
     def __init__(self, 
                  possible_agents: list[str],
-                 num_observations: int, 
+                 num_observations: dict[str, int], 
                  num_actions: dict[str, int],
                  min_log_std: float, 
                  max_log_std: float,
@@ -225,7 +225,9 @@ class SuperConnectedActor(Model):
         
         # Define instances 
         self.device = device
-        self.num_observations = num_observations
+        self.is_rma = False
+        self.head = {}
+        self.num_observations = num_observations["arm"]
         self.num_actions = num_actions
         self.possible_agents = possible_agents
 
@@ -236,7 +238,10 @@ class SuperConnectedActor(Model):
         self.actor_standardizer = RunningMeanStd(shape=self.num_observations, device=device)
 
         # Superconnected backbone
-        self.sharedbackbone = SharedBackbone(num_observations, num_actions["arm"], num_actions["leg"])
+        self.shared_backbone = SharedBackbone(self.num_observations, self.num_actions["arm"], self.num_actions["leg"])
+
+        self.head["arm"] = self.shared_backbone.head_arm
+        self.head["leg"] = self.shared_backbone.head_leg
 
         # Log std parameter initialization
         self.log_std_parameter = nn.ParameterDict()
@@ -248,6 +253,7 @@ class SuperConnectedActor(Model):
 
     def forward(self, 
                 observations: torch.Tensor, 
+                shared_infos: torch.Tensor | None,
                 taken_actions: torch.Tensor | None, 
                 deterministic: bool = False, 
                 update_rms: bool = False):
@@ -266,11 +272,11 @@ class SuperConnectedActor(Model):
         # eps
         eps = 1e-6
         # Input standardization
-        standardized_input = self.actor_standardizer.standardize(observations, update=update_rms)
+        standardized_input = self.actor_standardizer.standardize(observations["arm"], update=update_rms)
 
         # 5. Action
-        mean_action_arm = self.sharedbackbone(standardized_input, role="arm")
-        mean_action_leg = self.sharedbackbone(standardized_input, role="leg")
+        mean_action_arm = self.shared_backbone(standardized_input, role="arm")
+        mean_action_leg = self.shared_backbone(standardized_input, role="leg")
         mean_action = {
             "arm": mean_action_arm,
             "leg": mean_action_leg}

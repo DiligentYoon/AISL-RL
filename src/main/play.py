@@ -16,7 +16,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-lipm", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -86,14 +86,14 @@ def main():
     # ============================================================================================================================
 
     # cfg for viewpoint control
-    viewer_cfg = ViewerCfg(
-        origin_type="asset_root",
-        asset_name="robot",
-        env_index=0,
-        eye=(0.0, 4.0, 0.5),
-        lookat=(0.0, 0.0, 0.0)
-    )
-    env_cfg.viewer = viewer_cfg
+    # viewer_cfg = ViewerCfg(
+    #     origin_type="asset_root",
+    #     asset_name="robot",
+    #     env_index=0,
+    #     eye=(0.0, 4.0, 0.5),
+    #     lookat=(0.0, 0.0, 0.0)
+    # )
+    # env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:
@@ -195,7 +195,7 @@ def main():
     # Overwrite cfg by cli argument
     if model is not None:
         cfg["models"]["model_type"] = model
-        
+    
     model_manager = ModelFactory(cfg=cfg["models"], device=env.device)
     if model_manager.model_class == "mlp":
         models = model_manager.generate_mlp_models(observation_size=obs_size,
@@ -229,15 +229,27 @@ def main():
     cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.is_shared:
-            from lib.agent.cooperative_mappo import CooperativeMAPPO
-            agent = CooperativeMAPPO(observation_space=env.observation_space,
-                                     state_space=env.state_space,
-                                     action_space=env.action_space,
-                                     possible_agents=possible_agents,
-                                     model=models,
-                                     buffer=buffers,
-                                     device=env.device,
-                                     cfg=cfg["agent"])
+            if cfg["models"]["model_type"] == "communet":
+                from lib.agent.communet_mappo import CommunetMAPPO
+                agent = CommunetMAPPO(observation_space=env.observation_space,
+                                      state_space=env.state_space,
+                                      action_space=env.action_space,
+                                      possible_agents=possible_agents,
+                                      model=models,
+                                      buffer=buffers,
+                                      device=env.device,
+                                      cfg=cfg["agent"])
+            else:
+                from lib.agent.cooperative_mappo import CooperativeMAPPO
+                agent = CooperativeMAPPO(observation_space=env.observation_space,
+                                        state_space=env.state_space,
+                                        action_space=env.action_space,
+                                        possible_agents=possible_agents,
+                                        model=models,
+                                        buffer=buffers,
+                                        device=env.device,
+                                        cfg=cfg["agent"])
+                
         else:
             from lib.agent.mappo import MAPPO
             agent = MAPPO(observation_space=env.observation_space,

@@ -59,13 +59,17 @@ class CooperativeMAPPO(MAPPO):
         self.is_rma = self.shared_actor.is_rma
         
         arm_params = []
-        arm_params += list(self.shared_actor.encoder["arm"].parameters())
-        arm_params += list(self.shared_actor.head["arm"].parameters())
-        arm_params += [self.shared_actor.log_std_parameter["arm"]]
-
         leg_params = []
-        leg_params += list(self.shared_actor.encoder["leg"].parameters())
-        leg_params += list(self.shared_actor.head["leg"].parameters())
+
+        if hasattr(self.shared_actor, "encoder"):
+            arm_params += list(self.shared_actor.encoder["arm"].parameters())
+            leg_params += list(self.shared_actor.encoder["leg"].parameters())
+
+        if hasattr(self.shared_actor, "head"):
+            arm_params += list(self.shared_actor.head["arm"].parameters())
+            leg_params += list(self.shared_actor.head["leg"].parameters())
+
+        arm_params += [self.shared_actor.log_std_parameter["arm"]]
         leg_params += [self.shared_actor.log_std_parameter["leg"]]
 
         shared_params = list(self.shared_actor.shared_backbone.parameters())
@@ -511,13 +515,17 @@ class CooperativeMAPPO(MAPPO):
 
                 # Parameter setting
                 arm_params = []
-                arm_params += list(self.shared_actor.encoder["arm"].parameters())
-                arm_params += list(self.shared_actor.head["arm"].parameters())
-                arm_params += [self.shared_actor.log_std_parameter["arm"]]
-
                 leg_params = []
-                leg_params += list(self.shared_actor.encoder["leg"].parameters())
-                leg_params += list(self.shared_actor.head["leg"].parameters())
+
+                if hasattr(self.shared_actor, "encoder"):
+                    arm_params += list(self.shared_actor.encoder["arm"].parameters())
+                    leg_params += list(self.shared_actor.encoder["leg"].parameters())
+
+                if hasattr(self.shared_actor, "head"):
+                    arm_params += list(self.shared_actor.head["arm"].parameters())
+                    leg_params += list(self.shared_actor.head["leg"].parameters())
+
+                arm_params += [self.shared_actor.log_std_parameter["arm"]]
                 leg_params += [self.shared_actor.log_std_parameter["leg"]]
 
                 shared_params = list(self.shared_actor.shared_backbone.parameters())
