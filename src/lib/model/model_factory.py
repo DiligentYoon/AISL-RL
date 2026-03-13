@@ -3,9 +3,8 @@ import gymnasium as gym
 
 from typing import Union, Any
 
-from lib.model.MLP import Actor, Critic, SharedActor, JointActor
+from lib.model.MLP import Actor, Critic, SharedActor
 from lib.model.MLP_test import SuperConnectedActor, CommunetActor
-from lib.model.attention_net import AttentionActor
 from lib.model.NerveNet import NerveNetPolicy
 from lib.utils.graph_utils import Mapping
 from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
@@ -26,15 +25,20 @@ class ModelFactory:
         self.model_cfg = cfg
         
         # Load model cfg
-        self.is_shared = False                                          # NOTE: 이거 최적화해야할지도?
         self.is_squashed = self.model_cfg.get("squashed", False)
         self.is_multi_agent = self.model_cfg.get("multi_agent", False)
         self.model_type = self.model_cfg.get("model_type", "mlp").lower()
 
-        if self.model_type == "nervenet" or self.model_type == "bodytransformer":
+        if (self.model_type == "nervenet") or (self.model_type == "bodytransformer"):
             self.model_class = "gnn"
         else:
             self.model_class = "mlp"
+
+        if (self.model_type == "mlp") and (self.model_class != "gnn"):
+            self.is_shared = False
+        else:
+            self.is_shared = True
+        
 
         self.device = device
 
@@ -50,21 +54,8 @@ class ModelFactory:
 
         if self.is_multi_agent:
             # Multi agent
-            models = {}
-            if self.model_type == "joint":
-                self.is_shared = True
-                actor = JointActor(possible_agents=possible_agents,
-                                   num_observations=observation_size,
-                                   num_actions=action_size,
-                                   encoder_hidden_dim=128,
-                                   RMA_hidden_dim=0,
-                                   min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                   max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                   squash=self.is_squashed,
-                                   device=self.device)
-                
-            elif self.model_type == "shared":
-                self.is_shared = True
+            models = {}     
+            if self.model_type == "shared":
                 actor = SharedActor(possible_agents=possible_agents,
                                     num_observations=observation_size,
                                     num_actions=action_size,
@@ -75,7 +66,6 @@ class ModelFactory:
                                     device=self.device)
             
             elif self.model_type == "superconnected":
-                self.is_shared = True
                 actor = SuperConnectedActor(possible_agents=possible_agents,
                                             num_observations=observation_size,
                                             num_actions=action_size,
@@ -85,7 +75,6 @@ class ModelFactory:
                                             device=self.device)
             
             elif self.model_type == "communet":
-                self.is_shared = True
                 actor = CommunetActor(possible_agents=possible_agents,
                                       num_observations=observation_size, 
                                       num_actions=action_size,
@@ -100,7 +89,6 @@ class ModelFactory:
             for uid in possible_agents:
                 # Multi Agent : Per-agent network
                 if self.model_type == "mlp":
-                    self.is_shared = False
                     actor = Actor(num_observations=observation_size[uid],
                                 num_actions=action_size[uid],
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],
@@ -121,7 +109,6 @@ class ModelFactory:
         elif self.is_multi_agent is False:
             # Single Agent
             if self.model_type == "mlp":
-                self.is_shared = False
                 actor = Actor(num_observations=observation_size,
                                 num_actions=action_size,
                                 min_log_std=self.model_cfg["policy"]["min_log_std"],

@@ -27,8 +27,8 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default="Joint",
-                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    default="Shared",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -253,7 +253,7 @@ def main():
                           device=env.device,
                           cfg=cfg["agent"])
     else:
-        from lib.agent.ppo_scaled import PPO
+        from lib.agent.ppo import PPO
         # Agent initialization
         agent = PPO(model=models,
                     buffer=buffer, 
@@ -287,7 +287,6 @@ def main():
     CLI_track_rewards = collections.deque(maxlen=env.num_envs)
     CLI_track_timesteps = collections.deque(maxlen=env.num_envs)
     CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
-    # CLI_episode_success_rate = collections.deque(maxlen=500)
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
@@ -411,12 +410,10 @@ def main():
             per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
-            # avg_ep_srate = float(np.mean(CLI_episode_success_rate)) if len(CLI_episode_success_rate) else float ("nan")
 
             ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
             per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
             ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
-            # ep_srate = "-" if np.isnan(avg_ep_srate) else f"{avg_ep_srate:6.3f} %"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
             e_h = int(elapsed_time // 3600)

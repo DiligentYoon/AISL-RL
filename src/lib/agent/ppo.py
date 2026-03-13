@@ -64,12 +64,25 @@ class PPO(Agent):
         self.value_clip = self.cfg["value_clip"]
 
         self.entropy_loss_scale = self.cfg["entropy_loss_scale"]
-        self.value_loss_scale = self.cfg["value_loss_scale"]
+        self.value_loss_scale   = self.cfg["value_loss_scale"]
 
-        self.time_limit_bootstrap = self.cfg["time_limit_bootstrap"]
+        self.time_limit_bootstrap  = self.cfg["time_limit_bootstrap"]
         self.clip_predicted_values = self.cfg["clip_predicted_values"]
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
+
+        self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
+        self.mapped_action_scale_factor = torch.zeros(self.num_action, device=self.device)
+        if isinstance(self.action_scale_factor, dict):
+            # Per-action dictionary
+            # Action Scale Factor : [k_1 : [0.5, (0, 1, ...)], k_2 : [1.5, (5, 6, ...)], ...]
+            for k, v in self.action_scale_factor.items():
+                scale_factor = v[0]
+                mapping_ids = v[1]
+                self.mapped_action_scale_factor[mapping_ids] = scale_factor
+        else:
+            # Single scalar
+            self.mapped_action_scale_factor[:] = self.action_scale_factor
 
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
@@ -134,16 +147,19 @@ class PPO(Agent):
         """
         if timestep < self.random_timesteps:
             # Random act
-            actions, log_prob, entropy = self.actor.random_act(observations)
+            nonscaled_actions, log_prob, entropy = self.actor.random_act(observations)
         else:
             # Normal act
-            actions, log_prob, entropy = self.actor(observations=observations,
-                                                    taken_actions=None,
-                                                    deterministic=deterministic, 
-                                                    update_rms=update_rms)
+            nonscaled_actions, log_prob, entropy = self.actor(observations=observations,
+                                                              taken_actions=None,
+                                                              deterministic=deterministic,
+                                                              update_rms=update_rms)
         
-        return actions, log_prob, entropy
-    
+        # Action scaling
+        n_batch = nonscaled_actions.shape[0]
+        actions = nonscaled_actions.clone() * self.mapped_action_scale_factor.repeat(n_batch, 1) # [E, A]
+
+        return actions, nonscaled_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
 
     def insert_data(self,
                     observations: torch.Tensor,
@@ -260,6 +276,8 @@ class PPO(Agent):
                     actor_input = sampled_observations
                     critic_input = sampled_observations
                 
+                # State, observation standardization
+
                 _, new_log_probs, dist_entropy = self.actor(observations=actor_input, 
                                                             taken_actions=sampled_actions,
                                                             deterministic=False,

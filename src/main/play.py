@@ -28,7 +28,7 @@ parser.add_argument("--algorithm",
 parser.add_argument("--model",
                     type=str,
                     default=None,
-                    choices=["MLP", "Joint", "Shared", "Superconnected", "Communet"],
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -86,14 +86,14 @@ def main():
     # ============================================================================================================================
 
     # cfg for viewpoint control
-    # viewer_cfg = ViewerCfg(
-    #     origin_type="asset_root",
-    #     asset_name="robot",
-    #     env_index=0,
-    #     eye=(0.0, 4.0, 0.5),
-    #     lookat=(0.0, 0.0, 0.0)
-    # )
-    # env_cfg.viewer = viewer_cfg
+    viewer_cfg = ViewerCfg(
+        origin_type="asset_root",
+        asset_name="robot",
+        env_index=0,
+        eye=(0.0, 4.0, 0.5),
+        lookat=(0.0, 0.0, 0.0)
+    )
+    env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:
@@ -125,8 +125,6 @@ def main():
 
     # wrap around environment
     env = IsaacLabWrapper(env)
-
-
 
     # configure and instantiate the skrl runner
     cfg["agent"]["experiment"]["write_interval"] = 0  
@@ -260,7 +258,7 @@ def main():
                           device=env.device,
                           cfg=cfg["agent"])
     else:
-        from lib.agent.ppo_scaled import PPO
+        from lib.agent.ppo import PPO
         # Agent initialization
         agent = PPO(model=models,
                     buffer=buffer, 
