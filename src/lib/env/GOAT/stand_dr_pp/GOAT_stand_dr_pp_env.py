@@ -8,8 +8,6 @@ from isaaclab.utils.math import normalize, quat_from_angle_axis, quat_from_euler
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
-from isaacsim.core.utils import bounds
-from isaacsim.core.utils import prims
 from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
@@ -32,7 +30,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.zero_joint_efforts = torch.zeros(self.num_envs, cfg.num_total_joints, device=self.device)
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
                                             kd=self.cfg.joint_kd,
-                                            alpha=0.3,
+                                            alpha=0.0,
                                             pos_margin_factor=self.cfg.pos_margin_factor,
                                             num_envs=self.num_envs,
                                             num_dof=self.cfg.leg_dof,
@@ -45,7 +43,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         
         self.wheel_controller = PI_Controller(kp=self.cfg.wheel_kp,
                                               ki=self.cfg.wheel_ki,
-                                              alpha=0.3,
+                                              alpha=0.0,
                                               num_envs=self.num_envs,
                                               num_dof=1,                        # One wheel per legs
                                               num_leg=self.cfg.num_leg,
@@ -146,8 +144,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
         
         # Load to sim buffer
-        self._robot.set_joint_effort_target(self.torque_cmd)
-        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
+        # self._robot.set_joint_effort_target(self.torque_cmd)
+        self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
 
     def _get_observations(self) -> torch.Tensor:
         """
@@ -156,7 +154,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns:
             Observation space
         """
-        # TODO: base의 높이를 알 수 있는 방법이 있는지 check
         observation = torch.cat((self.gravity_vector,
                                  self.base_ang_vel,
                                  self.base_rot_w,
@@ -275,12 +272,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
     
     def _get_dones(self):
         self._compute_intermediate_values() # planning state calculation
-        
-        # tilt_threshold_rad = torch.tensor(self.cfg.base_tilt_reset_condition, device=self.device) * torch.pi / 180.0
-        # cos_threshold = torch.cos(tilt_threshold_rad)
-
-        # target_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device)
-        # base_tilt = torch.sum(self.gravity_vector * target_gravity, dim=1)
 
         projected_gravity_x = self.gravity_vector[:, 0]
         projected_gravity_y = self.gravity_vector[:, 1]
