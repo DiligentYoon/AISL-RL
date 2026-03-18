@@ -309,6 +309,10 @@ class Env(gym.Env):
         if self.cfg.wait_for_textures and self.sim.has_rtx_sensors():
             while SimulationManager.assets_loading():
                 self.sim.render()
+                
+        # update viz data
+        if (self.cfg.viz_data is not None) and (self.is_plot):
+            self.extras = self._update_viz_data()
 
         # return observations
         return self._get_observations(), self._get_states(), self.extras
