@@ -290,8 +290,8 @@ def main():
             plot = PyQtLivePlotter(env, plot_cfg)
         else:
             plot_type = "save"
-            # plot_dir = os.path.join(log_dir, "plot")
-            plot = CapturabilityPlotter(env, plot_cfg)
+            plot_dir = os.path.join(log_dir, "plot") if args_cli.checkpoint else None
+            plot = CapturabilityPlotter(env, plot_cfg, plot_dir)
     else:
         plot = None
 
