@@ -610,7 +610,6 @@ class G1FallEnv(G1BaseEnv):
         command_count = self.command_count[env_ids]
         tau = self.step_dt * command_count
         T = self.step_dt * step_period
-        CoM = self.CoM[env_ids]
         z_c = self.CoM[env_ids, 2]
         w0 = torch.sqrt(9.81 / (z_c + 1e-6))
 
