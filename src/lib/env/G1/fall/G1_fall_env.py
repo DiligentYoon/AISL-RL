@@ -613,33 +613,16 @@ class G1FallEnv(G1BaseEnv):
         z_c = self.CoM[env_ids, 2]
         w0 = torch.sqrt(9.81 / (z_c + 1e-6))
 
-        # Support Foot pos
-        support_foot_pos = self.support_foot_pos[env_ids]
-
-        # Relative CoM pos
-        x_com_rel = self.com_pos0_w[env_ids, 0]
-        y_com_rel = self.com_pos0_w[env_ids, 1]
-        
-        # Linear CoM velocity in world frame
-        vel_x_com = self.com_vel0_w[env_ids, 0]
-        vel_y_com = self.com_vel0_w[env_ids, 1]
-
-        # Step COM pos at tau
-        x_com_t  = x_com_rel * torch.cosh(w0 * tau)      + (vel_x_com / w0) * torch.sinh(w0 * tau)
-        vx_com_t = x_com_rel * w0 * torch.sinh(w0 * tau) + vel_x_com * torch.cosh(w0 * tau)
-        y_com_t  = y_com_rel * torch.cosh(w0 * tau)      + (vel_y_com / w0) * torch.sinh(w0 * tau)
-        vy_com_t = y_com_rel * w0 * torch.sinh(w0 * tau) + vel_y_com * torch.cosh(w0 * tau)
-
         # ICP at tau
-        xi_f_x = (x_com_t + support_foot_pos[:, 0]) + vx_com_t / w0
-        xi_f_y = (y_com_t + support_foot_pos[:, 1]) + vy_com_t / w0
+        xi_t_x = self.CoM[env_ids, 0] + self.root_lin_vel_w[env_ids, 0] / w0
+        xi_t_y = self.CoM[env_ids, 1] + self.root_lin_vel_w[env_ids, 1] / w0
 
         # 2-step capturable boundary
         phase_1 = w0 * T
         phase_2 = w0 * (T - tau)
         radius = self.cfg.l_max * torch.exp(-phase_2) * (1 + torch.exp(-phase_1))
 
-        return xi_f_x, xi_f_y, radius
+        return xi_t_x, xi_t_y, radius
         
     def _update_viz_data(self):
         extras = copy.deepcopy(self.extras)
