@@ -267,7 +267,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
-    l_max = 1.0
+    l_max = 0.8
 
     # ==== Viz data ==== #
     viz_data = {

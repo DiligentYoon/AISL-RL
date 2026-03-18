@@ -579,9 +579,6 @@ class G1FallEnv(G1BaseEnv):
                 self.support_foot_rot[left_combined_mask]  = self.foot_rot_w[left_combined_mask, 0, :4]
                 self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
                 self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
-                # Update initial relative value for ICP dynamics
-                self.com_pos0_w[self.update_command_ids] = self.CoM[self.update_command_ids, :3] - self.support_foot_pos[self.update_command_ids, :3]
-                self.com_vel0_w[self.update_command_ids] = self.root_lin_vel_w[self.update_command_ids, :3]
 
         # Capturable
         icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
