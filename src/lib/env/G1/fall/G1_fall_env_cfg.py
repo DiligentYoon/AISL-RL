@@ -269,6 +269,19 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     z_c_max = robot.init_state.pos[2] + 0.01
     l_max = 1.0
 
+    # ==== Viz data ==== #
+    viz_data = {
+        "com_pos": 0,                  # (3,)
+        "left_foot_pos": 0,            # (3,)
+        "right_foot_pos": 0,           # (3,)
+        "icp_pos": 0,                  # (2,)
+        "capture_region_center": 0,    # (2,)
+        "capture_region_radius": 0,    # scalar
+        "time_hist": 0,                # scalar
+        "m_step_hist": 0,              # scalar
+        "icp_ankle_dist_hist": 0,      # scalar
+    }
+
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)

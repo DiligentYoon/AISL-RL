@@ -15,7 +15,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
@@ -58,7 +58,7 @@ import lib
 
 from isaaclab.envs.common import ViewerCfg
 
-from lib.utils.plot_utils import PyQtLivePlotter
+from lib.utils.plot_utils import PyQtLivePlotter, CapturabilityPlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
@@ -285,7 +285,13 @@ def main():
     # reset environment
     if env._unwrapped.cfg.viz_data is not None:
         plot_cfg = env._unwrapped.cfg.viz_data
-        plot = PyQtLivePlotter(env, plot_cfg)
+        if plot_cfg.get("type", None) == "live":
+            plot_type = "live"
+            plot = PyQtLivePlotter(env, plot_cfg)
+        else:
+            plot_type = "save"
+            # plot_dir = os.path.join(log_dir, "plot")
+            plot = CapturabilityPlotter(env, plot_cfg)
     else:
         plot = None
 
@@ -398,13 +404,17 @@ def main():
 
         # Plot Phase
         if plot is not None:
-            # Plotter Update
-            if "viz_data" in next_infos:
-                plot.update(next_infos["viz_data"])
+            done = terminated[0] | truncated[0]
+            if plot_type == "save":
+                # Plotter Update (Save)
+                plot.append(viz_data=next_infos["viz_data"], episode_end=done)
+            else:
+                # Plotter Update (Live)
+                if "viz_data" in next_infos:
+                    plot.update(next_infos["viz_data"])
+                if done:
+                    plot.reset()
 
-            # Plotter should be resetted in accordance to env reset (compatible only with env_ids=0)
-            if terminated[0] | truncated[0]:
-                plot.reset()
 
         # Video update
         if args_cli.video and timestep == args_cli.video_length:
@@ -419,6 +429,11 @@ def main():
 
     # close the simulator
     env.close()
+
+    # close and save GIF plotter
+    if plot_type == "save":
+        plot.save()
+        plot.close()
 
 
 if __name__ == "__main__":

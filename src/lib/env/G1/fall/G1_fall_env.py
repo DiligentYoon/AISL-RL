@@ -540,6 +540,8 @@ class G1FallEnv(G1BaseEnv):
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
 
         # Gait guidance (Phase scheduler)
+        self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]
+        self.foot_rot_w[i] = self._robot.data.body_link_quat_w[i][:, self.ankle_x_link_ids] # [Left, Right]
         if env_ids is not None:
             # Update only reset env
             self.support_foot_pos[i] = self.foot_pos_w[i, 1, :3] # Left swing and Right support
@@ -559,23 +561,22 @@ class G1FallEnv(G1BaseEnv):
             self.phase[phase_update_mask] = 0
             self.phase_count[phase_update_mask] = 0
             self.command_count[command_update_mask] = 0
-
-        # Target foot pos (only full progress)
-        if env_ids is None and torch.any(self.update_command_ids):
-            # Switch the swing foot
-            self.foot_on_swing[self.update_command_ids] = ~self.foot_on_swing[self.update_command_ids] # NOTE: we assume single stance in all time
-            # Switch the support foot
-            left_support_mask  = (self.foot_on_swing[:, 0] == 0) 
-            right_support_mask = (self.foot_on_swing[:, 1] == 0)
-            # Envs which require left stance state
-            left_combined_mask = self.update_command_ids & left_support_mask
-            # Envs which require right stance state
-            right_combined_mask = self.update_command_ids & right_support_mask
-            # Update support foot pos and rot
-            self.support_foot_pos[left_combined_mask]  = self.foot_pos_w[left_combined_mask, 0, :3]
-            self.support_foot_rot[left_combined_mask]  = self.foot_rot_w[left_combined_mask, 0, :4]
-            self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
-            self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
+            # Foot switching
+            if torch.any(self.update_command_ids):
+                # Switch the swing foot
+                self.foot_on_swing[self.update_command_ids] = ~self.foot_on_swing[self.update_command_ids] # NOTE: we assume single stance in all time
+                # Switch the support foot
+                left_support_mask  = (self.foot_on_swing[:, 0] == 0) 
+                right_support_mask = (self.foot_on_swing[:, 1] == 0)
+                # Envs which require left stance state
+                left_combined_mask = self.update_command_ids & left_support_mask
+                # Envs which require right stance state
+                right_combined_mask = self.update_command_ids & right_support_mask
+                # Update support foot pos and rot
+                self.support_foot_pos[left_combined_mask]  = self.foot_pos_w[left_combined_mask, 0, :3]
+                self.support_foot_rot[left_combined_mask]  = self.foot_rot_w[left_combined_mask, 0, :4]
+                self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
+                self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
 
         # Capturable
         icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
@@ -636,7 +637,23 @@ class G1FallEnv(G1BaseEnv):
 
         return xi_f_x, xi_f_y, radius
         
+    def _update_viz_data(self):
+        extras = copy.deepcopy(self.extras)
 
+        dist_from_icp_to_ankle = torch.norm(self.ICP_pos_w[0, 0] - self.support_foot_pos[0, 0], 
+                                            self.ICP_pos_w[0, 1] - self.support_foot_pos[0, 1])
+
+        extras["viz_data"]["com_pos"]               = self.CoM[0]
+        extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
+        extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
+        extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
+        extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
+        extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
+        extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
+        extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
+        extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
+
+        return extras
 
 @torch.jit.script
 def wrap_to_pi(angles):
