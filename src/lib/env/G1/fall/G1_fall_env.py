@@ -94,6 +94,8 @@ class G1FallEnv(G1BaseEnv):
         self.foot_yaw_b          = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.ICP_pos_w           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.capturable_boundary = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
+        self.com_pos0_w          = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.com_vel0_w          = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
 
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
@@ -577,6 +579,9 @@ class G1FallEnv(G1BaseEnv):
                 self.support_foot_rot[left_combined_mask]  = self.foot_rot_w[left_combined_mask, 0, :4]
                 self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
                 self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
+                # Update initial relative value for ICP dynamics
+                self.com_pos0_w[self.update_command_ids] = self.CoM[self.update_command_ids, :3] - self.support_foot_pos[self.update_command_ids, :3]
+                self.com_vel0_w[self.update_command_ids] = self.root_lin_vel_w[self.update_command_ids, :3]
 
         # Capturable
         icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
@@ -613,12 +618,12 @@ class G1FallEnv(G1BaseEnv):
         support_foot_pos = self.support_foot_pos[env_ids]
 
         # Relative CoM pos
-        x_com_rel = CoM[:, 0] - support_foot_pos[:, 0]
-        y_com_rel = CoM[:, 1] - support_foot_pos[:, 1]
+        x_com_rel = self.com_pos0_w[env_ids, 0]
+        y_com_rel = self.com_pos0_w[env_ids, 1]
         
         # Linear CoM velocity in world frame
-        vel_x_com = self.root_lin_vel_w[env_ids, 0]
-        vel_y_com = self.root_lin_vel_w[env_ids, 1]
+        vel_x_com = self.com_vel0_w[env_ids, 0]
+        vel_y_com = self.com_vel0_w[env_ids, 1]
 
         # Step COM pos at tau
         x_com_t  = x_com_rel * torch.cosh(w0 * tau)      + (vel_x_com / w0) * torch.sinh(w0 * tau)
