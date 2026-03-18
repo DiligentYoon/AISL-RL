@@ -102,8 +102,7 @@ def read_scalars_from_event_files(
 def _moving_average(y: np.ndarray, window: int) -> np.ndarray:
     if window <= 1:
         return y
-    kernel = np.ones(int(window), dtype=float) / float(window)
-    return np.convolve(y, kernel, mode="same")
+    return pd.Series(y).rolling(window=window, center=True, min_periods=1).mean().to_numpy()
 
 
 def _dedup_by_step(g: pd.DataFrame) -> pd.DataFrame:
@@ -238,6 +237,7 @@ def plot_prefix_figures_from_event_files(
 
             ax.set_title(f"{task_name} | {tag}", fontsize=10)
 
+            ax.grid()
             ax.set_xlabel(x_axis)
             ax.set_ylabel("value")
             ax.legend(fontsize=8)
@@ -269,14 +269,14 @@ def plot_prefix_figures_from_event_files(
 
 # ======================================================================================================
 
-task_name = "GOAT_stand_dr_pp"
+task_name = "G1_recovery"
 
 event_files = [
-    "logs/GOAT_Stand_DR_PP/2026-03-03_22-58-05_ppo/events.out.tfevents.1772546307.DESKTOP-DG88GR7.2188.0",
-    "logs/GOAT_Stand_DR_PP/2026-03-03_00-32-14_ppo/events.out.tfevents.1772465555.DESKTOP-DG88GR7.20620.0"
+    "logs/g1_recovery/2026-03-13_00-05-45_mappo/events.out.tfevents.1773328004.AIS-simulation.17508.0",
+    "logs/g1_recovery/2026-03-13_12-24-10_mappo/events.out.tfevents.1773372308.AIS-simulation.24328.0"
 ]
 
-legends = ["test1", "test2"]
+legends = ["Cooperative MAPPO", "Vanilla MAPPO"]
 
 # Plot
 plot_prefix_figures_from_event_files(
