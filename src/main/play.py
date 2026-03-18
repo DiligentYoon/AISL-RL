@@ -407,11 +407,11 @@ def main():
             done = terminated[0] | truncated[0]
             if plot_type == "save":
                 # Plotter Update (Save)
-                plot.append(viz_data=next_infos["viz_data"], episode_end=done)
+                plot.append(viz_data=infos["viz_data"], episode_end=done)
             else:
                 # Plotter Update (Live)
-                if "viz_data" in next_infos:
-                    plot.update(next_infos["viz_data"])
+                if "viz_data" in infos:
+                    plot.update(infos["viz_data"])
                 if done:
                     plot.reset()
 
