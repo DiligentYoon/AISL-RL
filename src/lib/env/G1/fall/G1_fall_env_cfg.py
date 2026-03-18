@@ -84,14 +84,14 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 3.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-5.0, 5.0), "pitch": (-5.0, 5.0)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.0, 4.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0)}},
+    )
 
 
 
@@ -267,7 +267,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     dstep_max = 0.25
     z_c_min = robot.init_state.pos[2] + 0.01
     z_c_max = robot.init_state.pos[2] + 0.01
-    l_max = 0.8
+    l_max = 0.6
 
     # ==== Viz data ==== #
     viz_data = {
