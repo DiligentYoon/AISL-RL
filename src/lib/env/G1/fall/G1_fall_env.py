@@ -31,42 +31,11 @@ class G1FallEnv(G1BaseEnv):
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
 
-        # Joint Ids
-        self.hip_xz_joint_ids, _ = self._robot.find_joints([".*_hip_yaw_joint", ".*_hip_roll_joint"])
-        self.knee_joint_ids, _ = self._robot.find_joints([".*_knee_joint"])
-        self.ankle_xy_joint_ids, _ = self._robot.find_joints([".*_ankle_pitch_joint", ".*_ankle_roll_joint"])
-        self.hip_knee_all_joint_ids, _ = self._robot.find_joints([".*_hip_.*", ".*_knee_joint"])
-
-        self.arm_all_joint_ids, _ = self._robot.find_joints([".*_shoulder_pitch_joint",
-                                                             ".*_shoulder_roll_joint",
-                                                             ".*_shoulder_yaw_joint",
-                                                             ".*_elbow_pitch_joint",
-                                                             ".*_elbow_roll_joint"])
-
-        self.finger_all_joint_ids, _ = self._robot.find_joints([".*_five_joint",
-                                                                ".*_three_joint",
-                                                                ".*_six_joint",
-                                                                ".*_four_joint",
-                                                                ".*_zero_joint",
-                                                                ".*_one_joint",
-                                                                ".*_two_joint"])
-        
-        self.torso_joint_ids, _ = self._robot.find_joints("torso_joint")
-        
-        # Link ids
-        self.torso_link_ids, _ = self._robot.find_bodies("torso_link")
-        self.ankle_x_link_ids, _ = self._robot.find_bodies(".*_ankle_roll_link")
-
-        # Contact Link ids
-        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
-        self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
-
         # Contact Link ids
         total_body_ids, _ = self.contact_sensors.find_bodies(".*")
         self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
         self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
                     
-
         # Action scale factor
         if self.cfg.num_agents > 1:
             self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids

@@ -2,6 +2,7 @@ import torch
 
 from abc import abstractmethod
 from isaaclab.assets import Articulation
+from isaaclab.sensors import ContactSensor
 
 from lib.env.env import Env
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
@@ -28,20 +29,59 @@ class G1BaseEnv(Env):
         
         self.total_leg_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint",
                                                                r".*_knee_joint",
-                                                               r".*_ankle_(pitch|roll)_joint"])
-        
-        self.total_arm_joint_ids, _ = self._robot.find_joints([r"torso_joint", 
+                                                               r".*_ankle_(pitch|roll)_joint",])
+
+        self.total_arm_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",
                                                                r".*_shoulder_(pitch|roll|yaw)_joint",
-                                                               r".*_elbow_(pitch|roll)_joint",
-                                                               r".*_(zero|one|two|three|four|five|six)_joint"])
+                                                               r".*_elbow_joint",
+                                                               r".*_wrist_(roll|pitch|yaw)_joint",])
+
+        self.total_hand_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
+                                                                r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
+
+        # Specific Joint Ids
+        self.hip_xz_joint_ids, _ = self._robot.find_joints([r".*_hip_yaw_joint",
+                                                            r".*_hip_roll_joint",])
+
+        self.knee_joint_ids, _ = self._robot.find_joints([r".*_knee_joint",])
+
+        self.ankle_xy_joint_ids, _ = self._robot.find_joints([r".*_ankle_pitch_joint",
+                                                              r".*_ankle_roll_joint",])
+
+        self.hip_knee_all_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint", 
+                                                                  r".*_knee_joint",])
+        
+    
+        self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(pitch|roll|yaw)_joint",
+                                                             r".*_elbow_joint",
+                                                             r".*_wrist_(roll|pitch|yaw)_joint",])
+
+        self.finger_all_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
+                                                                r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
+
+        self.torso_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",])
+
+        # Link ids
+        self.torso_link_ids, _ = self._robot.find_bodies([r"torso_link"])
+        self.ankle_x_link_ids, _ = self._robot.find_bodies([r".*_ankle_roll_link"])
+
+        # Contact Link ids
+        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link"])
+        self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_roll_link"])
+
         # Joint Limits
         self.leg_joint_limits = self.joint_pos_limits[:, self.total_leg_joint_ids]
         self.arm_joint_limits = self.joint_pos_limits[:, self.total_arm_joint_ids]
 
     # Create scene
     def _setup_scene(self):
+        # Robot
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
+        # sensor
+        self.scene.sensors["contact_forces"] = ContactSensor(self.cfg.contact_forces)
+        self.contact_sensors = self.scene.sensors["contact_forces"]
+        self.contact_sensors.update_period = self.cfg.sim_dt
 
     # Reset Env
     def _reset_idx(self, env_ids: torch.Tensor):
