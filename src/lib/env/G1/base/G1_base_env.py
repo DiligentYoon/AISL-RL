@@ -36,8 +36,8 @@ class G1BaseEnv(Env):
                                                                r".*_elbow_joint",
                                                                r".*_wrist_(roll|pitch|yaw)_joint",])
 
-        self.total_hand_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
-                                                                r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
+        # self.total_hand_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
+        #                                                         r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
 
         # Specific Joint Ids
         self.hip_xz_joint_ids, _ = self._robot.find_joints([r".*_hip_yaw_joint",
@@ -55,9 +55,6 @@ class G1BaseEnv(Env):
         self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(pitch|roll|yaw)_joint",
                                                              r".*_elbow_joint",
                                                              r".*_wrist_(roll|pitch|yaw)_joint",])
-
-        self.finger_all_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
-                                                                r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
 
         self.torso_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",])
 

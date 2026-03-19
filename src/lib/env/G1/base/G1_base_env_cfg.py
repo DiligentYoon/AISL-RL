@@ -229,19 +229,19 @@ class G1BaseEnvCfg(EnvCfg):
                 ".*_wrist_.*_joint": 0.001,
             },
         ),
-        "hands": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_index_.*",
-                ".*_middle_.*",
-                ".*_pinky_.*",
-                ".*_ring_.*",
-                ".*_thumb_.*",
-            ],
-            effort_limit=300,
-            velocity_limit=1.0,
-            stiffness=10000.0,
-            damping=200.0,
-            armature=0.001,
-        ),
+        # "hands": ImplicitActuatorCfg(
+        #     joint_names_expr=[
+        #         ".*_index_.*",
+        #         ".*_middle_.*",
+        #         ".*_pinky_.*",
+        #         ".*_ring_.*",
+        #         ".*_thumb_.*",
+        #     ],
+        #     effort_limit=300,
+        #     velocity_limit=1.0,
+        #     stiffness=10000.0,
+        #     damping=200.0,
+        #     armature=0.001,
+        # ),
     },
 )
