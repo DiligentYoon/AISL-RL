@@ -61,6 +61,12 @@ class G1FallEnv(G1BaseEnv):
         self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
         self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
 
+        # Contact Link ids
+        total_body_ids, _ = self.contact_sensors.find_bodies(".*")
+        self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
+        self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
+                    
+
         # Action scale factor
         if self.cfg.num_agents > 1:
             self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
@@ -467,17 +473,19 @@ class G1FallEnv(G1BaseEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        torso_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.torso_contact_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.denied_collision_link_ids]
+
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
         z_c = self.CoM[:, 2]
 
-        died_fall   = torch.any(torch.max(torch.norm(torso_contact_forces, dim=-1), dim=1)[0] > 1.0, dim=1)
+        died_fall   = z_c <= self.cfg.termination_height
         died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
-        died_fall   = z_c <= self.cfg.termination_height
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
-        died = died_fall | died_fall_2 | died_ang
+        
+        died_collision   = torch.any(torch.max(torch.norm(critical_contact_forces, dim=-1), dim=1)[0] > 0.5, dim=1)
+        died = died_fall | died_fall_2 | died_ang | died_collision
         return died, time_out
 
 
@@ -596,18 +604,18 @@ class G1FallEnv(G1BaseEnv):
                 self.support_foot_pos[right_combined_mask] = self.foot_pos_w[right_combined_mask, 1, :3]
                 self.support_foot_rot[right_combined_mask] = self.foot_rot_w[right_combined_mask, 1, :4]
 
-        # Capturable
-        icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
-        self.ICP_pos_w[i] = torch.stack([icp_x, icp_y], dim=-1)
-        self.capturable_boundary[i] = radius.unsqueeze(-1)
-        self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
-        
         # Contact schedule
         self.contact_schedule[i] = smooth_sqr_wave(self.phase[i])
         # Phase variable
         self.phase_sin[i] = torch.sin(2*torch.pi*self.phase[i])
         self.phase_cos[i] = torch.cos(2*torch.pi*self.phase[i])
 
+        # Capturable
+        icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
+        self.ICP_pos_w[i] = torch.stack([icp_x, icp_y], dim=-1)
+        self.capturable_boundary[i] = radius.unsqueeze(-1)
+        self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
+        
         # Regularization Parameter
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)

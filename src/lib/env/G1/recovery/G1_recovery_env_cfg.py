@@ -106,7 +106,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     robot: ArticulationCfg = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
+        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,

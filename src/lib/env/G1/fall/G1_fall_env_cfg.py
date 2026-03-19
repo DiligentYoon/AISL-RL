@@ -106,7 +106,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     robot: ArticulationCfg = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd",
+        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -259,6 +259,12 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.9
+
+    ## ============== Self collision =============== ##
+    allowed_collision_bodies = ["left_ankle_pitch_link",
+                                "left_ankle_roll_link",
+                                "right_ankle_pitch_link",
+                                "right_ankle_roll_link"]
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
