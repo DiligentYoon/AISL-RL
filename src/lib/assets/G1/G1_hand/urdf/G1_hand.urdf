@@ -948,6 +948,7 @@
     <child link="L_hand_base_link"/>
   </joint>
 
+    <!-- ****************************************** Left Hand ******************************************************** -->
   <link name="L_hand_base_link">
     <inertial>
       <origin xyz="-0.002551 -0.066047 -0.0019357" rpy="0 0 0"/>
@@ -994,7 +995,7 @@
     </collision>
   </link>
 
-  <joint name="L_thumb_proximal_yaw_joint" type="revolute">
+  <joint name="L_thumb_proximal_yaw_joint" type="fixed">
     <origin xyz="-0.01696 -0.0691 0.02045" rpy="1.5708 -1.5708 0"/>
     <parent link="L_hand_base_link"/>
     <child link="L_thumb_proximal_base"/>
@@ -1025,7 +1026,7 @@
     </collision>
   </link>
 
-  <joint name="L_thumb_proximal_pitch_joint" type="revolute">
+  <joint name="L_thumb_proximal_pitch_joint" type="fixed">
     <origin xyz="0.0099867 0.0098242 -0.0089" rpy="-1.5708 0 0.16939"/>
     <parent link="L_thumb_proximal_base"/>
     <child link="L_thumb_proximal"/>
@@ -1056,7 +1057,7 @@
     </collision>
   </link>
 
-  <joint name="L_thumb_intermediate_joint" type="revolute">
+  <joint name="L_thumb_intermediate_joint" type="fixed">
     <origin xyz="0.04407 -0.034553 -0.0008" rpy="0 0 0"/>
     <parent link="L_thumb_proximal"/>
     <child link="L_thumb_intermediate"/>
@@ -1088,7 +1089,7 @@
     </collision>
   </link>
 
-  <joint name="L_thumb_distal_joint" type="revolute">
+  <joint name="L_thumb_distal_joint" type="fixed">
     <origin xyz="0.020248 -0.010156 -0.0012" rpy="0 0 0"/>
     <parent link="L_thumb_intermediate"/>
     <child link="L_thumb_distal"/>
@@ -1120,7 +1121,7 @@
     </collision>
   </link>
 
-  <joint name="L_index_proximal_joint" type="revolute">
+  <joint name="L_index_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13653 0.032268" rpy="-0.034907 0 0"/>
     <parent link="L_hand_base_link"/>
     <child link="L_index_proximal"/>
@@ -1151,7 +1152,7 @@
     </collision>
   </link>
 
-  <joint name="L_index_intermediate_joint" type="revolute">
+  <joint name="L_index_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 -0.032041 -0.001" rpy="0 0 0"/>
     <parent link="L_index_proximal"/>
     <child link="L_index_intermediate"/>
@@ -1183,7 +1184,7 @@
     </collision>
   </link>
 
-  <joint name="L_middle_proximal_joint" type="revolute">
+  <joint name="L_middle_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.1371 0.01295" rpy="0 0 0"/>
     <parent link="L_hand_base_link"/>
     <child link="L_middle_proximal"/>
@@ -1214,7 +1215,7 @@
     </collision>
   </link>
 
-  <joint name="L_middle_intermediate_joint" type="revolute">
+  <joint name="L_middle_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 -0.032041 -0.001" rpy="0 0 0"/>
     <parent link="L_middle_proximal"/>
     <child link="L_middle_intermediate"/>
@@ -1246,7 +1247,7 @@
     </collision>
   </link>
 
-  <joint name="L_ring_proximal_joint" type="revolute">
+  <joint name="L_ring_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13691 -0.0062872" rpy="0.05236 0 0"/>
     <parent link="L_hand_base_link"/>
     <child link="L_ring_proximal"/>
@@ -1277,7 +1278,7 @@
     </collision>
   </link>
 
-  <joint name="L_ring_intermediate_joint" type="revolute">
+  <joint name="L_ring_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 -0.032041 -0.001" rpy="0 0 0"/>
     <parent link="L_ring_proximal"/>
     <child link="L_ring_intermediate"/>
@@ -1309,7 +1310,7 @@
     </collision>
   </link>
 
-  <joint name="L_pinky_proximal_joint" type="revolute">
+  <joint name="L_pinky_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13571 -0.025488" rpy="0.10472 0 0"/>
     <parent link="L_hand_base_link"/>
     <child link="L_pinky_proximal"/>
@@ -1340,7 +1341,7 @@
     </collision>
   </link>
 
-  <joint name="L_pinky_intermediate_joint" type="revolute">
+  <joint name="L_pinky_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 -0.032041 -0.001" rpy="0 0 0"/>
     <parent link="L_pinky_proximal"/>
     <child link="L_pinky_intermediate"/>
@@ -1349,6 +1350,9 @@
     <mimic joint="L_pinky_proximal_joint" multiplier="1" offset="0"/>
   </joint>
 
+    <!-- ****************************************** Left Hand ******************************************************** -->
+  
+    <!-- ****************************************** Right Hand ******************************************************** -->
   <joint name="R_base_link_joint" type="fixed">
     <origin xyz="0.0415 0 0" rpy="3.1415926535897932384626433832795 0 -1.5707963267948966192313216916398"/>
     <parent link="right_wrist_yaw_link"/>
@@ -1401,7 +1405,7 @@
     </collision>
   </link>
 
-  <joint name="R_thumb_proximal_yaw_joint" type="revolute">
+  <joint name="R_thumb_proximal_yaw_joint" type="fixed">
     <origin xyz="-0.01696 -0.0691 -0.02045" rpy="1.5708 -1.5708 0"/>
     <parent link="R_hand_base_link"/>
     <child link="R_thumb_proximal_base"/>
@@ -1432,7 +1436,7 @@
     </collision>
   </link>
 
-  <joint name="R_thumb_proximal_pitch_joint" type="revolute">
+  <joint name="R_thumb_proximal_pitch_joint" type="fixed">
     <origin xyz="-0.0088099 0.010892 -0.00925" rpy="1.5708 0 2.8587"/>
     <parent link="R_thumb_proximal_base"/>
     <child link="R_thumb_proximal"/>
@@ -1463,7 +1467,7 @@
     </collision>
   </link>
 
-  <joint name="R_thumb_intermediate_joint" type="revolute">
+  <joint name="R_thumb_intermediate_joint" type="fixed">
     <origin xyz="0.04407 0.034553 -0.0008" rpy="0 0 0"/>
     <parent link="R_thumb_proximal"/>
     <child link="R_thumb_intermediate"/>
@@ -1495,7 +1499,7 @@
     </collision>
   </link>
 
-  <joint name="R_thumb_distal_joint" type="revolute">
+  <joint name="R_thumb_distal_joint" type="fixed">
     <origin xyz="0.020248 0.010156 -0.0012" rpy="0 0 0"/>
     <parent link="R_thumb_intermediate"/>
     <child link="R_thumb_distal"/>
@@ -1527,7 +1531,7 @@
     </collision>
   </link>
 
-  <joint name="R_index_proximal_joint" type="revolute">
+  <joint name="R_index_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13653 -0.032268" rpy="-3.1067 0 0"/>
     <parent link="R_hand_base_link"/>
     <child link="R_index_proximal"/>
@@ -1558,7 +1562,7 @@
     </collision>
   </link>
 
-  <joint name="R_index_intermediate_joint" type="revolute">
+  <joint name="R_index_intermediate_joint" type="fixed">
     <origin xyz="-0.0026138 0.032026 -0.001" rpy="0 0 0"/>
     <parent link="R_index_proximal"/>
     <child link="R_index_intermediate"/>
@@ -1590,7 +1594,7 @@
     </collision>
   </link>
 
-  <joint name="R_middle_proximal_joint" type="revolute">
+  <joint name="R_middle_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.1371 -0.01295" rpy="-3.1416 0 0"/>
     <parent link="R_hand_base_link"/>
     <child link="R_middle_proximal"/>
@@ -1621,7 +1625,7 @@
     </collision>
   </link>
 
-  <joint name="R_middle_intermediate_joint" type="revolute">
+  <joint name="R_middle_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 0.032041 -0.001" rpy="0 0 0"/>
     <parent link="R_middle_proximal"/>
     <child link="R_middle_intermediate"/>
@@ -1653,7 +1657,7 @@
     </collision>
   </link>
 
-  <joint name="R_ring_proximal_joint" type="revolute">
+  <joint name="R_ring_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13691 0.0062872" rpy="3.0892 0 0"/>
     <parent link="R_hand_base_link"/>
     <child link="R_ring_proximal"/>
@@ -1684,7 +1688,7 @@
     </collision>
   </link>
 
-  <joint name="R_ring_intermediate_joint" type="revolute">
+  <joint name="R_ring_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 0.032041 -0.001" rpy="0 0 0"/>
     <parent link="R_ring_proximal"/>
     <child link="R_ring_intermediate"/>
@@ -1716,7 +1720,7 @@
     </collision>
   </link>
 
-  <joint name="R_pinky_proximal_joint" type="revolute">
+  <joint name="R_pinky_proximal_joint" type="fixed">
     <origin xyz="0.00028533 -0.13571 0.025488" rpy="3.0369 0 0"/>
     <parent link="R_hand_base_link"/>
     <child link="R_pinky_proximal"/>
@@ -1747,7 +1751,7 @@
     </collision>
   </link>
 
-  <joint name="R_pinky_intermediate_joint" type="revolute">
+  <joint name="R_pinky_intermediate_joint" type="fixed">
     <origin xyz="-0.0024229 0.032041 -0.001" rpy="0 0 0"/>
     <parent link="R_pinky_proximal"/>
     <child link="R_pinky_intermediate"/>
@@ -1756,4 +1760,5 @@
     <mimic joint="R_pinky_proximal_joint" multiplier="1" offset="0"/>
   </joint>
 
+    <!-- ****************************************** Right Hand ******************************************************** -->
 </robot>
