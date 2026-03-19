@@ -100,7 +100,7 @@ class ModelFactory:
                     'actor': actor,
                     'critic': critic}
 
-        elif self.is_multi_agent is False:
+        else:
             # Single Agent
             if self.model_type == "mlp":
                 actor = Actor(num_observations=observation_size,

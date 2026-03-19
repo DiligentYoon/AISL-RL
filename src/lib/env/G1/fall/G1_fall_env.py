@@ -94,8 +94,7 @@ class G1FallEnv(G1BaseEnv):
         self.foot_yaw_b          = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.ICP_pos_w           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.capturable_boundary = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
-        self.com_pos0_w          = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
-        self.com_vel0_w          = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.dist_from_icp_to_stance = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
 
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
@@ -320,6 +319,23 @@ class G1FallEnv(G1BaseEnv):
         else:
             # Single Agent
             states = None
+
+        # Reach-Avoid information
+        self.extras["ra_states"] = torch.cat([self.root_pos_w[:, 2:3],
+                                              self.root_heading,
+                                              self.root_lin_vel_b,                                # [E, 3]
+                                              self.root_ang_vel_b,                                # [E, 3]
+                                              self.projected_gravity,                             # [E, 3]
+                                              self.command_inputs_b,                              # [E, 3]
+                                              self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                                              self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                                              self.joint_pos,                                     # [E, 37]
+                                              self.joint_vel,                                     # [E, 37]
+                                            ], dim=-1)
+        
+        self.extras["l_values"] = -torch.tanh(self.capturable_boundary - self.dist_from_icp_to_stance)
+        self.extras["g_values"] = 2 * self.reset_terminated.float().unsqueeze(-1) - 1
+
 
         return states
     
@@ -584,6 +600,8 @@ class G1FallEnv(G1BaseEnv):
         icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
         self.ICP_pos_w[i] = torch.stack([icp_x, icp_y], dim=-1)
         self.capturable_boundary[i] = radius.unsqueeze(-1)
+        self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
+        
 
         # Contact schedule
         self.contact_schedule[i] = smooth_sqr_wave(self.phase[i])
@@ -624,8 +642,7 @@ class G1FallEnv(G1BaseEnv):
     def _update_viz_data(self):
         extras = copy.deepcopy(self.extras)
 
-        dist_from_icp_to_ankle = torch.norm(self.ICP_pos_w[0, 0] - self.support_foot_pos[0, 0], 
-                                            self.ICP_pos_w[0, 1] - self.support_foot_pos[0, 1])
+        dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
 
         extras["viz_data"]["com_pos"]               = self.CoM[0]
         extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]

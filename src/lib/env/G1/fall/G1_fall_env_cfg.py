@@ -220,6 +220,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
+    ra_state_space = 90
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
