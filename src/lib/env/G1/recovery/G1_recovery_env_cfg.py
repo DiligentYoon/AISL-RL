@@ -173,19 +173,19 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_termination: float = 200
     termination_height: float = 0.3
     termination_gravity: float = 0.5
-    termination_ang_vel: float = 15.0
+    termination_ang_vel: float = 25.0
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.9
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
-    time_period_min = 0.35
-    time_period_max = 0.35
+    time_period_min = 0.34
+    time_period_max = 0.34
     dstep_min = 0.25
     dstep_max = 0.25
-    z_c_min = 0.677 # Init height + 0.01
-    z_c_max = 0.677
+    z_c_min = 0.76 # Init height + 0.01
+    z_c_max = 0.76
     w_foot_loc = 0.0
     w_foot_rot = 0.0
 
