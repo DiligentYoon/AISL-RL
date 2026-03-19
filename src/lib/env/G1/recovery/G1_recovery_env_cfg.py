@@ -173,7 +173,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_termination: float = 200
     termination_height: float = 0.3
     termination_gravity: float = 0.5
-    termination_ang_vel: float = 25.0
+    termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.9
@@ -188,6 +188,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     z_c_max = 0.76
     w_foot_loc = 0.0
     w_foot_rot = 0.0
+
+    ## ============== Self collision =============== ##
+    allowed_collision_bodies = ["left_ankle_pitch_link",
+                                "left_ankle_roll_link",
+                                "right_ankle_pitch_link",
+                                "right_ankle_roll_link"]
 
 
     # Simulation
