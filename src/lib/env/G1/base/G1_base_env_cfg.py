@@ -94,7 +94,7 @@ class G1BaseEnvCfg(EnvCfg):
         usd_path=urdf_converter.usd_path,
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=True,
+            disable_gravity=False,
             retain_accelerations=False,
             linear_damping=0.0,
             angular_damping=0.0,
@@ -104,7 +104,7 @@ class G1BaseEnvCfg(EnvCfg):
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            fix_root_link=True,  # Configurable - can be set to True for fixed base
+            fix_root_link=False,  # Configurable - can be set to True for fixed base
             solver_position_iteration_count=8, 
             solver_velocity_iteration_count=4
         ),
@@ -233,12 +233,14 @@ class G1BaseEnvCfg(EnvCfg):
             joint_names_expr=[
                 ".*_index_.*",
                 ".*_middle_.*",
+                ".*_pinky_.*",
+                ".*_ring_.*",
                 ".*_thumb_.*",
             ],
             effort_limit=300,
-            velocity_limit=100,
-            stiffness=20,
-            damping=2,
+            velocity_limit=1.0,
+            stiffness=10000.0,
+            damping=200.0,
             armature=0.001,
         ),
     },

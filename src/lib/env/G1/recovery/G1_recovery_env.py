@@ -25,6 +25,12 @@ class G1RecoveryEnv(G1BaseEnv):
     def __init__(self, cfg: G1RecoveryEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
+        # Hand hard lock
+        # self._robot.data.joint_pos_limits[:, self.total_hand_joint_ids, 0] = -1e-8
+        # self._robot.data.joint_pos_limits[:, self.total_hand_joint_ids, 1] =  1e-8
+        # self._robot.data.default_joint_pos_limits[:, self.total_hand_joint_ids, 0] = -1e-8
+        # self._robot.data.default_joint_pos_limits[:, self.total_hand_joint_ids, 1] =  1e-8
+
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
