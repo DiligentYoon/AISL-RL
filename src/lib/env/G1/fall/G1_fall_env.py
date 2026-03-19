@@ -582,7 +582,7 @@ class G1FallEnv(G1BaseEnv):
             # Foot switching
             if torch.any(self.update_command_ids):
                 # Switch the swing foot
-                self.foot_on_swing[self.update_command_ids] = ~self.foot_on_swing[self.update_command_ids] # NOTE: we assume single stance in all time
+                self.foot_on_swing[self.update_command_ids] = ~self.foot_on_swing[self.update_command_ids]
                 # Switch the support foot
                 left_support_mask  = (self.foot_on_swing[:, 0] == 0) 
                 right_support_mask = (self.foot_on_swing[:, 1] == 0)
@@ -602,7 +602,6 @@ class G1FallEnv(G1BaseEnv):
         self.capturable_boundary[i] = radius.unsqueeze(-1)
         self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
         
-
         # Contact schedule
         self.contact_schedule[i] = smooth_sqr_wave(self.phase[i])
         # Phase variable
