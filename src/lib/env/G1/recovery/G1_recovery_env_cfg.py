@@ -94,36 +94,6 @@ class EventCfg:
     #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0)}},
     # )
 
-# Robot asset paths
-current_dir = os.path.dirname(__file__)
-G1_hand_ASSET = {
-    "urdf_path": os.path.join(current_dir, "../../../assets/G1/G1_hand/urdf/G1_hand.urdf"),
-    "usd_path": os.path.join(current_dir, "../../../assets/G1/G1_hand/usd/G1_hand.usd"),
-    "usd_place": os.path.join(current_dir, "../../../assets/G1/G1_hand/usd/"),
-    "usd_filename": "G1_hand.usd"
-}
-
-# URDF to USD conversion
-urdf_cfg: sim_utils.UrdfConverterCfg = sim_utils.UrdfConverterCfg(
-    root_link_name = "pelvis",
-    asset_path = G1_hand_ASSET["urdf_path"],
-    usd_dir = G1_hand_ASSET["usd_place"],
-    usd_file_name = G1_hand_ASSET["usd_filename"],
-    fix_base=False,
-    joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-        drive_type="force",
-        gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0.0, damping=0.0)
-    ),
-)
-urdf_converter = sim_utils.UrdfConverter(cfg = urdf_cfg)
-
-# URDF conversion check
-if urdf_converter.usd_path == G1_hand_ASSET["usd_path"]:
-    print("urdf conversion success!")
-else:
-    print("urdf conversion failed!")
-
-
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
