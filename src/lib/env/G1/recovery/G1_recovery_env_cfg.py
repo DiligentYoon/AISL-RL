@@ -85,14 +85,14 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 4.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.0, 4.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
+    )
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -176,7 +176,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(10.0, 10.0),
+        resampling_time_range=(4.0, 5.0),
         prob_standing_envs=0.02,
         prob_heading_envs=1.0,
         heading_command=True,
