@@ -392,6 +392,7 @@ class G1RecoveryEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
+            "Task Penalty / Common_Self_Collision" : self.cfg.w_self_collision     * self_collision_penalty,
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
