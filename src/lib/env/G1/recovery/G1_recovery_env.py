@@ -313,7 +313,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Self-collision
-        self_collision_penalty = torch.norm(self.illegal_force, dim=-1)
+        self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
@@ -511,7 +511,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
         # Ilegal force (self-collision)
-        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i, self.denied_collision_link_ids]
+        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]
