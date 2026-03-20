@@ -68,8 +68,9 @@ class G1RecoveryEnv(G1BaseEnv):
         self.robot_mass = self._robot.data.default_mass.to(self.device)
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
 
-        # Foot states
+        # Contact states
         self.is_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
+        self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
 
         # Gait guidance (Gait scheduler)
         self.phase = torch.zeros(self.num_envs, device=self.device)
@@ -311,6 +312,8 @@ class G1RecoveryEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
+        # Self-collision
+        self_collision_penalty = torch.norm(self.illegal_force, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
@@ -336,10 +339,11 @@ class G1RecoveryEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_heading * heading_rewards     + \
-                         self.cfg.w_flat          * flat_rewards        + \
-                         self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
-                         self.cfg.w_termination   * terminate_penalty
+        common_rewards = self.cfg.w_track_heading  * heading_rewards        + \
+                         self.cfg.w_flat           * flat_rewards           + \
+                         self.cfg.w_ang_vel_xy     * ang_vel_xy_penalty     + \
+                         self.cfg.w_self_collision * self_collision_penalty + \
+                         self.cfg.w_termination    * terminate_penalty
         
         arm_rewards = common_rewards                                                  + \
                       self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
@@ -414,7 +418,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
+        # critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
 
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
@@ -425,8 +429,8 @@ class G1RecoveryEnv(G1BaseEnv):
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         
-        died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
-        died = died_fall | died_fall_2 | died_ang | died_collision
+        # died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
+        died = died_fall | died_fall_2 | died_ang
         return died, time_out
 
 
@@ -505,6 +509,8 @@ class G1RecoveryEnv(G1BaseEnv):
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+        # Ilegal force (self-collision)
+        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i, self.denied_collision_link_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]

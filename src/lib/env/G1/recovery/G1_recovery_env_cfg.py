@@ -122,9 +122,10 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_track_heading: float = 2.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 6.0
-    w_feet_slide: float = 2.0
-    w_flat:       float = 2.0
+    w_feet_gait:      float = 6.0
+    w_feet_slide:     float = 2.0
+    w_self_collision: float = 0.01
+    w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
     w_ang_vel_xy:         float = 0.1
