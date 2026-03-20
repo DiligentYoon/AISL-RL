@@ -124,7 +124,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = 2.0
-    w_self_collision: float = 0.01
+    w_self_collision: float = 0.001 
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
@@ -136,8 +136,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
-    w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.3
+    w_deviation_torso:   float = 2.0
+    w_deviation_arm:     float = 0.5
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
@@ -182,7 +182,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
         is_body_frame=False,
     )
