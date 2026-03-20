@@ -431,7 +431,7 @@ def main():
     env.close()
 
     # close and save GIF plotter
-    if plot_type == "save":
+    if plot is not None and plot_type == "save":
         plot.save()
         plot.close()
 
