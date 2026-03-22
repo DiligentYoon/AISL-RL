@@ -20,6 +20,7 @@ class CurriculumManager:
     def __init__(self, cfg: CurriculumManagerCfg, env):
         self.cfg = cfg
         self.env = env
+        self.total_timesteps = self.env.cfg.total_timesteps
         self._difficulty: float = 0.0
         # (getter, setter, param_cfg) 튜플 목록
         self._resolvers: list[tuple[Callable, Callable, CurriculumParamCfg]] = []
@@ -75,7 +76,7 @@ class CurriculumManager:
         Args:
             current_step: Current env step.
         """
-        total = self.env.cfg.total_timesteps
+        total = self.total_timesteps
         if total is None or total <= 0:
             return
 
