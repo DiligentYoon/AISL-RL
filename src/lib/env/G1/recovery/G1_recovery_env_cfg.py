@@ -138,7 +138,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 1.0
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
