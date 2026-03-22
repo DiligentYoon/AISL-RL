@@ -86,14 +86,14 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 4.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(2.0, 4.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
+    )
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -176,18 +176,18 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Curriculum
     # difficulty=0: x,y: (-0.1, 0.1) m/s, roll,pitch: 0
     # difficulty=1: x,y: (-1.5, 1.5) m/s, roll,pitch: (-2.5, 2.5) rad/s
-    # curriculum = CurriculumManagerCfg(
-    #     warmup=0.3,
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="push_velocity",
-    #             attr_path="cfg/events/push_robot/params/velocity_range",
-    #             start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
-    #             end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)},
-    #             schedule="linear",
-    #         ),
-    #     ]
-    # )
+    curriculum = CurriculumManagerCfg(
+        warmup=0.3,
+        params=[
+            CurriculumParamCfg(
+                name="push_velocity",
+                attr_path="cfg/events/push_robot/params/velocity_range",
+                start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
+                end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)},
+                schedule="linear",
+            ),
+        ]
+    )
 
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
