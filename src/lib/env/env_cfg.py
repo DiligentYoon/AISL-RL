@@ -227,3 +227,9 @@ class EnvCfg:
 
     viz_data: dict | None = None
     """Visualization Data for debugging"""
+
+    curriculum: object | None = None
+    """CurriculumManagerCfg instance. If None, curriculum is deactivated."""
+
+    total_timesteps: int | None = None
+    """Total timesteps for time-progress based curriculum learning."""

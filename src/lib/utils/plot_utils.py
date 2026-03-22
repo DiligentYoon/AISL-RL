@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtWidgets
 import numpy as np
 import torch
-import sys
-
 import os
+
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -14,97 +11,6 @@ from matplotlib.patches import Circle
 
 from abc import abstractmethod
 
-class PyQtLivePlotter:
-    def __init__(self, env, plot_config: dict):
-        self.env = env
-        self.cfg = plot_config
-        self.num_envs = self.env.num_envs
-        self.max_length = int(self.env._unwrapped.cfg.max_episode_length)
-
-        # Single Env Safety
-        if self.num_envs > 1:
-            print(f"[LivePlotter] Warning: {self.num_envs} envs detected. Only Env 0 will be plotted for performance.")
-            self.plot_idx = 0
-        else:
-            self.plot_idx = 0
-
-        self.app = QtWidgets.QApplication.instance()
-        if self.app is None:
-            self.app = QtWidgets.QApplication(sys.argv)
-
-        pg.setConfigOptions(antialias=True) 
-
-        self.win = pg.GraphicsLayoutWidget(show=True, title="Isaac Lab Live Monitor")
-        num_plots = len(plot_config)
-        nrows = (num_plots + 1) // 2
-        self.win.resize(1200, 300 * nrows) 
-
-        self.plots = {}
-        self.curves = {}
-        self.data_buffers = {}
-        self.name_to_idx = {}
-        self.count = 0
-
-        ncols = 2
-        for i, name in enumerate(plot_config.keys()):
-            self.name_to_idx[name] = i
-            self.curves[name] = []
-            self.data_buffers[name] = []
-
-            row = i // ncols
-            col = i % ncols
-            p = self.win.addPlot(row=row, col=col, title=name)
-            p.showGrid(x=True, y=True, alpha=0.3)
-            p.setXRange(0, self.max_length)
-            
-            p.enableAutoRange(axis='y', enable=True)
-            self.plots[name] = p
-
-            curve = p.plot(pen=pg.mkPen('royalblue', width=2))
-            self.curves[name].append(curve)
-            self.data_buffers[name].append(np.full(self.max_length, np.nan))
-
-    def reset(self):
-        """
-        Re-initialization at every Env reset
-        """
-        for name in self.data_buffers:
-            for i in range(len(self.data_buffers[name])):
-                self.data_buffers[name][i].fill(np.nan)
-                self.curves[name][i].setData(self.data_buffers[name][i])
-        
-        self.count = 0
-
-        for p in self.plots.values():
-            p.enableAutoRange(axis='y', enable=True)
-            
-        self.app.processEvents()
-
-    def update(self, viz_data: dict):
-        """
-        Update Plots at every Env step
-        """
-        self.count += 1  
-        
-        for name, values in viz_data.items():
-            if name not in self.curves:
-                continue
-            
-            for i, val in enumerate(values):
-                if torch.is_tensor(val) and val.dim() > 0:
-                    new_val = val[self.plot_idx].item()
-                else:
-                    new_val = val.item() if torch.is_tensor(val) else val
-
-                if self.count < self.max_length:
-                    self.data_buffers[name][i][self.count - 1] = new_val
-                else:
-                    self.data_buffers[name][i] = np.roll(self.data_buffers[name][i], -1)
-                    self.data_buffers[name][i][-1] = new_val
-                
-                self.curves[name][i].setData(self.data_buffers[name][i], connect='finite')
-
-        self.app.processEvents()
 
 # ============================================================
 # Basic visualization helpers
@@ -213,39 +119,206 @@ class LIPM_3D_Animate:
 
 
 # ============================================================
-# Main plotter
+# Base GIF plotter (generic infrastructure)
 # ============================================================
 class GIFSavePlotter:
+    """
+    Abstract base class for offline GIF-saving plotters.
+
+    Responsibilities
+    ----------------
+    - Data buffering: collects one step of viz_data per append() call,
+      keyed by the entries in plot_cfg.
+    - Episode tracking: records (start, end) frame indices per episode so
+      that subclasses can slice trajectories within an episode boundary.
+    - GIF export: drives FuncAnimation + PillowWriter using the subclass-
+      supplied _setup_figure / _init_func / _update_func hooks.
+
+    Subclass contract
+    -----------------
+    Implement exactly three methods:
+      _setup_figure()      -- create self.fig and all axes / artist objects
+      _init_func()         -- initialise artists to frame-0 state, return artist list
+      _update_func(i: int) -- update artists to frame i state, return artist list
+
+    Everything else (buffering, saving, episode math) is handled here.
+    """
+
     def __init__(self, env, plot_cfg: dict, plot_dir):
         self.env = env
-        self.plot_cfg = plot_cfg
-        self.dt = self.env._unwrapped.step_dt    
-        self.plot_dir = plot_dir if plot_dir is not None else os.getcwd()    
-        
-    @abstractmethod
+        self.cfg = plot_cfg
+        self.dt = self.env._unwrapped.step_dt
+        self.plot_dir = plot_dir if plot_dir is not None else os.getcwd()
+
+        # Keyed buffer: one list per plot_cfg entry
+        self.buffer: dict[str, list] = {key: [] for key in plot_cfg.keys()}
+
+        # Episode boundary tracking
+        self.episode_ranges: list[tuple[int, int]] = []
+        self.current_episode_start: int = 0
+
+        # Figure handle — populated by _setup_figure()
+        self.fig = None
+
+        self._setup_figure()
+
+    # ----------------------------------------------------------
+    # Data methods (shared across all subclasses)
+    # ----------------------------------------------------------
+    def process_data(self, x):
+        """
+        Convert incoming step data to a numpy array or Python scalar.
+
+        Handles torch.Tensor, numpy arrays, and plain scalars.
+        """
+        if isinstance(x, torch.Tensor):
+            x = x.detach().cpu().numpy()
+        x = np.asarray(x)
+        if x.ndim == 0:
+            return x.item()
+        return x.copy()
+
+    def append(self, viz_data: dict, episode_end: bool = False):
+        """
+        Buffer one step of visualization data.
+
+        Parameters
+        ----------
+        viz_data : dict
+            Must contain every key present in plot_cfg.
+        episode_end : bool
+            Set True on the last frame of an episode so the episode
+            boundary is recorded for trajectory slicing in _update_func.
+        """
+        for key in self.buffer.keys():
+            if key not in viz_data:
+                raise KeyError(f"Missing key in viz_data: '{key}'")
+            self.buffer[key].append(self.process_data(viz_data[key]))
+
+        curr_idx = self.num_frames() - 1
+        if episode_end:
+            self.episode_ranges.append((self.current_episode_start, curr_idx))
+            self.current_episode_start = curr_idx + 1
+
     def reset(self):
-        raise NotImplementedError(f"Please implement the 'reset' method for {self.__class__.__name__}.")
-        
+        """Clear all buffered data and episode records."""
+        for key in self.buffer:
+            self.buffer[key].clear()
+        self.episode_ranges.clear()
+        self.current_episode_start = 0
+
+    def num_frames(self) -> int:
+        """Return the total number of buffered frames."""
+        first_key = next(iter(self.buffer.keys()))
+        return len(self.buffer[first_key])
+
+    def _val(self, key: str, i: int):
+        """Return the buffered value for key at frame index i."""
+        return self.buffer[key][i]
+
+    def _get_episode_range_for_frame(self, i: int) -> tuple[int, int]:
+        """
+        Return the (start, end) frame indices of the episode that contains
+        frame i.  Raises IndexError if i is not covered by any range.
+        """
+        for start, end in self.episode_ranges:
+            if start <= i <= end:
+                return start, end
+        raise IndexError(f"Frame index {i} is not covered by any episode range.")
+
+    def _finalize_open_episode(self):
+        """
+        Close the current (still-open) episode so that all buffered frames
+        are covered by an episode range before saving.
+        """
+        n = self.num_frames()
+        if n == 0:
+            return
+        last_closed_end = -1 if len(self.episode_ranges) == 0 else self.episode_ranges[-1][1]
+        if last_closed_end < n - 1:
+            self.episode_ranges.append((self.current_episode_start, n - 1))
+            self.current_episode_start = n
+
+    # ----------------------------------------------------------
+    # GIF export (shared across all subclasses)
+    # ----------------------------------------------------------
+    def save(self, filename: str = "animation.gif"):
+        """
+        Render and save the buffered data as an animated GIF.
+
+        Parameters
+        ----------
+        filename : str
+            Output filename written inside self.plot_dir.
+        """
+        self._finalize_open_episode()
+        data_len = self.num_frames()
+
+        if data_len == 0:
+            raise RuntimeError("No buffered data. Call append() first.")
+        if data_len == 1:
+            raise RuntimeError("Need at least 2 frames to build animation.")
+
+        anim = FuncAnimation(
+            fig=self.fig,
+            init_func=self._init_func,
+            func=self._update_func,
+            frames=range(1, data_len),
+            interval=1000 * self.dt,
+            blit=False,
+            repeat=False,
+        )
+
+        fps = max(1, int(1.0 / self.dt))
+        writer = PillowWriter(fps=fps)
+
+        os.makedirs(self.plot_dir, exist_ok=True)
+        filepath = os.path.join(self.plot_dir, filename)
+        anim.save(filepath, writer=writer)
+        print(f"--------- Saved animation to: {filepath}")
+
+    def close(self):
+        """Close the matplotlib figure."""
+        if self.fig is not None:
+            plt.close(self.fig)
+
+    # ----------------------------------------------------------
+    # Abstract hooks (subclass must implement)
+    # ----------------------------------------------------------
+    @abstractmethod
+    def _setup_figure(self):
+        """Create self.fig and all axes / artist objects."""
+        raise NotImplementedError
 
     @abstractmethod
-    def append(self):
-        raise NotImplementedError(f"Please implement the 'append' method for {self.__class__.__name__}.")
+    def _init_func(self) -> list:
+        """Initialise all artists to their frame-0 state. Return artist list."""
+        raise NotImplementedError
 
     @abstractmethod
-    def save(self):
-        raise NotImplementedError(f"Please implement the 'save' method for {self.__class__.__name__}.")
+    def _update_func(self, i: int) -> list:
+        """Update all artists to frame i. Return artist list."""
+        raise NotImplementedError
 
 
+# ============================================================
+# Capturability-specific plotter
+# ============================================================
 class CapturabilityPlotter(GIFSavePlotter):
     """
-    Streaming plotter for single-env capturability visualization.
+    GIF plotter for capturability visualization.
+
+    Panels
+    ------
+    - Left  : 3-D walking animation (LIPM model)
+    - Right top    : Bird-eye view with ICP and capture region
+    - Right bottom : m_step(t) time-series
 
     Notes
     -----
-    1. Incoming viz_data is one-step data for the already-selected environment.
-    2. Keys of plot_cfg["viz_data"] define the internal buffer schema.
-    3. Multiple episodes can be concatenated into a single GIF.
-    4. Episode boundary is given externally through episode_end=True.
+    Panel options (axis limits, follow mode, etc.) are set as instance
+    attributes before super().__init__() so that _setup_figure() can
+    read them when it is called from the parent constructor.
     """
 
     REQUIRED_KEYS = (
@@ -260,17 +333,14 @@ class CapturabilityPlotter(GIFSavePlotter):
         "icp_ankle_dist_hist",
     )
 
-    def __init__(self, env, plot_cfg: dict, plot_dir = None):
-        super().__init__(env, plot_cfg, plot_dir)
-
+    def __init__(self, env, plot_cfg: dict, plot_dir=None):
         missing = [k for k in self.REQUIRED_KEYS if k not in plot_cfg]
         if missing:
-            raise KeyError(f"plot_cfg['viz_data'] missing required keys: {missing}")
-
-        self.dt = self.env._unwrapped.step_dt
+            raise KeyError(f"plot_cfg missing required keys: {missing}")
 
         # Figure size
-        self.figsize =(14, 10)
+        self.figsize = (14, 10)
+
         # 3D panel options
         self.ax3d_xlim = (-2.0, 8.0)
         self.ax3d_ylim = (-2.0, 2.0)
@@ -286,25 +356,19 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.bx_follow_yspan = (-2.0, 2.0)
 
         # m_step plot options
-        self.mx_initial_xlim  = (0.0, 3.0)
+        self.mx_initial_xlim = (0.0, 3.0)
         self.mx_follow_window = 2.0
         self.mx_future_margin = 0.2
 
-        # text
+        # Annotation format string
         self.COM_pos_str = "COM = (%.2f, %.2f)\nICP-ankle = %.3f m\nradius = %.3f m\nm_step = %.3f m"
-        
-        # buffer schema = directly from viz_data keys
-        self.buffer = {key: [] for key in plot_cfg.keys()}
 
-        # matplotlib handles
-        self.fig = None
+        # Matplotlib artist handles — populated by _setup_figure()
         self.ax = None
         self.bx = None
         self.mx = None
-
         self.LIPM_3D_ani = None
         self.capture_region_ani = None
-
         self.ani_text_COM_pos = None
         self.original_ani = None
         self.COM_traj_ani = None
@@ -316,68 +380,14 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.m_step_line_ani = None
         self.m_step_curr_ani = None
 
-        # multi-episode support
-        self.episode_ranges: list[tuple[int, int]] = []
-        self.current_episode_start = 0
+        # Delegate buffer init and _setup_figure() call to parent
+        super().__init__(env, plot_cfg, plot_dir)
 
-        self._setup_figure()
-
-    # ------------------------------------------------------------
-    # buffer / input
-    # ------------------------------------------------------------
-    def reset(self):
-        for key in self.buffer:
-            self.buffer[key].clear()
-        self.episode_ranges.clear()
-        self.current_episode_start = 0
-
-    def num_frames(self) -> int:
-        first_key = next(iter(self.buffer.keys()))
-        return len(self.buffer[first_key])
-
-    def append(self, viz_data: dict, episode_end: bool = False):
-        """
-        Append one step of data.
-
-        Parameters
-        ----------
-        viz_data : dict
-            One-step visualization data for the selected environment.
-        episode_end : bool
-            True if this appended frame is the last frame of the current episode.
-        """
-        for key in self.buffer.keys():
-            if key not in viz_data:
-                raise KeyError(f"Missing key in viz_data: '{key}'")
-            self.buffer[key].append(self.process_data(viz_data[key]))
-
-        curr_idx = self.num_frames() - 1
-
-        if episode_end:
-            self.episode_ranges.append((self.current_episode_start, curr_idx))
-            self.current_episode_start = curr_idx + 1
-
-    def process_data(self, x):
-        """
-        Convert incoming data to numpy/scalar form.
-
-        - torch.Tensor -> numpy
-        - scalar-like  -> python scalar
-        - array-like   -> copied ndarray
-        """
-        if isinstance(x, torch.Tensor):
-            x = x.detach().cpu().numpy()
-
-        x = np.asarray(x)
-
-        if x.ndim == 0:
-            return x.item()
-        return x.copy()
-
-    # ------------------------------------------------------------
-    # figure setup
-    # ------------------------------------------------------------
+    # ----------------------------------------------------------
+    # Abstract hook implementations
+    # ----------------------------------------------------------
     def _setup_figure(self):
+        """Create the three-panel figure and all artist objects."""
         self.fig = plt.figure(figsize=self.figsize)
         spec = gridspec.GridSpec(
             nrows=2,
@@ -386,7 +396,7 @@ class CapturabilityPlotter(GIFSavePlotter):
             height_ratios=[1.0, 0.55],
         )
 
-        # 3D animation panel
+        # 3D walking panel
         self.ax = self.fig.add_subplot(spec[:, 0], projection="3d")
         self.ax.set_xlim(*self.ax3d_xlim)
         self.ax.set_ylim(*self.ax3d_ylim)
@@ -397,7 +407,6 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.ax.set_zlabel("z (m)")
         self.ax.set_title("3D Walking Animation")
         self.ax.view_init(*self.ax3d_view_init)
-
         self.LIPM_3D_ani = LIPM_3D_Animate(self.ax)
 
         # Bird-eye-view panel
@@ -410,7 +419,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.bx.set_title("Bird-eye View")
         self.bx.grid(ls="--")
 
-        # M function metric panel
+        # m_step time-series panel
         self.mx = self.fig.add_subplot(spec[1, 1])
         self.mx.set_title(r"$m_{step}(t)=d^{(2)}_{avail}(t)-\|r_{ic}(t)-r_{ankle}\|$")
         self.mx.set_xlabel("time (s)")
@@ -418,6 +427,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.mx.grid(True, ls="--")
         self.mx.axhline(0.0, color="r", linestyle="--", linewidth=1.2)
 
+        # Artists
         self.capture_region_ani = CircleRegion2D(
             ax=self.bx,
             radius=0.1,
@@ -427,9 +437,7 @@ class CapturabilityPlotter(GIFSavePlotter):
             alpha=0.15,
             linewidth=2.0,
         )
-
         self.ani_text_COM_pos = self.bx.text(0.05, 0.88, "", transform=self.bx.transAxes, va="top")
-
         self.original_ani, = self.bx.plot([0], [0], marker="o", markersize=2, color="k")
         self.COM_traj_ani, = self.bx.plot([], [], color="g")
         self.COM_pos_ani, = self.bx.plot([], [], marker="o", markersize=6, color="r")
@@ -437,41 +445,29 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.right_foot_pos_ani, = self.bx.plot([], [], "o", markersize=10, color="m")
         self.ICP_traj_ani, = self.bx.plot([], [], "--", color="k", linewidth=1.5, label="ICP traj")
         self.ICP_pos_ani, = self.bx.plot([], [], marker="x", markersize=8, color="k", label="ICP")
-
         self.m_step_line_ani, = self.mx.plot([], [], color="b", linewidth=2.0, label=r"$m_{step}(t)$")
         self.m_step_curr_ani, = self.mx.plot([], [], marker="o", markersize=5, color="k")
         self.mx.legend(loc="upper right")
 
-    # ------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------
-    def _val(self, key, i):
-        return self.buffer[key][i]
+    def _init_func(self) -> list:
+        """Initialise all artists to their frame-0 state."""
+        artists_3d = self._ani_3D_init()
+        artists_2d = self._ani_2D_init()
+        return artists_3d + artists_2d
 
-    def _get_episode_range_for_frame(self, i: int):
-        for start, end in self.episode_ranges:
-            if start <= i <= end:
-                return start, end
-        raise IndexError(f"Frame index {i} is not covered by any episode range.")
+    def _update_func(self, i: int) -> list:
+        """Update all artists to frame i."""
+        artists_3d = self._ani_3D_update(i)
+        artists_2d = self._ani_2D_update(i)
+        return artists_3d + artists_2d
 
-    def _finalize_open_episode(self):
-        n = self.num_frames()
-        if n == 0:
-            return
-
-        last_closed_end = -1 if len(self.episode_ranges) == 0 else self.episode_ranges[-1][1]
-
-        if last_closed_end < n - 1:
-            self.episode_ranges.append((self.current_episode_start, n - 1))
-            self.current_episode_start = n
-
-    # ------------------------------------------------------------
-    # 3D animation functions
-    # ------------------------------------------------------------
-    def ani_3D_init(self):
+    # ----------------------------------------------------------
+    # 3D animation helpers
+    # ----------------------------------------------------------
+    def _ani_3D_init(self) -> list:
         return []
 
-    def ani_3D_update(self, i):
+    def _ani_3D_update(self, i: int) -> list:
         ep_start, _ = self._get_episode_range_for_frame(i)
 
         COM_pos = np.asarray(self._val("com_pos", i), dtype=float).reshape(3,)
@@ -488,10 +484,10 @@ class CapturabilityPlotter(GIFSavePlotter):
             right_foot_pos,
         )
 
-    # ------------------------------------------------------------
-    # 2D animation functions
-    # ------------------------------------------------------------
-    def ani_2D_init(self):
+    # ----------------------------------------------------------
+    # 2D animation helpers
+    # ----------------------------------------------------------
+    def _ani_2D_init(self) -> list:
         com_pos0 = np.asarray(self._val("com_pos", 0), dtype=float).reshape(-1)
         left_foot0 = np.asarray(self._val("left_foot_pos", 0), dtype=float).reshape(-1)
         right_foot0 = np.asarray(self._val("right_foot_pos", 0), dtype=float).reshape(-1)
@@ -499,7 +495,6 @@ class CapturabilityPlotter(GIFSavePlotter):
 
         center0 = np.asarray(self._val("capture_region_center", 0), dtype=float).reshape(2,)
         radius0 = float(self._val("capture_region_radius", 0))
-
         time0 = float(self._val("time_hist", 0))
         mstep0 = float(self._val("m_step_hist", 0))
         dist0 = float(self._val("icp_ankle_dist_hist", 0))
@@ -508,23 +503,13 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.COM_pos_ani.set_data([com_pos0[0]], [com_pos0[1]])
         self.left_foot_pos_ani.set_data([left_foot0[0]], [left_foot0[1]])
         self.right_foot_pos_ani.set_data([right_foot0[0]], [right_foot0[1]])
-
         self.ICP_traj_ani.set_data([], [])
         self.ICP_pos_ani.set_data([icp_pos0[0]], [icp_pos0[1]])
-
         self.capture_region_ani.update(center=center0, radius=radius0)
-
         self.m_step_line_ani.set_data([], [])
         self.m_step_curr_ani.set_data([time0], [mstep0])
-
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (
-                com_pos0[0],
-                com_pos0[1],
-                dist0,
-                radius0,
-                mstep0,
-            )
+            self.COM_pos_str % (com_pos0[0], com_pos0[1], dist0, radius0, mstep0)
         )
 
         return [
@@ -540,7 +525,7 @@ class CapturabilityPlotter(GIFSavePlotter):
             self.m_step_curr_ani,
         ]
 
-    def ani_2D_update(self, i):
+    def _ani_2D_update(self, i: int) -> list:
         ep_start, _ = self._get_episode_range_for_frame(i)
 
         com_hist = np.stack(self.buffer["com_pos"][ep_start:i + 1], axis=0)
@@ -561,20 +546,12 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.COM_pos_ani.set_data([com_pos[0]], [com_pos[1]])
         self.left_foot_pos_ani.set_data([left_foot_pos[0]], [left_foot_pos[1]])
         self.right_foot_pos_ani.set_data([right_foot_pos[0]], [right_foot_pos[1]])
-
         self.ICP_traj_ani.set_data(icp_hist[:, 0], icp_hist[:, 1])
         self.ICP_pos_ani.set_data([icp_pos[0]], [icp_pos[1]])
-
         self.capture_region_ani.update(center=center, radius=radius)
 
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (
-                com_pos[0],
-                com_pos[1],
-                dist_now,
-                radius,
-                m_step_now,
-            )
+            self.COM_pos_str % (com_pos[0], com_pos[1], dist_now, radius, m_step_now)
         )
 
         if self.bx_follow_com:
@@ -611,59 +588,17 @@ class CapturabilityPlotter(GIFSavePlotter):
             self.m_step_curr_ani,
         ]
 
-    # ------------------------------------------------------------
-    # animation wrappers
-    # ------------------------------------------------------------
-    def _init_func(self):
-        artist1 = self.ani_3D_init()
-        artist2 = self.ani_2D_init()
-        return artist1 + artist2
-
-    def _update_func(self, i):
-        artist1 = self.ani_3D_update(i)
-        artist2 = self.ani_2D_update(i)
-        return artist1 + artist2
-
-    # ------------------------------------------------------------
-    # utility
-    # ------------------------------------------------------------
+    # ----------------------------------------------------------
+    # Utility
+    # ----------------------------------------------------------
     def show_last_frame(self):
+        """Render and display the final buffered frame without saving."""
         if self.num_frames() == 0:
             raise RuntimeError("No buffered data.")
         self._finalize_open_episode()
         self._update_func(self.num_frames() - 1)
         plt.show()
 
-    def close(self):
-        if self.fig is not None:
-            plt.close(self.fig)
-
-    # ------------------------------------------------------------
-    # save
-    # ------------------------------------------------------------
     def save(self):
-        self._finalize_open_episode()
-        data_len = self.num_frames()
-
-        if data_len == 0:
-            raise RuntimeError("No buffered data. Call append() first.")
-        if data_len == 1:
-            raise RuntimeError("Need at least 2 frames to build animation.")
-
-        anim = FuncAnimation(
-            fig=self.fig,
-            init_func=self._init_func,
-            func=self._update_func,
-            frames=range(1, data_len),
-            interval=1000 * self.dt,
-            blit=False,
-            repeat=False,
-        )
-
-        fps = max(1, int((1.0 / self.dt)))
-        writer = PillowWriter(fps=fps)
-
-        os.makedirs(self.plot_dir, exist_ok=True)
-        filepath = os.path.join(self.plot_dir, "capturability.gif")
-        anim.save(filepath, writer=writer)
-        print(f"--------- Saved animation to: {filepath}")
+        """Save the animation as 'capturability.gif' inside plot_dir."""
+        super().save(filename="capturability.gif")

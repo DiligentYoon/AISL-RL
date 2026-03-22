@@ -58,7 +58,7 @@ import lib
 
 from isaaclab.envs.common import ViewerCfg
 
-from lib.utils.plot_utils import PyQtLivePlotter, CapturabilityPlotter
+from lib.utils.plot_utils import CapturabilityPlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
@@ -285,13 +285,8 @@ def main():
     # reset environment
     if env._unwrapped.cfg.viz_data is not None:
         plot_cfg = env._unwrapped.cfg.viz_data
-        if plot_cfg.get("type", None) == "live":
-            plot_type = "live"
-            plot = PyQtLivePlotter(env, plot_cfg)
-        else:
-            plot_type = "save"
-            plot_dir = os.path.join(log_dir, "plot") if args_cli.checkpoint else None
-            plot = CapturabilityPlotter(env, plot_cfg, plot_dir)
+        plot_dir = os.path.join(log_dir, "plot") if args_cli.checkpoint else None
+        plot = CapturabilityPlotter(env, plot_cfg, plot_dir)
     else:
         plot = None
 
@@ -405,15 +400,7 @@ def main():
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            if plot_type == "save":
-                # Plotter Update (Save)
-                plot.append(viz_data=infos["viz_data"], episode_end=done)
-            else:
-                # Plotter Update (Live)
-                if "viz_data" in infos:
-                    plot.update(infos["viz_data"])
-                if done:
-                    plot.reset()
+            plot.append(viz_data=infos["viz_data"], episode_end=done)
 
 
         # Video update
@@ -431,7 +418,7 @@ def main():
     env.close()
 
     # close and save GIF plotter
-    if plot is not None and plot_type == "save":
+    if plot is not None:
         plot.save()
         plot.close()
 

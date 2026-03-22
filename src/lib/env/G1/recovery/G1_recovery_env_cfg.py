@@ -19,6 +19,7 @@ from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKE
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from isaaclab.managers import SceneEntityCfg
 
 
@@ -85,14 +86,14 @@ class EventCfg:
     )
 
     # interval
-    push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(2.0, 4.0),
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
-    )
+    # push_robot = EventTerm(
+    #     func=randomizer.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(2.0, 4.0),
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+    #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
+    # )
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -120,14 +121,14 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
-    w_track_height : float = 2.0
+    w_track_height : float = 1.0
 
-    w_feet_gait:      float = 6.0
+    w_feet_gait:      float = 8.0
     w_feet_slide:     float = 2.0
     w_self_collision: float = 0.001 
     w_flat:           float = 2.0
 
-    w_lin_vel_z:          float = 1.5
+    w_lin_vel_z:          float = 0.5
     w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
@@ -137,7 +138,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 1.0
+    w_deviation_arm:     float = 0.5
     w_deviation_fingers: float = 0.05
     w_action_rate:       float = 0.05
 
@@ -155,8 +156,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     time_period_max = 0.34
     dstep_min = 0.25
     dstep_max = 0.25
-    z_c_min = 0.76 # Init height + 0.01
-    z_c_max = 0.76
+    z_c_min = 0.75
+    z_c_max = 0.75
     w_foot_loc = 0.0
     w_foot_rot = 0.0
 
@@ -172,6 +173,22 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     # Event
     events: EventCfg = EventCfg()
+
+    # Curriculum
+    # difficulty=0: x,y: (-0.1, 0.1) m/s, roll,pitch: 0
+    # difficulty=1: x,y: (-1.5, 1.5) m/s, roll,pitch: (-2.5, 2.5) rad/s
+    # curriculum = CurriculumManagerCfg(
+    #     warmup=0.1,
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="push_velocity",
+    #             attr_path="cfg/events/push_robot/params/velocity_range",
+    #             start_value={"x": (-0.1, 0.1), "y": (-0.1, 0.1), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
+    #             end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)},
+    #             schedule="linear",
+    #         ),
+    #     ]
+    # )
 
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
