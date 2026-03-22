@@ -30,7 +30,7 @@ class Agent:
         self.seed = self.cfg["seed"]
 
         # set seed
-        set_seed(self.seed)
+        set_seed(self.seed, deterministic=True)
 
         # checkpoint
         self.checkpoint_modules = {}

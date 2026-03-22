@@ -36,7 +36,7 @@ class MultiAgent:
         self.num_agents = len(possible_agents)
 
         # set seed
-        set_seed(self.seed)
+        set_seed(self.seed, deterministic=True)
 
         # Spaces
         self.observation_space = observation_space
