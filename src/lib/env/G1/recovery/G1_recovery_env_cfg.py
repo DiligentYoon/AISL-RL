@@ -181,7 +181,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         params=[
             CurriculumParamCfg(
                 name="push_velocity",
-                attr_path="cfg/events/push_robot/params/velocity_range",
+                attr_path="event_manager/cfg/push_robot/params/velocity_range",
                 start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
                 end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)},
                 schedule="linear",
