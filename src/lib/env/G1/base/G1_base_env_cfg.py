@@ -169,9 +169,9 @@ class G1BaseEnvCfg(EnvCfg):
                 "waist_pitch_joint": 300.0,
             },
             stiffness={
-                "waist_yaw_joint": 500.0,
-                "waist_roll_joint": 500.0,
-                "waist_pitch_joint": 500.0,
+                "waist_yaw_joint": 200.0,
+                "waist_roll_joint": 200.0,
+                "waist_pitch_joint": 200.0,
             },
             damping={
                 "waist_yaw_joint": 5.0,
