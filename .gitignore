@@ -52,6 +52,7 @@ docker/artifacts/
 # Claude
 **/*.md
 !README.md
+!CLAUDE.md
 
 # Doc Outputs
 **/docs/_build/*
