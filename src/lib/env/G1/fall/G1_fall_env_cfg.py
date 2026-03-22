@@ -18,6 +18,7 @@ from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKE
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.utils.plot_utils import CapturabilityPlotter
 from isaaclab.managers import SceneEntityCfg
 
 
@@ -277,6 +278,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     l_max = 0.6
 
     # ==== Viz data ==== #
+    plotter = CapturabilityPlotter
     viz_data = {
         "com_pos": 0,                  # (3,)
         "left_foot_pos": 0,            # (3,)

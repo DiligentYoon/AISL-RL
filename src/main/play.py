@@ -39,6 +39,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
+args_cli.headless = True                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -58,8 +59,8 @@ import lib
 
 from isaaclab.envs.common import ViewerCfg
 
-from lib.utils.plot_utils import CapturabilityPlotter
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
+from lib.utils.plot_utils import GIFSavePlotter
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
 
@@ -283,10 +284,11 @@ def main():
     # ======================================================================================================================
 
     # reset environment
-    if env._unwrapped.cfg.viz_data is not None:
+    plotter_cls = getattr(env._unwrapped.cfg, "plotter", None)
+    if plotter_cls is not None:
         plot_cfg = env._unwrapped.cfg.viz_data
         plot_dir = os.path.join(log_dir, "plot") if args_cli.checkpoint else None
-        plot = CapturabilityPlotter(env, plot_cfg, plot_dir)
+        plot: GIFSavePlotter = plotter_cls(env, plot_cfg, plot_dir)
     else:
         plot = None
 
