@@ -76,7 +76,7 @@ class CurriculumManager:
         Args:
             current_step: Current env step.
         """
-        total = self.total_timesteps
+        total = self.total_timesteps * self.cfg.endup
         if total is None or total <= 0:
             return
 
