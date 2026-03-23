@@ -307,7 +307,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
-        gait_reward = (diff * s)
+        gait_reward = diff * self.contact_schedule
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
