@@ -27,6 +27,45 @@ class G1BaseEnv(Env):
         # Joint Ids
         self._joint_dof_ids, _ = self._robot.find_joints(".*")
         
+        # self.total_leg_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint",
+        #                                                        r".*_knee_joint",
+        #                                                        r".*_ankle_(pitch|roll)_joint",])
+
+        # self.total_arm_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",
+        #                                                        r".*_shoulder_(pitch|roll|yaw)_joint",
+        #                                                        r".*_elbow_joint",
+        #                                                        r".*_wrist_(roll|pitch|yaw)_joint",])
+
+        # # self.total_hand_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
+        # #                                                         r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
+
+        # # Specific Joint Ids
+        # self.hip_xz_joint_ids, _ = self._robot.find_joints([r".*_hip_yaw_joint",
+        #                                                     r".*_hip_roll_joint",])
+
+        # self.knee_joint_ids, _ = self._robot.find_joints([r".*_knee_joint",])
+
+        # self.ankle_xy_joint_ids, _ = self._robot.find_joints([r".*_ankle_pitch_joint",
+        #                                                       r".*_ankle_roll_joint",])
+
+        # self.hip_knee_all_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint", 
+        #                                                           r".*_knee_joint",])
+        
+    
+        # self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(pitch|roll|yaw)_joint",
+        #                                                      r".*_elbow_joint",
+        #                                                      r".*_wrist_(roll|pitch|yaw)_joint",])
+
+        # self.torso_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",])
+
+        # # Link ids
+        # self.torso_link_ids, _ = self._robot.find_bodies([r"torso_link"])
+        # self.ankle_x_link_ids, _ = self._robot.find_bodies([r".*_ankle_roll_link"])
+
+        # # Contact Link ids
+        # self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link"])
+        # self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_roll_link"])
+
         self.total_leg_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint",
                                                                r".*_knee_joint",
                                                                r".*_ankle_(pitch|roll)_joint",])
@@ -36,35 +75,35 @@ class G1BaseEnv(Env):
                                                                r".*_elbow_joint",
                                                                r".*_wrist_(roll|pitch|yaw)_joint",])
 
-        # self.total_hand_joint_ids, _ = self._robot.find_joints([r"[LR]_(index|middle|pinky|ring)_(proximal|intermediate)_joint",
-        #                                                         r"[LR]_thumb_(proximal_yaw|proximal_pitch|intermediate|distal)_joint",])
+        self.hip_xz_joint_ids, _ = self._robot.find_joints([".*_hip_yaw_joint", ".*_hip_roll_joint"])
+        self.knee_joint_ids, _ = self._robot.find_joints([".*_knee_joint"])
+        self.ankle_xy_joint_ids, _ = self._robot.find_joints([".*_ankle_pitch_joint", ".*_ankle_roll_joint"])
+        self.hip_knee_all_joint_ids, _ = self._robot.find_joints([".*_hip_.*", ".*_knee_joint"])
 
-        # Specific Joint Ids
-        self.hip_xz_joint_ids, _ = self._robot.find_joints([r".*_hip_yaw_joint",
-                                                            r".*_hip_roll_joint",])
+        self.arm_all_joint_ids, _ = self._robot.find_joints([".*_shoulder_pitch_joint",
+                                                             ".*_shoulder_roll_joint",
+                                                             ".*_shoulder_yaw_joint",
+                                                             ".*_elbow_pitch_joint",
+                                                             ".*_elbow_roll_joint"])
 
-        self.knee_joint_ids, _ = self._robot.find_joints([r".*_knee_joint",])
-
-        self.ankle_xy_joint_ids, _ = self._robot.find_joints([r".*_ankle_pitch_joint",
-                                                              r".*_ankle_roll_joint",])
-
-        self.hip_knee_all_joint_ids, _ = self._robot.find_joints([r".*_hip_(pitch|roll|yaw)_joint", 
-                                                                  r".*_knee_joint",])
+        self.finger_all_joint_ids, _ = self._robot.find_joints([".*_five_joint",
+                                                                ".*_three_joint",
+                                                                ".*_six_joint",
+                                                                ".*_four_joint",
+                                                                ".*_zero_joint",
+                                                                ".*_one_joint",
+                                                                ".*_two_joint"])
         
-    
-        self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(pitch|roll|yaw)_joint",
-                                                             r".*_elbow_joint",
-                                                             r".*_wrist_(roll|pitch|yaw)_joint",])
-
-        self.torso_joint_ids, _ = self._robot.find_joints([r"waist_(yaw|roll|pitch)_joint",])
+        self.torso_joint_ids, _ = self._robot.find_joints("torso_joint")
+        
 
         # Link ids
-        self.torso_link_ids, _ = self._robot.find_bodies([r"torso_link"])
-        self.ankle_x_link_ids, _ = self._robot.find_bodies([r".*_ankle_roll_link"])
+        self.torso_link_ids, _ = self._robot.find_bodies("torso_link")
+        self.ankle_x_link_ids, _ = self._robot.find_bodies(".*_ankle_roll_link")
 
         # Contact Link ids
-        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link"])
-        self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_roll_link"])
+        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies("torso_link")
+        self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies(".*_ankle_roll_link")
 
         # Joint Limits
         self.leg_joint_limits = self.joint_pos_limits[:, self.total_leg_joint_ids]
