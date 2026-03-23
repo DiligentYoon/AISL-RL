@@ -189,7 +189,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
+        resampling_time_range=(10.0, 10.0),
         prob_standing_envs=0.02,
         prob_heading_envs=1.0,
         heading_command=True,
