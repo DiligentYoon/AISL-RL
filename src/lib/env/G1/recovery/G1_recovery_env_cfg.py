@@ -104,9 +104,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
-    action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 50, "leg": 40}                
-    state_space = {"arm": 74, "leg": 74}
+    action_space = {"arm": 25, "leg": 12}                         
+    observation_space = {"arm": 66, "leg": 40}                
+    state_space = {"arm": 90, "leg": 90}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -190,7 +190,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     robot: ArticulationCfg = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1_minimal.usd",
+        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -202,7 +202,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
