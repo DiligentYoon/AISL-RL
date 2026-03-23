@@ -460,7 +460,7 @@ class Env(gym.Env):
         except ModuleNotFoundError:
             pass
         # set seed for torch and other libraries
-        return configure_seed(seed, torch_deterministic=True)
+        return configure_seed(seed)
 
     def render(self, recompute: bool = False) -> np.ndarray | None:
         """Run rendering without stepping through the physics.
