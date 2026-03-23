@@ -104,9 +104,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 40}                
-    state_space = {"arm": 90, "leg": 90}
+    action_space = {"arm": 17, "leg": 12}                         
+    observation_space = {"arm": 50, "leg": 40}                
+    state_space = {"arm": 74, "leg": 74}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -125,7 +125,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 8.0
     w_feet_slide:     float = 2.0
-    w_self_collision: float = 0.0
+    w_self_collision: float = 0.001
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
@@ -165,7 +165,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
                                 "left_ankle_roll_link",
                                 "right_ankle_pitch_link",
                                 "right_ankle_roll_link"]
-
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
