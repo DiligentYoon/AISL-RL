@@ -125,6 +125,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = 2.0
+    w_support_xy:     float = 0.1
     w_self_collision: float = 5.0e-3
     w_flat:           float = 2.0
 

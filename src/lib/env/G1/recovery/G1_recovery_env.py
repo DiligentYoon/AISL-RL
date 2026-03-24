@@ -332,6 +332,9 @@ class G1RecoveryEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
+        # Support foot penalty
+        support_xy = abs(wrap_to_pi(euler_xyz_from_quat(self.support_foot_rot)))[:, :2]
+        support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Self-collision
         # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
         self_collision_penalty_leg = -torch.sum(torch.norm(self.illegal_leg_force, dim=-1), dim=-1)
@@ -382,6 +385,7 @@ class G1RecoveryEnv(G1BaseEnv):
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
+                      self.cfg.w_support_xy          * support_xy_penalty              + \
                       self.cfg.w_self_collision      * self_collision_penalty_leg      + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
@@ -427,6 +431,7 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
             "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
+            "Task Penalty / Leg_Support_XY"        : self.cfg.w_support_xy         * support_xy_penalty, 
             "Task Penalty / Leg_Self_Collision"    : self.cfg.w_self_collision     * self_collision_penalty_leg,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
