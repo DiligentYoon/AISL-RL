@@ -44,8 +44,8 @@ class G1RecoveryEnv(G1BaseEnv):
             r".*_wrist_.*_link",
         ])
 
-        self.denied_collision_link_leg_ids = [bid for bid in self.leg_collision_link_ids.tolist() if bid not in self.allowed_collision_link_ids],
-        self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids.tolist() if bid not in self.allowed_collision_link_ids],
+        self.denied_collision_link_leg_ids = [bid for bid in self.leg_collision_link_ids if bid not in self.allowed_collision_link_ids]
+        self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
 
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
@@ -333,7 +333,9 @@ class G1RecoveryEnv(G1BaseEnv):
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Support foot penalty
-        support_xy = abs(wrap_to_pi(euler_xyz_from_quat(self.support_foot_rot)))[:, :2]
+        support_x, support_y, _ = euler_xyz_from_quat(self.support_foot_rot)
+        support_xy = torch.stack([support_x, support_y], dim=-1)
+        support_xy = abs(wrap_to_pi(support_xy))
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Self-collision
         # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
