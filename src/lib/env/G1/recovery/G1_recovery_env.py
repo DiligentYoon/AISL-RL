@@ -339,14 +339,14 @@ class G1RecoveryEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_heading  * heading_rewards        + \
-                         self.cfg.w_flat           * flat_rewards           + \
-                         self.cfg.w_ang_vel_xy     * ang_vel_xy_penalty     + \
-                         self.cfg.w_self_collision * self_collision_penalty + \
-                         self.cfg.w_termination    * terminate_penalty
+        common_rewards = self.cfg.w_track_heading   * heading_rewards                 + \
+                         self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
+                         self.cfg.w_flat            * flat_rewards                    + \
+                         self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
+                         self.cfg.w_self_collision  * self_collision_penalty          + \
+                         self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                  + \
-                      self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
                       self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
@@ -395,7 +395,7 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Common_Self_Collision" : self.cfg.w_self_collision     * self_collision_penalty,
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
-            "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
+            "Task Penalty / Common_Torso_Deviation": self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
             "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
