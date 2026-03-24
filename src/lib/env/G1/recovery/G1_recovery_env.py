@@ -29,6 +29,24 @@ class G1RecoveryEnv(G1BaseEnv):
         self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
         self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
 
+        self.leg_collision_link_ids, _ = self.contact_sensors.find_bodies([
+            r"pelvis",
+            r".*_hip_.*_link",
+            r".*_knee_link",
+            r".*_ankle_.*_link",
+        ])
+
+        self.arm_collision_link_ids, _ = self.contact_sensors.find_bodies([
+            r"waist_.*_link",
+            r"torso_link",
+            r".*_shoulder_.*_link",
+            r".*_elbow_link",
+            r".*_wrist_.*_link",
+        ])
+
+        self.denied_collision_link_leg_ids = [bid for bid in self.leg_collision_link_ids.tolist() if bid not in self.allowed_collision_link_ids],
+        self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids.tolist() if bid not in self.allowed_collision_link_ids],
+
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
@@ -71,6 +89,8 @@ class G1RecoveryEnv(G1BaseEnv):
         # Contact states
         self.is_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
         self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
+        self.illegal_leg_force = torch.zeros((self.num_envs, len(self.denied_collision_link_leg_ids), 3), dtype=torch.float, device=self.device)
+        self.illegal_arm_force = torch.zeros((self.num_envs, len(self.denied_collision_link_arm_ids), 3), dtype=torch.float, device=self.device)
 
         # Gait guidance (Gait scheduler)
         self.phase = torch.zeros(self.num_envs, device=self.device)
@@ -313,7 +333,9 @@ class G1RecoveryEnv(G1BaseEnv):
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Self-collision
-        self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
+        # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
+        self_collision_penalty_leg = -torch.sum(torch.norm(self.illegal_leg_force, dim=-1), dim=-1)
+        self_collision_penalty_arm = -torch.sum(torch.norm(self.illegal_arm_force, dim=-1), dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
@@ -343,10 +365,10 @@ class G1RecoveryEnv(G1BaseEnv):
                          self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
-                         self.cfg.w_self_collision  * self_collision_penalty          + \
                          self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                  + \
+                      self.cfg.w_self_collision     * self_collision_penalty_arm      + \
                       self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
@@ -360,6 +382,7 @@ class G1RecoveryEnv(G1BaseEnv):
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
+                      self.cfg.w_self_collision      * self_collision_penalty_leg      + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
@@ -392,11 +415,11 @@ class G1RecoveryEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Common_Self_Collision" : self.cfg.w_self_collision     * self_collision_penalty,
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Common_Torso_Deviation": self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
+            "Task Penalty / Arm_Self_Collision"    : self.cfg.w_self_collision     * self_collision_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
@@ -404,6 +427,7 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
             "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
+            "Task Penalty / Leg_Self_Collision"    : self.cfg.w_self_collision     * self_collision_penalty_leg,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
             "Task Penalty / Leg_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_leg,
@@ -512,6 +536,8 @@ class G1RecoveryEnv(G1BaseEnv):
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
         # Ilegal force (self-collision)
         self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
+        self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
+        self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]

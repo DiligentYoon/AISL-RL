@@ -86,14 +86,14 @@ class EventCfg:
     )
 
     # interval
-    # push_robot = EventTerm(
-    #     func=randomizer.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(2.0, 4.0),
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-    #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)}},
-    # )
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(4.0, 6.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)}},
+    )
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -125,7 +125,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = 2.0
-    w_self_collision: float = 3.0e-3
+    w_self_collision: float = 5.0e-3
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
@@ -147,7 +147,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
 
-    soft_torque_limit: float = 0.9
+    soft_torque_limit: float = 0.8
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
@@ -173,18 +173,18 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     events: EventCfg = EventCfg()
 
     # Curriculum
-    # curriculum = CurriculumManagerCfg(
-    #     warmup=0.4,
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="push_velocity",
-    #             attr_path="event_manager/cfg/push_robot/params/velocity_range",
-    #             start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
-    #             end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-2.5, 2.5), "pitch": (-2.5, 2.5)},
-    #             schedule="linear",
-    #         ),
-    #     ]
-    # )
+    curriculum = CurriculumManagerCfg(
+        warmup=0.4,
+        params=[
+            CurriculumParamCfg(
+                name="push_velocity",
+                attr_path="event_manager/cfg/push_robot/params/velocity_range",
+                start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
+                end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)},
+                schedule="linear",
+            ),
+        ]
+    )
 
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
