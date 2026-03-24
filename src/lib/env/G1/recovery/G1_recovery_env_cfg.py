@@ -125,7 +125,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = 2.0
-    w_self_collision: float = 5.0e-3
+    w_self_collision: float = 3.0e-3
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
@@ -138,7 +138,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 1.0
     w_action_rate:       float = 0.05
 
     w_termination: float = 200
@@ -174,7 +174,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     # Curriculum
     # curriculum = CurriculumManagerCfg(
-    #     warmup=0.3,
+    #     warmup=0.4,
     #     params=[
     #         CurriculumParamCfg(
     #             name="push_velocity",
@@ -189,7 +189,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(10.0, 10.0),
+        resampling_time_range=(4.0, 5.0),
         prob_standing_envs=0.02,
         prob_heading_envs=1.0,
         heading_command=True,
