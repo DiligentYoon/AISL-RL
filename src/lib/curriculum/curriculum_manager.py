@@ -21,6 +21,8 @@ class CurriculumManager:
         self.cfg = cfg
         self.env = env
         self.total_timesteps = self.env.cfg.total_timesteps
+        self.warmup_timesteps = self.total_timesteps * self.cfg.warmup
+        self.endup_timesteps = self.total_timesteps * self.cfg.endup
         self._difficulty: float = 0.0
         # (getter, setter, param_cfg) 튜플 목록
         self._resolvers: list[tuple[Callable, Callable, CurriculumParamCfg]] = []
@@ -76,17 +78,16 @@ class CurriculumManager:
         Args:
             current_step: Current env step.
         """
-        total = self.total_timesteps * self.cfg.endup
-        if total is None or total <= 0:
+        total = self.total_timesteps
+        if total <= 0:
             return
 
-        t = min(current_step / total, 1.0)
-
-        # warmup phase (difficulty = 0)
-        if t < self.cfg.warmup:
+        if current_step < self.warmup_timesteps:
+            # warmup phase (difficulty = 0)
             effective_t = 0.0
         else:
-            effective_t = (t - self.cfg.warmup) / (1.0 - self.cfg.warmup)
+            # apply phase (difficulty = 0 -> 1)
+            effective_t = (current_step - self.warmup_timesteps) / (self.endup_timesteps - self.warmup_timesteps)
             effective_t = min(effective_t, 1.0)
 
         self._difficulty = effective_t

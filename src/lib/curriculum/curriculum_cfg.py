@@ -41,8 +41,8 @@ class CurriculumManagerCfg:
     warmup: float = 0.1
     """Warm-up starts ratio (0.1 = 10% of total steps)"""
 
-    endup: float = 0.9
-    """End-up ends ratio (0.9 = 90% of total steps)"""
+    endup: float = 0.8
+    """End-up ends ratio (0.8 = 80% of total steps)"""
 
     params: list[CurriculumParamCfg] = field(default_factory=list)
     """list of controlled parameters."""

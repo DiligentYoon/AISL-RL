@@ -125,7 +125,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = 2.0
-    w_support_xy:     float = 0.1
+    w_support_xy:     float = 0.2
     w_self_collision: float = 5.0e-3
     w_flat:           float = 2.0
 
@@ -165,7 +165,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     allowed_collision_bodies = ["left_ankle_pitch_link",
                                 "left_ankle_roll_link",
                                 "right_ankle_pitch_link",
-                                "right_ankle_roll_link"]
+                                "right_ankle_roll_link", 
+                                "waist_yaw_link",
+                                "waist_roll_link"]
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
@@ -174,18 +176,18 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     events: EventCfg = EventCfg()
 
     # Curriculum
-    curriculum = CurriculumManagerCfg(
-        warmup=0.4,
-        params=[
-            CurriculumParamCfg(
-                name="push_velocity",
-                attr_path="event_manager/cfg/push_robot/params/velocity_range",
-                start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
-                end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)},
-                schedule="linear",
-            ),
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     warmup=0.4,
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="push_velocity",
+    #             attr_path="event_manager/cfg/push_robot/params/velocity_range",
+    #             start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
+    #             end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)},
+    #             schedule="linear",
+    #         ),
+    #     ]
+    # )
 
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
