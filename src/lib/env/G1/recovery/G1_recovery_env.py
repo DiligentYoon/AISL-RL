@@ -339,8 +339,8 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Self-collision
         # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
-        collision_norm_leg = (1.0 - torch.norm(self.illegal_leg_force, dim=-1)).clamp(min=0.0)
-        collision_norm_arm = (1.0 - torch.norm(self.illegal_arm_force, dim=-1)).clamp(min=0.0)
+        collision_norm_leg = (torch.norm(self.illegal_leg_force, dim=-1) - 1.0).clamp(min=0.0)
+        collision_norm_arm = (torch.norm(self.illegal_arm_force, dim=-1) - 1.0).clamp(min=0.0)
         self_collision_penalty_leg = -torch.sum(collision_norm_leg, dim=-1)
         self_collision_penalty_arm = -torch.sum(collision_norm_arm, dim=-1)
         # Regularization
