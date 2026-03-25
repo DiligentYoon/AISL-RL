@@ -165,7 +165,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     allowed_collision_bodies = ["left_ankle_pitch_link",
                                 "left_ankle_roll_link",
                                 "right_ankle_pitch_link",
-                                "right_ankle_roll_link"]
+                                "right_ankle_roll_link", 
+                                "waist_yaw_link",
+                                "waist_roll_link"]
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
