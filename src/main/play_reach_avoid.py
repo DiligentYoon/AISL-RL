@@ -112,7 +112,7 @@ def main():
     if args_cli.video:
         args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
         video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "train"),
+            "video_folder": os.path.join(log_dir, "videos", "play"),
             "step_trigger": lambda step: step % args_cli.video_interval == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
@@ -128,12 +128,7 @@ def main():
 
     # Wrap around environment
     env = IsaacLabWrapper(env)  
-
-    if cfg["agent"]["experiment"]["write_interval"] == "auto":
-        write_interval = int(cfg["train"]["timesteps"] / 100)
-    if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
-        checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
-
+    
     # ======================= Buffer =========================
     multi_agent = algorithm == "mappo"
     cfg["models"]["multi_agent"] = multi_agent
@@ -307,7 +302,6 @@ def main():
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
-    elapsed_time = 0
     
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
@@ -322,14 +316,12 @@ def main():
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
-        
-        t2_loop = time.time()
-
 
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
             infos["viz_data"]["RA_value"] = RA_value
+            infos["viz_data"]["m_step_hist"] = RA_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
 
