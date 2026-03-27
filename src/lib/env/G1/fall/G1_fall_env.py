@@ -25,16 +25,33 @@ class G1FallEnv(G1BaseEnv):
     def __init__(self, cfg: G1FallEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
+        total_body_ids, _ = self.contact_sensors.find_bodies(".*")
+        self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
+        self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
+
+        self.leg_collision_link_ids, _ = self.contact_sensors.find_bodies([
+            r"pelvis",
+            r".*_hip_.*_link",
+            r".*_knee_link",
+            r".*_ankle_.*_link",
+        ])
+
+        self.arm_collision_link_ids, _ = self.contact_sensors.find_bodies([
+            r"waist_.*_link",
+            r"torso_link",
+            r".*_shoulder_.*_link",
+            r".*_elbow_link",
+            r".*_wrist_.*_link",
+        ])
+
+        self.denied_collision_link_leg_ids = [bid for bid in self.leg_collision_link_ids if bid not in self.allowed_collision_link_ids]
+        self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
+
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
-
-        # Contact Link ids
-        total_body_ids, _ = self.contact_sensors.find_bodies(".*")
-        self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
-        self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
                     
         # Action scale factor
         if self.cfg.num_agents > 1:
@@ -64,9 +81,6 @@ class G1FallEnv(G1BaseEnv):
         self.in_contact          = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
         self.foot_pos_w          = torch.zeros((self.num_envs, 2, 3), dtype=torch.float, device=self.device)
         self.foot_rot_w          = torch.zeros((self.num_envs, 2, 4), dtype=torch.float, device=self.device)
-        self.foot_pos_b          = torch.zeros((self.num_envs, 2, 3), dtype=torch.float, device=self.device)
-        self.foot_yaw_w          = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
-        self.foot_yaw_b          = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.ICP_pos_w           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.capturable_boundary = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.dist_from_icp_to_stance = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
@@ -77,6 +91,9 @@ class G1FallEnv(G1BaseEnv):
 
         # Foot states
         self.is_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
+        self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
+        self.illegal_leg_force = torch.zeros((self.num_envs, len(self.denied_collision_link_leg_ids), 3), dtype=torch.float, device=self.device)
+        self.illegal_arm_force = torch.zeros((self.num_envs, len(self.denied_collision_link_arm_ids), 3), dtype=torch.float, device=self.device)
 
         # Gait guidance (Gait scheduler)
         self.phase = torch.zeros(self.num_envs, device=self.device)
@@ -112,7 +129,6 @@ class G1FallEnv(G1BaseEnv):
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.deviation_hip_xz       = torch.zeros((self.num_envs, len(self.hip_xz_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
-        self.deviation_fingers      = torch.zeros((self.num_envs, len(self.finger_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Visualization
@@ -167,10 +183,6 @@ class G1FallEnv(G1BaseEnv):
 
     def _setup_scene(self):
         super()._setup_scene()
-        # sensor
-        self.scene.sensors["contact_forces"] = ContactSensor(self.cfg.contact_forces)
-        self.contact_sensors = self.scene.sensors["contact_forces"]
-        self.contact_sensors.update_period = self.cfg.sim_dt
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # add ground plane
@@ -222,49 +234,50 @@ class G1FallEnv(G1BaseEnv):
             observations = {
                 "arm": torch.cat(
                     [
-                        self.root_pos_w[:, 2:3],
-                        self.root_heading,
-                        self.root_lin_vel_b,
-                        self.root_ang_vel_b,
-                        self.projected_gravity,
-                        self.command_inputs_b,
-                        self.phase_sin.unsqueeze(-1),
-                        self.phase_cos.unsqueeze(-1),
-                        self.joint_pos[:, self.total_arm_joint_ids],
-                        self.joint_vel[:, self.total_arm_joint_ids]
+                        self.root_pos_w[:, 2:3],                            # [E, 1]
+                        self.root_heading,                                  # [E, 1]
+                        self.root_lin_vel_b,                                # [E, 3]
+                        self.root_ang_vel_b,                                # [E, 3]
+                        self.projected_gravity,                             # [E, 3]
+                        self.command_inputs_b,                              # [E, 3]
+                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                        self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
+                        self.joint_vel[:, self.total_arm_joint_ids]         # [E, 17]
                     ],
                     dim=-1
                 ),
                 "leg": torch.cat(
                     [
-                        self.root_pos_w[:, 2:3],
-                        self.root_heading,
-                        self.root_lin_vel_b,
-                        self.root_ang_vel_b,
-                        self.projected_gravity,
-                        self.command_inputs_b,
-                        self.phase_sin.unsqueeze(-1),
-                        self.phase_cos.unsqueeze(-1),
-                        self.joint_pos[:, self.total_leg_joint_ids],
-                        self.joint_vel[:, self.total_leg_joint_ids]
+                        self.root_pos_w[:, 2:3],                            # [E, 1]
+                        self.root_heading,                                  # [E, 1]
+                        self.root_lin_vel_b,                                # [E, 3]
+                        self.root_ang_vel_b,                                # [E, 3]
+                        self.projected_gravity,                             # [E, 3]
+                        self.command_inputs_b,                              # [E, 3]
+                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                        self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
+                        self.joint_vel[:, self.total_leg_joint_ids]         # [E, 12]
                     ],
                     dim=-1
                 )
             }
         else:
             # Single Agent
+            total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             observations = torch.cat(
                 [
-                    self.root_pos_w[:, 2:3],
-                    self.root_heading,
+                    self.root_pos_w[:, 2:3],                            # [E, 1]
+                    self.root_heading,                                  # [E, 1]
                     self.root_lin_vel_b,                                # [E, 3]
                     self.root_ang_vel_b,                                # [E, 3]
                     self.projected_gravity,                             # [E, 3]
                     self.command_inputs_b,                              # [E, 3]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos,                                     # [E, 37]
-                    self.joint_vel,                                     # [E, 37]
+                    self.joint_pos[:, total_joint_ids],                 # [E, 29]
+                    self.joint_vel[:, total_joint_ids],                 # [E, 29]
                 ], dim=-1) 
 
         return observations
@@ -273,18 +286,19 @@ class G1FallEnv(G1BaseEnv):
     def _get_states(self) -> dict[str, torch.Tensor]:
         if self.cfg.num_agents > 1:
             # Multi Agent
+            total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             shared_states = torch.cat(
                 [
-                    self.root_pos_w[:, 2:3],
-                    self.root_heading,
+                    self.root_pos_w[:, 2:3],                            # [E, 1]
+                    self.root_heading,                                  # [E, 1]
                     self.root_lin_vel_b,                                # [E, 3]
                     self.root_ang_vel_b,                                # [E, 3]
                     self.projected_gravity,                             # [E, 3]
                     self.command_inputs_b,                              # [E, 3]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos,                                     # [E, 37]
-                    self.joint_vel,                                     # [E, 37]
+                    self.joint_pos[:, total_joint_ids],                 # [E, 29]
+                    self.joint_vel[:, total_joint_ids],                 # [E, 29]
                 ], dim=-1) 
             
             states = {
@@ -331,15 +345,25 @@ class G1FallEnv(G1BaseEnv):
         # Gait rewards
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
-        gait_reward = (diff * s)
+        gait_reward = diff * self.contact_schedule
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
+        # Support foot penalty
+        support_x, support_y, _ = euler_xyz_from_quat(self.support_foot_rot)
+        support_xy = torch.stack([support_x, support_y], dim=-1)
+        support_xy = abs(wrap_to_pi(support_xy))
+        support_xy_penalty = -torch.sum(support_xy, dim=-1)
+        # Self-collision
+        # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
+        collision_norm_leg = (torch.norm(self.illegal_leg_force, dim=-1) - 1.0).clamp(min=0.0)
+        collision_norm_arm = (torch.norm(self.illegal_arm_force, dim=-1) - 1.0).clamp(min=0.0)
+        self_collision_penalty_leg = -torch.sum(collision_norm_leg, dim=-1)
+        self_collision_penalty_arm = -torch.sum(collision_norm_arm, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
-        joint_deviation_penalty_fingers    = -torch.sum(torch.abs(self.deviation_fingers), dim=1)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
@@ -362,15 +386,15 @@ class G1FallEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_heading * heading_rewards     + \
-                         self.cfg.w_flat          * flat_rewards        + \
-                         self.cfg.w_ang_vel_xy    * ang_vel_xy_penalty  + \
-                         self.cfg.w_termination   * terminate_penalty
+        common_rewards = self.cfg.w_track_heading   * heading_rewards                 + \
+                         self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
+                         self.cfg.w_flat            * flat_rewards                    + \
+                         self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
+                         self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                  + \
-                      self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
+                      self.cfg.w_self_collision     * self_collision_penalty_arm      + \
                       self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
-                      self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers + \
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
                       self.cfg.w_joint_torque       * joint_torque_penalty_arm        + \
@@ -383,6 +407,8 @@ class G1FallEnv(G1BaseEnv):
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_slide          * slide_penalty                   + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
+                      self.cfg.w_support_xy          * support_xy_penalty              + \
+                      self.cfg.w_self_collision      * self_collision_penalty_leg      + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
@@ -417,9 +443,9 @@ class G1FallEnv(G1BaseEnv):
             # ==========================================
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
-            "Task Penalty / Arm_Torso_Deviation"   : self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
+            "Task Penalty / Common_Torso_Deviation": self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
-            "Task Penalty / Arm_Finger_Deviation"  : self.cfg.w_deviation_fingers  * joint_deviation_penalty_fingers,
+            "Task Penalty / Arm_Self_Collision"    : self.cfg.w_self_collision     * self_collision_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
@@ -427,6 +453,8 @@ class G1FallEnv(G1BaseEnv):
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
             "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Slide"             : self.cfg.w_feet_slide         * slide_penalty,
+            "Task Penalty / Leg_Support_XY"        : self.cfg.w_support_xy         * support_xy_penalty, 
+            "Task Penalty / Leg_Self_Collision"    : self.cfg.w_self_collision     * self_collision_penalty_leg,
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
             "Task Penalty / Leg_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_leg,
@@ -435,14 +463,14 @@ class G1FallEnv(G1BaseEnv):
             "Task Penalty / Leg_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_leg,
         }
         
-        return rewards  
+        return rewards   
 
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.denied_collision_link_ids]
+        # critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
 
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
@@ -453,8 +481,8 @@ class G1FallEnv(G1BaseEnv):
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         
-        died_collision   = torch.any(torch.max(torch.norm(critical_contact_forces, dim=-1), dim=1)[0] > 0.5, dim=1)
-        died = died_fall | died_fall_2 | died_ang | died_collision
+        # died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
+        died = died_fall | died_fall_2 | died_ang
         return died, time_out
 
 
@@ -498,11 +526,11 @@ class G1FallEnv(G1BaseEnv):
 
         # Command resampling
         self.commands.reset(env_ids)
-        self.step_period, self.full_step_period = resample_commands(self.step_period,
-                                                                    self.full_step_period,
-                                                                    env_ids,
-                                                                    self.step_dt,
-                                                                    self.cfg.time_period_min, self.cfg.time_period_max)
+        self.step_period, self.full_step_period= resample_commands(self.step_period,
+                                                                   self.full_step_period,
+                                                                   env_ids,
+                                                                   self.step_dt,
+                                                                   self.cfg.time_period_min, self.cfg.time_period_max,)
 
         self._compute_intermediate_values(env_ids)
 
@@ -533,6 +561,10 @@ class G1FallEnv(G1BaseEnv):
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+        # Ilegal force (self-collision)
+        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
+        self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
+        self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]

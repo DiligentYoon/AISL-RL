@@ -88,10 +88,10 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(2.0, 4.0),
+        interval_range_s=(4.0, 6.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0)}},
+            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)}},
     )
 
 
@@ -101,127 +101,16 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 1/200
-    decimation = 4
-
-    # ================= Robot =================== ## 
-    robot: ArticulationCfg = ArticulationCfg(
-    prim_path="/World/envs/env_.*/Robot",
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/Unitree/G1/g1.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
-        ),
-    ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        # pos=(0.0, 0.0, 0.706), # knee = 0.6 rad
-        # pos=(0.0, 0.0, 0.692), # knee = 0.7 rad
-        pos=(0.0, 0.0, 0.676), # knee = 0.8 rad
-        joint_pos={
-            ".*_hip_pitch_joint": -0.4,
-            ".*_knee_joint": 0.8,
-            ".*_ankle_pitch_joint": -0.4,
-            ".*_elbow_pitch_joint": 0.87,
-            "left_shoulder_roll_joint": 0.16,
-            "left_shoulder_pitch_joint": 0.35,
-            "right_shoulder_roll_joint": -0.16,
-            "right_shoulder_pitch_joint": 0.35,
-            "left_one_joint": 1.0,
-            "right_one_joint": -1.0,
-            "left_two_joint": 0.52,
-            "right_two_joint": -0.52,
-        },
-        joint_vel={".*": 0.0},
-    ),
-    soft_joint_pos_limit_factor=0.9,
-    actuators={
-        "legs": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_hip_yaw_joint",
-                ".*_hip_roll_joint",
-                ".*_hip_pitch_joint",
-                ".*_knee_joint",
-                "torso_joint",
-            ],
-            effort_limit_sim=300,
-            stiffness={
-                ".*_hip_yaw_joint": 150.0,
-                ".*_hip_roll_joint": 150.0,
-                ".*_hip_pitch_joint": 200.0,
-                ".*_knee_joint": 200.0,
-                "torso_joint": 200.0,
-            },
-            damping={
-                ".*_hip_yaw_joint": 5.0,
-                ".*_hip_roll_joint": 5.0,
-                ".*_hip_pitch_joint": 5.0,
-                ".*_knee_joint": 5.0,
-                "torso_joint": 5.0,
-            },
-            armature={
-                ".*_hip_.*": 0.01,
-                ".*_knee_joint": 0.01,
-                "torso_joint": 0.01,
-            },
-        ),
-        "feet": ImplicitActuatorCfg(
-            effort_limit_sim=20,
-            joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
-            stiffness=20.0,
-            damping=2.0,
-            armature=0.01,
-        ),
-        "arms": ImplicitActuatorCfg(
-            joint_names_expr=[
-                ".*_shoulder_pitch_joint",
-                ".*_shoulder_roll_joint",
-                ".*_shoulder_yaw_joint",
-                ".*_elbow_pitch_joint",
-                ".*_elbow_roll_joint",
-                ".*_five_joint",
-                ".*_three_joint",
-                ".*_six_joint",
-                ".*_four_joint",
-                ".*_zero_joint",
-                ".*_one_joint",
-                ".*_two_joint",
-            ],
-            effort_limit_sim=300,
-            stiffness=40.0,
-            damping=10.0,
-            armature={
-                ".*_shoulder_.*": 0.01,
-                ".*_elbow_.*": 0.01,
-                ".*_five_joint": 0.001,
-                ".*_three_joint": 0.001,
-                ".*_six_joint": 0.001,
-                ".*_four_joint": 0.001,
-                ".*_zero_joint": 0.001,
-                ".*_one_joint": 0.001,
-                ".*_two_joint": 0.001,
-            },
-        ),
-    },
-)                
+    decimation = 4          
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
-    action_space = {"arm": 25, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 40}                
-    state_space = {"arm": 90, "leg": 90}
+    action_space = {"arm": 17, "leg": 12}                         
+    observation_space = {"arm": 50, "leg": 40}                
+    state_space = {"arm": 74, "leg": 74}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
-    ra_state_space = 90
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
@@ -235,9 +124,11 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     w_track_heading: float = 2.0
     w_track_height : float = 1.0
 
-    w_feet_gait:  float = 6.0
-    w_feet_slide: float = 2.0
-    w_flat:       float = 2.0
+    w_feet_gait:      float = 6.0
+    w_feet_slide:     float = 2.0
+    w_support_xy:     float = 0.2
+    w_self_collision: float = 0.01
+    w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
     w_ang_vel_xy:         float = 0.1
@@ -247,10 +138,9 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
-    w_deviation_hip:     float = 1.0
-    w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.3
-    w_deviation_fingers: float = 0.05
+    w_deviation_hip:     float = 2.0
+    w_deviation_torso:   float = 2.0
+    w_deviation_arm:     float = 1.0
     w_action_rate:       float = 0.05
 
     w_termination: float = 200
@@ -259,13 +149,15 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
 
-    soft_torque_limit: float = 0.9
+    soft_torque_limit: float = 0.8
 
     ## ============== Self collision =============== ##
     allowed_collision_bodies = ["left_ankle_pitch_link",
                                 "left_ankle_roll_link",
                                 "right_ankle_pitch_link",
-                                "right_ankle_roll_link"]
+                                "right_ankle_roll_link", 
+                                "waist_yaw_link",
+                                "waist_roll_link"]
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
@@ -273,9 +165,9 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     time_period_max = 0.34
     dstep_min = 0.25
     dstep_max = 0.25
-    z_c_min = robot.init_state.pos[2] + 0.01
-    z_c_max = robot.init_state.pos[2] + 0.01
-    l_max = 0.6
+    z_c_min = 0.75
+    z_c_max = 0.75
+    l_max = 1.0
 
     # ==== Viz data ==== #
     plotter = CapturabilityPlotter
@@ -301,13 +193,13 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(10.0, 10.0),
+        resampling_time_range=(4.0, 5.0),
         prob_standing_envs=0.02,
         prob_heading_envs=1.0,
         heading_command=True,
         heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
         is_body_frame=False,
     )
