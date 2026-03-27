@@ -15,9 +15,9 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-03-26_11-01-21_mappo/agent_96000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="", help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -54,8 +54,6 @@ import copy
 import numpy as np
 import collections
 
-from torch.utils.tensorboard import SummaryWriter
-
 
 from datetime import datetime
 
@@ -66,6 +64,7 @@ from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
+from lib.utils.plot_utils import GIFSavePlotter
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -104,6 +103,9 @@ def main():
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    # Predicted RA value
+    if env_cfg.viz_data is not None:
+        env_cfg.viz_data["RA_value"] = 0.0
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -291,15 +293,18 @@ def main():
 
 
 
-    # ======================= Training ============================
-
-    # Tensorboard Wrtier
-    writer = SummaryWriter(log_dir=log_dir)
-    tracking_data = collections.defaultdict(list)
-    CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
-    CLI_value_loss = collections.deque(maxlen=env.num_envs)
-
+    # ======================= Evaluation ============================
+    
     # Reset environment
+    plotter_cls = getattr(env._unwrapped.cfg, "plotter", None)
+    if plotter_cls is not None:
+        plot_cfg = env._unwrapped.cfg.viz_data
+        plot_dir = os.path.join(log_dir, "plot") if args_cli.checkpoint else None
+        plot: GIFSavePlotter = plotter_cls(env, plot_cfg, plot_dir)
+    else:
+        plot = None
+
+    agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
     elapsed_time = 0
@@ -312,73 +317,26 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            RA_value = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
         
-            # Insert data to the buffer
-            ra_agent.insert_data(states=infos["ra_states"],
-                                 next_states=next_infos["ra_states"],
-                                 l_values=infos["l_values"],
-                                 g_values=infos["g_values"],
-                                 truncated=truncated,
-                                 terminated=terminated)
-        
-        # Parameter update
-        if timestep >= ra_cfg["agent"]["learning_starts"]:
-            value_loss = ra_agent.update()
-            CLI_value_loss.append(value_loss)
-            tracking_data["Loss / RA Value Loss"].append(value_loss)
-        
         t2_loop = time.time()
 
-        # =============== Logging Phase ================
-        # Tensorboard logging
-        if timestep % write_interval == 0: 
-            for k, v in tracking_data.items():
-                if k.endswith("(min)"):
-                    writer.add_scalar(k, np.min(v), timestep)
-                elif k.endswith("(max)"):
-                    writer.add_scalar(k, np.max(v), timestep)
-                else:
-                    writer.add_scalar(k, np.mean(v), timestep)
-            # reset data containers for next iteration
-            tracking_data.clear()
 
-        # CLI Logging about the training process at each parameter update
-        if timestep % ra_buffer.buffer_size == 0:
-            per_update_value_loss = float(np.mean(CLI_value_loss)) if len(CLI_value_loss) else float("nan")
-            per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.3f}"
+        # Plot Phase
+        if plot is not None:
+            done = terminated[0] | truncated[0]
+            infos["viz_data"]["RA_value"] = RA_value
+            plot.append(viz_data=infos["viz_data"], episode_end=done)
 
-            elapsed_time += (t2_loop - t1_loop)
-            e_h = int(elapsed_time // 3600)
-            e_m = int((elapsed_time % 3600) // 60)
-            e_s = int(elapsed_time % 60)
-            total_timesteps = int(cfg["train"]["timesteps"])
-            complete_time = (t2_loop - t1_loop) * (total_timesteps - timestep)
-            c_h = int(complete_time // 3600)
-            c_m = int((complete_time % 3600) // 60)
-            c_s = int(complete_time % 60)
 
-            content_width = 64
-            line_header = f"Step Progress {timestep} / {cfg['train']['timesteps']}"
-            line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
-            line_value_loss = f"Value Loss        : {per_value_loss}"
-
-            print(f" ________________________________________________________________")
-            print(f"|                                                                |")
-            print(f"|{line_header.center(content_width)}|")
-            print(f"|{line_time_header.center(content_width)}|")
-            print(f"|________________________________________________________________|")
-            print(f"|                                                                |")
-            print(f"| {line_value_loss:<{content_width-1}}|")
-            print(f"|________________________________________________________________|")
-
-        # Checkpoint save
-        if timestep % checkpoint_interval == 0:
-            checkpoint_ra_path = os.path.join(log_dir, f"ra_agent_{timestep}.pt")
-            ra_agent.save(checkpoint_ra_path)
+        # Video update
+        if args_cli.video and timestep == args_cli.video_length:
+            # exit the play loop after recording one video
+            break
 
         # update
         obs = next_obs
