@@ -17,7 +17,7 @@ parser.add_argument("--video_interval", type=int, default=2000, help="Interval b
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-03-26_11-01-21_mappo/agent_96000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -91,7 +91,7 @@ def main():
     if args_cli.checkpoint is not None:
         log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)), "Reach_Avoid")
     else:
-        raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
+        log_dir = os.getcwd()
 
     # ============================ Env & Wrapper Spawn ================================
 
@@ -277,9 +277,14 @@ def main():
     ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
     
     # Checkpoint (Policy)
-    resume_path = os.path.abspath(args_cli.checkpoint)
-    agent.load(resume_path)
-    print(f"[INFO] Get checkpoint of policy from {resume_path}")
+    if args_cli.checkpoint is not None:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+        agent.load(resume_path)
+        print(f"[INFO] Get checkpoint of policy from {resume_path}")
+    else:
+        resume_path = None
+        print("[INFO] Unfortunately a pre-trained policy is not found for this task.")
+
     # Checkpoint (RA value)
     if args_cli.ra_checkpoint is not None:
         resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
