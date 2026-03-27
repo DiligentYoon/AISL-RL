@@ -104,6 +104,7 @@ class LIPM_3D_Animate:
 
         # camera follow
         self.ax.set_xlim(COM_pos[0] - 2.0, COM_pos[0] + 8.0)
+        self.ax.set_ylim(COM_pos[1] - 2.0, COM_pos[1] + 2.0)
         self.ax.set_zlim(-0.01, 1.0)
 
         return [
