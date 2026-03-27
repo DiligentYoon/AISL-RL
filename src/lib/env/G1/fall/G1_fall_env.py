@@ -322,9 +322,12 @@ class G1FallEnv(G1BaseEnv):
                                               self.joint_vel,                                     # [E, 37]
                                             ], dim=-1)
         
-        self.extras["l_values"] = -torch.tanh(self.capturable_boundary - self.dist_from_icp_to_stance)
-        self.extras["g_values"] = 2 * self.reset_terminated.float().unsqueeze(-1) - 1
+        sum_deviation_all_joint = torch.sum(torch.abs(torch.stack([self.deviation_hip_xz, self.deviation_arms, self.deviation_torso], dim=-1)), dim=-1)
+        is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float()
 
+        self.extras["l_values"] = torch.tanh(torch.log(sum_deviation_all_joint / self.cfg.target_set_threshold))
+        self.extras["g_values"] = 2 * is_fall - 1
+        # self.extras["g_values"] = 2 * self.reset_terminated.float().unsqueeze(-1) - 1
 
         return states
     
