@@ -88,10 +88,10 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(4.0, 6.0),
+        interval_range_s=(1.0, 2.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)}},
+            "velocity_range": {"x": (-3.0, 3.0), "y": (-3.0, 3.0), "roll": (-5.0, 5.0), "pitch": (-5.0, 5.0)}},
     )
 
 
@@ -108,6 +108,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     action_space = {"arm": 17, "leg": 12}                         
     observation_space = {"arm": 50, "leg": 40}                
     state_space = {"arm": 74, "leg": 74}
+    ra_state_space = 74
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
