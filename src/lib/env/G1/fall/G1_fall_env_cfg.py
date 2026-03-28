@@ -171,7 +171,8 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     l_max = 1.0
 
     # === Surface Function === #
-    target_set_threshold = 0.01
+    target_set_threshold = 0.1
+    target_set_scale_factor = 3
 
     # ==== Viz data ==== #
     plotter = CapturabilityPlotter
