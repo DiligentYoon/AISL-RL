@@ -17,8 +17,8 @@ parser.add_argument("--video_interval", type=int, default=2000, help="Interval b
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-03-26_11-01-21_mappo/agent_96000.pt", help="Path to model checkpoint.")
+parser.add_argument("--ra_checkpoint", type=str, default="logs/g1_recovery/2026-03-26_11-01-21_mappo/Reach_Avoid/ra_agent_51200.pt", help="Path to Reach-Avoid model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -56,7 +56,7 @@ import collections
 
 
 from datetime import datetime
-
+from isaaclab.envs.common import ViewerCfg
 import lib
 
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
@@ -93,6 +93,16 @@ def main():
         raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
 
     # ============================ Env & Wrapper Spawn ================================
+
+    # cfg for viewpoint control
+    viewer_cfg = ViewerCfg(
+        origin_type="asset_root",
+        asset_name="robot",
+        env_index=0,
+        eye=(0.0, 4.0, 0.5),
+        lookat=(0.0, 0.0, 0.0)
+    )
+    env_cfg.viewer = viewer_cfg
 
     # Create isaac environment
     if args_cli.seed is not None:
@@ -311,7 +321,7 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
-            RA_value = ra_agent.critic(infos["ra_states"])
+            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
@@ -320,8 +330,8 @@ def main():
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            infos["viz_data"]["RA_value"] = RA_value
-            infos["viz_data"]["m_step_hist"] = RA_value
+            infos["viz_data"]["RA_value"] = RA_value.squeeze(-1)
+            infos["viz_data"]["m_step_hist"] = RA_value.squeeze(-1)
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
 
@@ -337,6 +347,11 @@ def main():
 
     # close the simulator
     env.close()
+
+    # close and save GIF plotter
+    if plot is not None:
+        plot.save()
+        plot.close()
 
 
 if __name__ == "__main__":

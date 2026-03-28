@@ -106,8 +106,8 @@ class HindSightReplayBuffer(Buffer):
             self.recent_rows_per_env[env_id].append(current_row)
 
         # Apply hindsight labeling immediately after insertion
-        if torch.any(truncated):
-            self.apply_hindsight_labeling(truncated)
+        if torch.any(terminated):
+            self.apply_hindsight_labeling(terminated)
 
         # Clear per-env recent history when episode ends
         done = torch.logical_or(truncated, terminated).squeeze(-1)

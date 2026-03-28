@@ -88,10 +88,10 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(1.0, 1.5),
+        interval_range_s=(3.0, 4.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-3.0, 3.0), "y": (-3.0, 3.0), "roll": (-6.0, 6.0), "pitch": (-6.0, 6.0)}},
+            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0), "roll": (-5.0, 5.0), "pitch": (-5.0, 5.0)}},
     )
 
 
@@ -171,8 +171,8 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     l_max = 1.0
 
     # === Surface Function === #
-    target_set_threshold = 0.1
-    target_set_scale_factor = 3
+    target_set_threshold = 0.05
+    target_set_scale_factor = 0.3 
 
     # ==== Viz data ==== #
     plotter = CapturabilityPlotter
