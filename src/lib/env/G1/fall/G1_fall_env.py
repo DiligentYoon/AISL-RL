@@ -310,25 +310,19 @@ class G1FallEnv(G1BaseEnv):
             states = None
 
         # Reach-Avoid information
-        self.extras["ra_states"] = torch.cat([self.root_pos_w[:, 2:3],
-                                              self.root_heading,
-                                              self.root_lin_vel_b,                                # [E, 3]
+        self.extras["ra_states"] = torch.cat([self.root_pos_w[:, 2:3],                            # [E, 1]
                                               self.root_ang_vel_b,                                # [E, 3]
                                               self.projected_gravity,                             # [E, 3]
-                                              self.command_inputs_b,                              # [E, 3]
-                                              self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                                              self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                                              self.joint_pos,                                     # [E, 37]
-                                              self.joint_vel,                                     # [E, 37]
+                                              self.dist_from_icp_to_stance                        # [E, 1]
                                             ], dim=-1)
         
         # sum_deviation_all_joint = torch.sum(torch.abs(torch.cat([self.deviation_hip_xz, self.deviation_arms, self.deviation_torso], dim=-1)), dim=-1)
         base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
 
-        self.extras["l_values"] = torch.tanh(self.cfg.target_set_scale_factor * torch.log(base_tilt / self.cfg.target_set_threshold**2))
-        self.extras["g_values"] = 2 * is_fall - 1
-        # self.extras["g_values"] = 2 * self.reset_terminated.float().unsqueeze(-1) - 1
+        self.extras["l_values"] = torch.tanh(torch.log(base_tilt / self.cfg.target_set_threshold**2))
+        self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
+        # self.extras["g_values"] = 2 * is_fall - 1
 
         return states
     
@@ -350,8 +344,8 @@ class G1FallEnv(G1BaseEnv):
         s = torch.sign(self.contact_schedule)   # right support (+), left support (-)
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
         gait_reward = diff * self.contact_schedule
-        # Termination
         terminate_penalty = -self.reset_terminated.float()
+        # Termination
         # Sliding
         slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Support foot penalty
@@ -474,19 +468,19 @@ class G1FallEnv(G1BaseEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        # critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.critical_contact_link_ids]
 
-        projected_gravity_x = self.projected_gravity[:, 0]
-        projected_gravity_y = self.projected_gravity[:, 1]
-        z_c = self.CoM[:, 2]
+        # projected_gravity_x = self.projected_gravity[:, 0]
+        # projected_gravity_y = self.projected_gravity[:, 1]
+        # z_c = self.CoM[:, 2]
 
-        died_fall   = z_c <= self.cfg.termination_height
-        died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
-                                       torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
-        died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
+        # died_fall   = z_c <= self.cfg.termination_height
+        # died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
+        #                                torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
+        # died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         
-        # died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
-        died = died_fall | died_fall_2 | died_ang
+        died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
+        died = died_collision
         return died, time_out
 
 

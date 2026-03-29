@@ -63,7 +63,7 @@ class G1BaseEnv(Env):
         self.ankle_x_link_ids, _ = self._robot.find_bodies([r".*_ankle_roll_link"])
 
         # Contact Link ids
-        self.torso_contact_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link"])
+        self.critical_contact_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",])
         self.ankle_contact_roll_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_roll_link"])
 
         # Joint Limits

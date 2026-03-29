@@ -310,7 +310,7 @@ def main():
     elapsed_time = 0
     
     # Simulate environment
-    while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
+    while simulation_app.is_running() and timestep <= ra_cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
         t1_loop = time.time()
@@ -360,14 +360,14 @@ def main():
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
-            total_timesteps = int(cfg["train"]["timesteps"])
+            total_timesteps = int(ra_cfg["train"]["timesteps"])
             complete_time = (t2_loop - t1_loop) * (total_timesteps - timestep)
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)
             c_s = int(complete_time % 60)
 
             content_width = 64
-            line_header = f"Step Progress {timestep} / {cfg['train']['timesteps']}"
+            line_header = f"Step Progress {timestep} / {ra_cfg['train']['timesteps']}"
             line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
             line_value_loss = f"Value Loss        : {per_value_loss}"
 

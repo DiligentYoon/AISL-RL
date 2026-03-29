@@ -330,8 +330,12 @@ def main():
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            infos["viz_data"]["RA_value"] = RA_value.squeeze(-1)
-            infos["viz_data"]["m_step_hist"] = RA_value.squeeze(-1)
+            RA_value = RA_value.squeeze(-1)
+            l_value  = infos["l_values"].squeeze(-1)
+            g_value  = infos["g_values"] .squeeze(-1)
+            target = (1-0.99) * torch.max(l_value, g_value) + 0.99 * torch.max(g_value, torch.min(l_value, RA_value))
+            infos["viz_data"]["RA_value"] = RA_value
+            infos["viz_data"]["m_step_hist"] = RA_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
 
