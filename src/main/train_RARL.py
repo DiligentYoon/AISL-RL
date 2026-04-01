@@ -266,12 +266,15 @@ def main():
             raise RuntimeError("Unvalid model type.")
 
     else:
-        from lib.agent.ppo import PPO
-        nominal_agent = PPO(model=nominal_models,
-                            buffer=buffer, 
-                            device=env.device,
-                            cfg=cfg_nominal["agent"],
-                            possible_agents=nominal_agents)
+        # from lib.agent.ppo import PPO
+        nominal_agent = MAPPO(observation_space=env.observation_space,
+                              state_space=env.state_space,
+                              action_space=env.action_space,
+                              possible_agents=nominal_agents,
+                              model=nominal_models,
+                              buffer=buffers,
+                              device=env.device,
+                              cfg=cfg_nominal["agent"])
     
     # Checkpoint
     if args_cli.checkpoint_nominal is not None:
@@ -285,7 +288,7 @@ def main():
     # Verify save logic
     verify_save_logic = True
     if verify_save_logic:
-        test_agent = copy.deepcopy(nominal_agent)
+        test_nominal_agent = copy.deepcopy(nominal_agent)
 
 ### ========================================= Adversarial Agent ========================================= ###
     
@@ -295,8 +298,8 @@ def main():
     print(f"[INFO] Loading adversarial experiment from directory: {log_root_path}")
     print(f"[INFO] Exact adversarial experiment name requested from command line: {log_dir}")
     if cfg_adversarial["agent"]["experiment"]["experiment_name"]:
-        log_dir_pusher = log_dir + f"_{cfg_adversarial['agent']['experiment']['experiment_name']}"
-    log_dir_pusher = os.path.join(log_root_path, log_dir_pusher)
+        log_dir_adversarial = log_dir + f"_{cfg_adversarial['agent']['experiment']['experiment_name']}"
+    log_dir_adversarial = os.path.join(log_root_path, log_dir_adversarial)
 
     if cfg_adversarial["agent"]["experiment"]["write_interval"] == "auto":
         write_interval_pusher = int(cfg_adversarial["train"]["timesteps"] / 100)
@@ -377,16 +380,19 @@ def main():
             raise RuntimeError("Unvalid model type.")
 
     else:
-        from lib.agent.ppo import PPO
-        adversarial_agent = PPO(model=nominal_models,
-                                buffer=buffer, 
-                                device=env.device,
-                                cfg=cfg_adversarial["agent"],
-                                possible_agents=adversarial_agents)
+        # from lib.agent.ppo_RARL import PPO_RARL
+        adversarial_agent = MAPPO(observation_space=env.observation_space,
+                                  state_space=env.state_space,
+                                  action_space=env.action_space,
+                                  possible_agents=adversarial_agents,
+                                  model=adversarial_models,
+                                  buffer=buffers,
+                                  device=env.device,
+                                  cfg=cfg_adversarial["agent"])
     
     # Checkpoint
-    if args_cli.checkpoint_nominal is not None:
-        resume_path = os.path.abspath(args_cli.checkpoint_nominal)
+    if args_cli.checkpoint_adversarial is not None:
+        resume_path = os.path.abspath(args_cli.checkpoint_adversarial)
         adversarial_agent.load(resume_path)
         print(f"[INFO] Get checkpoint from {resume_path}")
     else:
@@ -396,7 +402,7 @@ def main():
     # Verify save logic
     verify_save_logic = True
     if verify_save_logic:
-        test_agent = copy.deepcopy(nominal_agent)
+        test_adversarial_agent = copy.deepcopy(adversarial_agent)
 
     # ======================= Training ============================
 
