@@ -313,7 +313,9 @@ class G1FallEnv(G1BaseEnv):
         self.extras["ra_states"] = torch.cat([self.root_pos_w[:, 2:3],                            # [E, 1]
                                               self.root_ang_vel_b,                                # [E, 3]
                                               self.projected_gravity,                             # [E, 3]
-                                              self.dist_from_icp_to_stance                        # [E, 1]
+                                              self.dist_from_icp_to_stance,                       # [E, 1]
+                                              self.phase.unsqueeze(-1),                           # [E, 1]
+                                              self.foot_on_swing.float()                          # [E, 2]
                                             ], dim=-1)
         
         # sum_deviation_all_joint = torch.sum(torch.abs(torch.cat([self.deviation_hip_xz, self.deviation_arms, self.deviation_torso], dim=-1)), dim=-1)

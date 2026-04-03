@@ -108,7 +108,7 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     action_space = {"arm": 17, "leg": 12}                         
     observation_space = {"arm": 50, "leg": 40}                
     state_space = {"arm": 74, "leg": 74}
-    ra_state_space = 8
+    ra_state_space = 11
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
