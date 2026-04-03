@@ -49,6 +49,11 @@ docker/artifacts/
 *.tmp
 *.csv
 
+# Claude
+**/*.md
+!README.md
+!CLAUDE.md
+
 # Doc Outputs
 **/docs/_build/*
 **/generated/*

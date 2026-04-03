@@ -47,7 +47,8 @@ class Agent:
                 datetime.datetime.now().strftime("%y-%m-%d_%H-%M-%S-%f"), self.__class__.__name__
             )
         self.experiment_dir = os.path.join(directory, experiment_name)
-        self.num_action = self.model["actor"].num_actions
+        if self.model.get("actor", None) is not None:
+            self.num_action = self.model["actor"].num_actions
 
 
     def set_running_mode(self, mode: str) -> None:

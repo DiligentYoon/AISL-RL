@@ -35,6 +35,7 @@ from isaaclab.envs.ui import ViewportCameraController
 
 from lib.domain_randomizer.noise_model import gaussian_noise, uniform_noise, constant_noise
 from lib.utils.space_utils import sample_space, spec_to_gym_space
+from lib.curriculum import CurriculumManager
 from .env_cfg import EnvCfg
 
 # import logger
@@ -221,6 +222,12 @@ class Env(gym.Env):
             if self.cfg.num_rerenders_on_reset == 0:
                 self.cfg.num_rerenders_on_reset = 1
 
+        # setup curriculum manager
+        if self.cfg.curriculum is not None:
+            self.curriculum_manager = CurriculumManager(self.cfg.curriculum, self)
+        else:
+            self.curriculum_manager = None
+
         # print the environment information
         print("[INFO]: Completed setting up the environment...")
 
@@ -309,6 +316,10 @@ class Env(gym.Env):
         if self.cfg.wait_for_textures and self.sim.has_rtx_sensors():
             while SimulationManager.assets_loading():
                 self.sim.render()
+                
+        # update viz data
+        if (self.cfg.viz_data is not None) and (self.is_plot):
+            self.extras = self._update_viz_data()
 
         # return observations
         return self._get_observations(), self._get_states(), self.extras
@@ -381,6 +392,10 @@ class Env(gym.Env):
         # -- update env counters (used for curriculum generation)
         self.episode_length_buf += 1  # step in current episode (per env)
         self.common_step_counter += 1  # total step (common for all envs)
+
+        # update curriculum difficulty
+        if self.curriculum_manager is not None:
+            self.curriculum_manager.update(self.common_step_counter)
 
         if self.cfg.commands is not None and hasattr(self, "commands"):
             self.commands.update()

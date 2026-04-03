@@ -227,3 +227,12 @@ class EnvCfg:
 
     viz_data: dict | None = None
     """Visualization Data for debugging"""
+
+    plotter: type | None = None
+    """GIFSavePlotter subclass for offline visualization. If None, no GIF is generated."""
+
+    curriculum: object | None = None
+    """CurriculumManagerCfg instance. If None, curriculum is deactivated."""
+
+    total_timesteps: int | None = None
+    """Total timesteps for time-progress based curriculum learning."""

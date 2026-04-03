@@ -104,6 +104,7 @@ def main():
     else:
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
