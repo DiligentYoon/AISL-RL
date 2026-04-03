@@ -16,7 +16,7 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-pusher", help="Name of the task.")
 parser.add_argument("--checkpoint_nominal", type=str, default=None, help="Path to nominal agent model checkpoint.")
 parser.add_argument("--checkpoint_adversarial", type=str, default=None, help="Path to adversarial agent model checkpoint.")
 
@@ -29,7 +29,7 @@ parser.add_argument("--algorithm_nominal",
 parser.add_argument("--algorithm_adversarial",
                     type=str,
                     default="PPO",
-                    choices=["PPO", "SAC", "TD3"],
+                    choices=["PPO", "SAC", "TD3"], 
                     help="The RL algorithm used for training the adversarial agent.")
 
 parser.add_argument("--model_nominal",
@@ -110,6 +110,8 @@ def main():
     print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
     if cfg_nominal["agent"]["experiment"]["experiment_name"]:
         log_dir_nominal = log_dir + f"_{cfg_nominal['agent']['experiment']['experiment_name']}"
+    else:
+        log_dir_nominal = log_dir
     log_dir_nominal = os.path.join(log_root_path, log_dir_nominal)
 
     # ============================ Env & Wrapper Spawn ================================

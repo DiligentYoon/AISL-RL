@@ -37,9 +37,7 @@ agent:
   async_actor_critic: False
 
   # Action scaling (Env-specific)
-  action_scale_factor:
-    arm: null
-    leg: null
+  action_scale_factor: null
 
   # logging and checkpoint
   experiment:
