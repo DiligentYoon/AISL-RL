@@ -249,6 +249,8 @@ class G1SafeEnv(G1BaseEnv):
         # Attitute rewards 
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         flat_rewards = torch.exp(-tilting / 0.2**2)
+        # Alive rewards
+        alive_rewards = torch.logical_not(self.reset_terminated).float()
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Regularization
@@ -276,7 +278,8 @@ class G1SafeEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_flat            * flat_rewards                    + \
+        common_rewards = self.cfg.w_alive           * alive_rewards                   + \
+                         self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
                          self.cfg.w_termination     * terminate_penalty

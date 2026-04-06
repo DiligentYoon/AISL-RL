@@ -68,7 +68,7 @@ class EventCfg:
 @configclass
 class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 2.0
+    episode_length_s = 3.0
     sim_dt = 1/200
     decimation = 4          
 
@@ -90,11 +90,12 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_heading: float = 2.0
-    w_flat:           float = 2.0
+    w_track_heading:  float = 2.0
+    w_flat:           float = 0.0
+    w_alive:          float = 6.0
 
-    w_lin_vel_z:          float = 1.0
-    w_ang_vel_xy:         float = 0.5
+    w_lin_vel_z:          float = 0.0
+    w_ang_vel_xy:         float = 0.01
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
