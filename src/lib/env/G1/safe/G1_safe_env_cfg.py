@@ -48,8 +48,8 @@ class EventCfg:
         func=randomizer.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.8, 1.2),
-            "velocity_range": (0.0, 0.0),
+            "position_range": (0.7, 1.3),
+            "velocity_range": (-0.0, 0.0),
         },
     )
 

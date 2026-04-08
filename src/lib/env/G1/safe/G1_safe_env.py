@@ -23,7 +23,7 @@ class G1SafeEnv(G1BaseEnv):
     def __init__(self, cfg: G1SafeEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link", 
-                                                                              r"waist_.*_link",])
+                                                                              r"waist_.*_link"])
 
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
