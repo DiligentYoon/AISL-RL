@@ -243,12 +243,6 @@ class G1SafeEnv(G1BaseEnv):
     
 
     def _get_rewards(self) -> torch.Tensor:
-        # Tracking rewards
-        # heading_error = torch.abs(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
-        # heading_rewards = torch.exp(-heading_error / 0.5**2)
-        # Attitute rewards 
-        tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
-        flat_rewards = torch.exp(-tilting / 0.2**2)
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Regularization
@@ -256,7 +250,6 @@ class G1SafeEnv(G1BaseEnv):
         # joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
-        lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
 
         joint_limit_penalty_leg         = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
         joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
@@ -276,8 +269,7 @@ class G1SafeEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_flat            * flat_rewards                    + \
-                         self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
+        common_rewards = self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
                          self.cfg.w_termination     * terminate_penalty
         
@@ -289,7 +281,6 @@ class G1SafeEnv(G1BaseEnv):
                       self.cfg.w_action_rate        * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                   + \
-                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
                       self.cfg.w_joint_torque        * joint_torque_penalty_leg        + \
@@ -313,19 +304,17 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
+
             # ==========================================
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
-            "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Common_Torso_Deviation": self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
             "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
-            "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
             "Task Penalty / Leg_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_leg,
             "Task Penalty / Leg_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_leg,
