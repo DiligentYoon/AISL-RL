@@ -87,14 +87,14 @@ def main():
     # ============================================================================================================================
 
     # cfg for viewpoint control
-    viewer_cfg = ViewerCfg(
-        origin_type="asset_root",
-        asset_name="robot",
-        env_index=0,
-        eye=(0.0, 4.0, 0.5),
-        lookat=(0.0, 0.0, 0.0)
-    )
-    env_cfg.viewer = viewer_cfg
+    # viewer_cfg = ViewerCfg(
+    #     origin_type="asset_root",
+    #     asset_name="robot",
+    #     env_index=0,
+    #     eye=(0.0, 4.0, 0.5),
+    #     lookat=(0.0, 0.0, 0.0)
+    # )
+    # env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:
