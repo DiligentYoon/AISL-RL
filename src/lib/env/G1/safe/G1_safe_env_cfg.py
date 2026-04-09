@@ -28,7 +28,7 @@ class EventCfg:
 
     # reset
     reset_base = EventTerm(
-        func=randomizer.reset_root_state_uniform,
+        func=randomizer.reset_root_state_orientation_biased_uniform,
         mode="reset",
         params={
             "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), 
@@ -37,10 +37,11 @@ class EventCfg:
                 "x": (-2.0, 2.0),
                 "y": (-2.0, 2.0),
                 "z": (-0.0, 0.0),
-                "roll": (-5.0, 5.0),
-                "pitch": (-5.0, 5.0),
+                "roll": (-3.0, 3.0),
+                "pitch": (-3.0, 3.0),
                 "yaw": (-0.0, 0.0),
             },
+            "bias": 3.14/8,
         },
     )
 
@@ -90,22 +91,21 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_heading:  float = 2.0
-    w_flat:           float = 0.0
     w_alive:          float = 6.0
 
-    w_lin_vel_z:          float = 0.0
     w_ang_vel_xy:         float = 0.01
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
     w_joint_vel:          float = 5.0e-4
 
-    w_limits:            float = 10.0
-    w_deviation_hip:     float = 2.0
-    w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 1.0
-    w_action_rate:       float = 0.05
+    w_limits:               float = 10.0
+    w_deviation_hip:        float = 2.0
+    w_deviation_torso:      float = 2.0
+    w_deviation_arm:        float = 1.0
+    w_action_rate:          float = 0.05
+    w_prefer_collision:     float = 0.1
+    w_not_prefer_collision: float = 0.5
 
     w_termination: float = 200
 
