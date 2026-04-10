@@ -1135,7 +1135,7 @@ def reset_root_state_orientation_biased_uniform(
     env_ids: torch.Tensor,
     pose_range: dict[str, tuple[float, float]],
     velocity_range: dict[str, tuple[float, float]],
-    bias: float = 3.14/8,
+    bias: float = 3.14/4,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ):
     """Reset the asset root state to a random position and velocity biased uniformly within the given ranges.

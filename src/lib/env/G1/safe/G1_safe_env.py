@@ -32,6 +32,8 @@ class G1SafeEnv(G1BaseEnv):
         self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies(r".*_shoulder_.*_link")
         self.collision_lower_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_elbow_link",
                                                                                  r".*_wrist_.*_link"])
+        
+        self.collision_foot_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_.*_link"])
 
 
         # Commands for reference generator
@@ -251,9 +253,10 @@ class G1SafeEnv(G1BaseEnv):
         lower_leg_collision = self.contact_force[:, self.collision_lower_leg_link_ids]
         upper_arm_collision = self.contact_force[:, self.collision_upper_arm_link_ids]
         lower_arm_collision = self.contact_force[:, self.collision_lower_arm_link_ids]
+        foot_collision = self.contact_force[:, self.collision_foot_link_ids]
 
-        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1) 
-        not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1)
+        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1)
+        not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1) - torch.sum(foot_collision, dim=-1)
         prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1)
         not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1)
 

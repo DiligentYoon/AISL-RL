@@ -31,8 +31,8 @@ class EventCfg:
         func=randomizer.reset_root_state_orientation_biased_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), 
-                           "roll": (-3.14/4, 3.14/4) , "pitch": (-3.14/4, 3.14/4), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.2, 0.4), 
+                           "roll": (-3.14/3, 3.14/3) , "pitch": (-3.14/3, 3.14/3), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (-2.0, 2.0),
                 "y": (-2.0, 2.0),
@@ -41,7 +41,7 @@ class EventCfg:
                 "pitch": (-3.0, 3.0),
                 "yaw": (-0.0, 0.0),
             },
-            "bias": 3.14/8,
+            "bias": 3.14/4,
         },
     )
 
@@ -104,10 +104,10 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_deviation_torso:      float = 2.0
     w_deviation_arm:        float = 1.0
     w_action_rate:          float = 0.05
-    w_prefer_collision:     float = 0.1
-    w_not_prefer_collision: float = 0.5
+    w_prefer_collision:     float = 0.001
+    w_not_prefer_collision: float = 0.05
 
-    w_termination: float = 200
+    w_termination: float = 300
 
     soft_torque_limit: float = 0.8
 
