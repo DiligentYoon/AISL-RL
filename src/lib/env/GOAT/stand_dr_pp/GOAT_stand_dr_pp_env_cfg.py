@@ -15,6 +15,7 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
+from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from isaaclab.managers import SceneEntityCfg
 
 @configclass
@@ -27,12 +28,12 @@ class EventCfg:
         params={
             "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (0.0, 0.0),
-                "y": (-0.0, 0.0),
-                "z": (-0.0, 0.0),
-                "roll": (-0.0, 0.0),
-                "pitch": (-0.0, 0.0),
-                "yaw": (-0.0, 0.0)},
+                "x": (-0.05, 0.05),
+                "y": (-0.05, 0.05),
+                "z": (-0.05, 0.05),
+                "roll": (-0.01, 0.01),
+                "pitch": (-0.01, 0.01),
+                "yaw": (-0.01, 0.01)},
         },
     )
 
@@ -40,7 +41,7 @@ class EventCfg:
         func=randomizer.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (1.0, 1.0),
+            "position_range": (1.0, 1.3),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -85,43 +86,29 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 24                      # Observation space
-    state_space = 36                            # State space including privilege information
+    observation_space = 30                      # Observation space
+    state_space = 30                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
-    joint_kd = torch.tensor([[1.0, 1.0, 1.0]])
+    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kd = torch.tensor([[0.3, 0.3, 0.3]])
     wheel_kp = torch.tensor([[3.0]])
-    wheel_ki = torch.tensor([[3.0]])
-    PD_LPF_gain = 0.049
-    PI_LPF_gain = 0.049
+    wheel_ki = torch.tensor([[0.0]])
+    PD_LPF_gain = 0.9
+    PI_LPF_gain = 0.9
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
-    pos_margin_factor = 1.1
+    pos_margin_factor = 1.2
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
-    num_total_joints = n_leg_j + num_leg        # Whee per legs
-    torque_limits = [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
+    num_total_joints = n_leg_j + num_leg        # Wheel per legs
+    torque_limits = [2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 2.5, 2.5]
     
-    ## ==================== Curriculum parameters ==================== ##
-    total_DR_curriculum_level = 5               # Domain Randomization curriculum level
-    total_task_curriculum_level = ["balancing", "recovery"]
-    success_rate_buffer_len = 500
-
-    max_base_acceleration_noise_per = 10        # Noise percentage (%)
-    max_base_angular_vel_noise_per = 20
-    max_gravity_vector_noise_per = 5
-    max_base_quaternion_noise_per = 5
-    max_joint_pos_noise_per = 3
-    max_joint_vel_noise_per = 150
-
-    max_terrain_friction_random_per = 50        # Friction randomization (%)
-    max_terrain_restitution_random_per = 50     # Restitution randomization (%)
-
+    ## ==================== Terrain ==================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
     default_terrain_dynamic_friction = 0.5
     default_terrain_restitution = 0.4
@@ -129,29 +116,58 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Terminal condition ==================== ##
     height_reset_condition = 0.15                # meter (m)
     base_tilt_reset_condition = 30              # degree
-    termination_gravity = 0.7
+    termination_gravity = 0.6
 
     ## ==================== Reward Shaping ==================== ##
-    target_height = GOAT_cfg.init_state.pos[2] # meter (m)
-    upright_threshold = 5                       # degree
-    height_threshold = 0.1                      # meter (m)
-    curriculum_level_up_threshold = 0.8         # success rate
-    curriculum_level_down_threshold = 0.2
-    soft_torque_limit = 0.9
+    soft_torque_limit = 0.8
 
-    r_upright_weight = 3.0
-    r_height_weight = 3.0
-    r_alive_weight = 0.0
+    r_upright_weight = 5.0
+    r_joint_deviation_weight = 5.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_joint_deviation = 5.0
-    p_all_torque_limit_weight = 0.01
-    p_all_torque_weight = 0.001
-    p_joint_velocity_weight = 0.01
-    p_action_rate_weight = 0.1
-    p_terminated_weight = 200.0
+    p_all_torque_limit_weight = 0.5
+    p_all_torque_weight = 0.1
+    p_joint_velocity_weight = 0.05
+    p_action_rate_weight = 0.5
+    p_terminated_weight = 300.0
+
+    ## ==================== Reward Shaping ==================== ##
+    curriculum = CurriculumManagerCfg(
+        warmup=0.0,
+        endup=0.7,
+        params=[
+            CurriculumParamCfg(
+                name="static_friction_coefficient",
+                attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
+                start_value= (0.6, 1.3),
+                end_value=(0.4, 1.5),
+                schedule="linear",
+            ),
+            CurriculumParamCfg(
+                name="dynamic_friction_coefficient",
+                attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
+                start_value= (0.6, 1.3),
+                end_value=(0.4, 1.5),
+                schedule="linear",
+            ),
+            CurriculumParamCfg(
+                name="observation_noise",
+                attr_path="cfg/observation_noise_params/std",
+                start_value=0.05,
+                end_value=0.1,
+                schedule="linear",
+            ),
+            CurriculumParamCfg(
+                name="action_noise",
+                attr_path="cfg/action_noise_params/std",
+                start_value= 0.05,
+                end_value=0.1,
+                schedule="linear",
+            ),
+        ]
+    )
     
 
     ## ==================== Plot variables ==================== ##
@@ -164,14 +180,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "right_knee_torque (Nm)": 0.0,
         "left_wheel_torque (Nm)": 0.0,
         "right_wheel_torque (Nm)": 0.0,
-        "left_hip_target (deg)": 0.0,
-        "right_hip_target (deg)": 0.0,
-        "left_thigh_target (deg)": 0.0,
-        "right_thigh_target (deg)": 0.0,
-        "left_knee_target (deg)": 0.0,
-        "right_knee_target (deg)": 0.0,
-        "left_wheel_target (rpm)": 0.0,
-        "right_wheel_target (rpm)": 0.0,}
+        "left_hip_velocity (deg/s)": 0.0,
+        "right_hip_velocity (deg/s)": 0.0,
+        "left_thigh_velocity (deg/s)": 0.0,
+        "right_thigh_velocity (deg/s)": 0.0,
+        "left_knee_velocity (deg/s)": 0.0,
+        "right_knee_velocity (deg/s)": 0.0,
+        "left_wheel_velocity (deg/s)": 0.0,
+        "right_wheel_velocity (deg/s)": 0.0}
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(
@@ -212,13 +228,13 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     action_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     action_noise_params: dict = {
         "mean": 0.0,
-        "std": 0.08,
+        "std": 0.05,
         "operation": "add",
     }
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
         "mean": 0.0,
-        "std": 0.08,
+        "std": 0.05,
         "operation": "add",
     }
 

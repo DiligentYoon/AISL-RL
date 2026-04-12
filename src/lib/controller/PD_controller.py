@@ -44,6 +44,10 @@ class PD_Controller():
         self.default_joint_pos = default_joint_pos
         self.old_torque = torch.zeros(self.num_envs, num_dof * num_leg, device=self.device)
 
+        # Isaac sim's Joint order: ['hip_L_Joint', 'hip_R_Joint', 'thigh_L_Joint', 'thigh_R_Joint', 'knee_L_Joint', 'knee_R_Joint', 'wheel_L_Joint', 'wheel_R_Joint']
+        self.left_leg_indices = torch.tensor([0, 2, 4], device=self.device, dtype=torch.long)
+        self.right_leg_indices = torch.tensor([1, 3, 5], device=self.device, dtype=torch.long)
+
         # kp gain
         if isinstance(kp, float):
             self.kp = torch.full((num_envs, num_dof), kp, device=device)
@@ -83,57 +87,43 @@ class PD_Controller():
         Returns:
             torch.Tensor: Joint torque.
         """
-
         # Robot dof
         leg_dof = self.num_dof                          # hip, thigh, knee joints
         num_joint = leg_dof * self.num_leg
-
-        # Define joint indices for each leg
-        # Isaac sim's Joint order: ['hip_L_Joint', 'hip_R_Joint', 'thigh_L_Joint', 'thigh_R_Joint', 'knee_L_Joint', 'knee_R_Joint', 'wheel_L_Joint', 'wheel_R_Joint']
-        left_leg_indices = torch.tensor([0, 2, 4], device=self.device, dtype=torch.long)                                        # Hard coded
-        right_leg_indices = torch.tensor([1, 3, 5], device=self.device, dtype=torch.long)                                       # Hard coded
 
         # Joint pos limit with relaxation
         joint_pos_limits = self.pos_margin_factor * self.joint_pos_limits
 
         # --- Left Leg slicing ---
-        joint_pos_left = torch.index_select(joint_pos, 1, left_leg_indices)
-        joint_vel_left = torch.index_select(joint_vel, 1, left_leg_indices)
-        joint_pos_cmd_left = torch.index_select(joint_pos_cmd, 1, left_leg_indices)
-        joint_default_pos_left = torch.index_select(self.default_joint_pos, 1, left_leg_indices)
-        joint_limits_left = torch.index_select(joint_pos_limits, 1, left_leg_indices)
-        # saturated_ids_left = torch.where(abs(joint_limits_left - joint_pos_left) <= math.radians(self.safe_margin), 0, 1)
+        joint_pos_left = torch.index_select(joint_pos, 1, self.left_leg_indices)
+        joint_vel_left = torch.index_select(joint_vel, 1, self.left_leg_indices)
+        joint_pos_cmd_left = torch.index_select(joint_pos_cmd, 1, self.left_leg_indices)
+        joint_default_pos_left = torch.index_select(self.default_joint_pos, 1, self.left_leg_indices)
+        joint_limits_left = torch.index_select(joint_pos_limits, 1, self.left_leg_indices)
 
         # --- Right Leg slicing ---
-        joint_pos_right = torch.index_select(joint_pos, 1, right_leg_indices)
-        joint_vel_right = torch.index_select(joint_vel, 1, right_leg_indices)
-        joint_pos_cmd_right = torch.index_select(joint_pos_cmd, 1, right_leg_indices)
-        joint_default_pos_right = torch.index_select(self.default_joint_pos, 1, right_leg_indices)
-        joint_limits_right = torch.index_select(joint_pos_limits, 1, right_leg_indices)
-        # saturated_ids_right = torch.where(abs(joint_limits_right - joint_pos_right) <= math.radians(self.safe_margin), 0, 1)        
+        joint_pos_right = torch.index_select(joint_pos, 1, self.right_leg_indices)
+        joint_vel_right = torch.index_select(joint_vel, 1, self.right_leg_indices)
+        joint_pos_cmd_right = torch.index_select(joint_pos_cmd, 1, self.right_leg_indices)
+        joint_default_pos_right = torch.index_select(self.default_joint_pos, 1, self.right_leg_indices)
+        joint_limits_right = torch.index_select(joint_pos_limits, 1, self.right_leg_indices)      
 
         # Left foot PD control
-        # joint_pos_cmd_left = joint_pos_left + (joint_pos_cmd_left * saturated_ids_left)    # Joint position Saturation Logic
-        # joint_pos_cmd_left = torch.clamp(joint_pos_left + joint_pos_cmd_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1])    # Joint position Saturation Logic
-        # joint_pos_cmd_left = joint_pos_left + joint_pos_cmd_left 
         joint_pos_cmd_left = torch.clamp(joint_default_pos_left + joint_pos_cmd_left, joint_limits_left[:, :, 0], joint_limits_left[:, :, 1])
         joint_pos_left_error = joint_pos_cmd_left - joint_pos_left
-        joint_vel_left_error = - joint_vel_left                                            # reference joint velocity = 0
+        joint_vel_left_error = -joint_vel_left                                            # reference joint velocity = 0
         torque_left = self.kp * joint_pos_left_error + self.kd * joint_vel_left_error
 
         # Right foot PD control
-        # joint_pos_cmd_right = joint_pos_right + (joint_pos_cmd_right * saturated_ids_right) # Joint position Saturation Logic
-        # joint_pos_cmd_right = torch.clamp(joint_pos_right + joint_pos_cmd_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1]) # Joint position Saturation Logic
-        # joint_pos_cmd_right = joint_pos_right + joint_pos_cmd_right
         joint_pos_cmd_right = torch.clamp(joint_default_pos_right + joint_pos_cmd_right, joint_limits_right[:, :, 0], joint_limits_right[:, :, 1])
         joint_pos_right_error = joint_pos_cmd_right - joint_pos_right
-        joint_vel_right_error = - joint_vel_right                                           # reference joint velocity = 0
+        joint_vel_right_error = -joint_vel_right                                           # reference joint velocity = 0
         torque_right = self.kp * joint_pos_right_error + self.kd * joint_vel_right_error
         
         # Combine torque inputs
         torque = torch.zeros(self.num_envs, num_joint, device=self.device)
-        torque.scatter_(1, left_leg_indices.repeat(self.num_envs, 1), torque_left)
-        torque.scatter_(1, right_leg_indices.repeat(self.num_envs, 1), torque_right)
+        torque[:, self.left_leg_indices] = torque_left
+        torque[:, self.right_leg_indices] = torque_right
         
         # LPF for torque
         torque = self.alpha * torque + (1 - self.alpha)* self.old_torque                                                        # 0.049 default
