@@ -96,7 +96,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_alive:          float = 6.0
+    w_alive:          float = 0.0
 
     w_ang_vel_xy:         float = 0.01
     w_joint_torque:       float = 1.0e-5
@@ -105,14 +105,14 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:               float = 10.0
-    w_deviation_hip:        float = 2.0
-    w_deviation_torso:      float = 2.0
+    w_deviation_hip:        float = 0.5
+    w_deviation_torso:      float = 0.0
     w_deviation_arm:        float = 1.0
-    w_action_rate:          float = 0.05
+    w_action_rate:          float = 0.5
     w_prefer_collision:     float = 0.001
-    w_not_prefer_collision: float = 0.05
+    w_not_prefer_collision: float = 0.01
 
-    w_termination: float = 300
+    w_termination: float = 400
 
     soft_torque_limit: float = 0.8
 
