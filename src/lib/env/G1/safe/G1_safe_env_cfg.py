@@ -105,10 +105,10 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:               float = 10.0
-    w_deviation_hip:        float = 0.5
+    w_deviation_hip:        float = 0.2
     w_deviation_torso:      float = 0.0
     w_deviation_arm:        float = 1.0
-    w_action_rate:          float = 0.5
+    w_action_rate:          float = 1.0
     w_prefer_collision:     float = 0.001
     w_not_prefer_collision: float = 0.01
 
