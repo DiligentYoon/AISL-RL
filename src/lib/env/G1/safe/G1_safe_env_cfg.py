@@ -98,21 +98,30 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ==================== Reward Shaping ==================== ##
     w_alive:          float = 0.0
 
-    w_ang_vel_xy:         float = 0.01
-    w_joint_torque:       float = 1.0e-5
+    w_ang_vel_xy:         float = 0.05
+    w_joint_torque:       float = 1.0e-4
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
-    w_joint_vel:          float = 5.0e-4
+    w_joint_vel:          float = 5.0e-3
 
     w_limits:               float = 10.0
     w_deviation_hip:        float = 0.2
     w_deviation_torso:      float = 0.0
     w_deviation_arm:        float = 1.0
-    w_action_rate:          float = 1.0
+    w_action_rate:          float = 2.0
     w_prefer_collision:     float = 0.001
     w_not_prefer_collision: float = 0.01
 
     w_termination: float = 400
+
+    # Post-impact stillness reward
+    w_stillness:              float = 3.0
+    grounded_height_threshold: float = 0.35
+    stillness_vel_sigma:      float = 1.0
+
+    # Post-impact early termination (success)
+    stable_steps_for_done:    int = 25
+    stable_vel_threshold:     float = 0.5
 
     soft_torque_limit: float = 0.8
 

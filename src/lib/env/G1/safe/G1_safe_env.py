@@ -91,7 +91,10 @@ class G1SafeEnv(G1BaseEnv):
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
 
         # Foot states
-        self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device) 
+        self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
+
+        # Post-impact stable counter for early termination
+        self.stable_counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # Geometry vector
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
@@ -286,10 +289,14 @@ class G1SafeEnv(G1BaseEnv):
 
         # Termination
         terminate_penalty = -self.reset_terminated.float()
+        # Post-impact stillness reward
+        is_grounded = (self.CoM[:, 2] < self.cfg.grounded_height_threshold).float()
+        joint_vel_norm = torch.sum(torch.square(self.joint_vel), dim=-1)
+        root_vel_norm  = torch.sum(torch.square(self.root_lin_vel_b), dim=-1) + torch.sum(torch.square(self.root_ang_vel_b), dim=-1)
+        stillness_reward = is_grounded * torch.exp(-(joint_vel_norm + root_vel_norm) / self.cfg.stillness_vel_sigma**2)
+
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        # joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
-        # joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
 
         joint_limit_penalty_leg         = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
@@ -313,6 +320,7 @@ class G1SafeEnv(G1BaseEnv):
         # Reward summation
         common_rewards = self.cfg.w_alive           * alive_reward                    + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
+                         self.cfg.w_stillness       * stillness_reward                + \
                          self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                     + \
@@ -348,6 +356,7 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
+            "Task Reward / Common_Stillness"          : self.cfg.w_stillness             * stillness_reward,
 
             # ==========================================
             # Task Penalty (-)
@@ -378,9 +387,20 @@ class G1SafeEnv(G1BaseEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         critical_contact_forces = self.illegal_force
-        
+
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         died = died_collision
+
+        # Post-impact early termination (success): grounded + low velocity for N steps
+        is_grounded = self.CoM[:, 2] < self.cfg.grounded_height_threshold
+        total_vel = torch.norm(self.root_lin_vel_b, dim=-1) + torch.norm(self.root_ang_vel_b, dim=-1)
+        is_stable = is_grounded & (total_vel < self.cfg.stable_vel_threshold)
+        self.stable_counter[is_stable] += 1
+        self.stable_counter[~is_stable] = 0
+        success_done = (self.stable_counter >= self.cfg.stable_steps_for_done)
+        # Success termination is treated as time_out (truncated) for bootstrapping
+        time_out = time_out | success_done
+
         return died, time_out
 
 
@@ -409,6 +429,9 @@ class G1SafeEnv(G1BaseEnv):
             else:
                 # Single Agent
                 self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
+
+        # Reset stable counter
+        self.stable_counter[env_ids] = 0
 
         # Command resampling
         self.commands.reset(env_ids)

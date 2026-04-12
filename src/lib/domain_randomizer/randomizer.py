@@ -42,6 +42,23 @@ from lib.env.env import Env
 # import logger
 logger = logging.getLogger(__name__)
 
+def sample_rfi_torque(num_envs, num_joints, rfi_limit, device):
+    """Sample per-step random joint torques (RFI).
+    Called every physics step inside _apply_action().
+    """
+    if not isinstance(rfi_limit, torch.Tensor):
+        rfi_limit = torch.tensor(rfi_limit, device=device)
+
+    return (2.0 * torch.rand(num_envs, num_joints, device=device) - 1.0) * rfi_limit
+
+def sample_rao_torque(env_ids, num_joints, rao_limit, device):
+    """Sample per-episode constant offset torques (RAO).
+    Called once per episode reset in _reset_idx().
+    """
+    n_envs = len(env_ids)
+    if not isinstance(rao_limit, torch.Tensor):
+        rao_limit = torch.tensor(rao_limit, device=device)
+    return (2.0 * torch.rand(n_envs, num_joints, device=device) - 1.0) * rao_limit
 
 def randomize_rigid_body_scale(
     env: Env,

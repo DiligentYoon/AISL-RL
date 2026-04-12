@@ -4,7 +4,6 @@ import torch
 import copy
 import numpy as np
 
-from isaaclab.utils.math import normalize, quat_from_angle_axis, quat_from_euler_xyz
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
@@ -12,8 +11,8 @@ from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCf
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
-
-csv_path = "initial_pose_data.csv"              # Path to csv file
+from lib.domain_randomizer.commander import UniformVelocityCommand
+from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
 class GOATStandDRPPEnv(GOATBaseEnv):
     cfg: GOATStandDRPPEnvCfg
@@ -25,6 +24,22 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.cfg = cfg
         self._contact_sensor =  self.scene.sensors["contact_sensor"]
         self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+
+        # REFI
+        if self.cfg.erfi_enabled:
+            # RAO offset buffer
+            self.rao_torque_offset = torch.zeros(
+                self.num_envs, self.cfg.num_total_joints, device=self.device
+            )
+            # Front 50% = RFI, Next 50% = RAO
+            n_rfi = self.num_envs // 2
+            self.rfi_env_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            self.rfi_env_mask[:n_rfi] = True
+            self.rao_env_mask = ~self.rfi_env_mask
+
+
+        # Commands for reference generator
+        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
         # Torque controller initialization
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
@@ -51,12 +66,32 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               joint_vel_limits=self.joint_vel_limits,
                                               torque_limits=self.torque_limits)
 
-        # Joint ids
-        self.hip_joint_ids, _  = self._robot.find_joints(["hip_.*"])
 
-        # Curriculum Info
-        self.extras["Curriculum"] = {}
-        self.extras["Curriculum"]["step_progress"] = 0
+        # Robot data
+        self.base_pos_w = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.base_rot_w = torch.zeros((self.num_envs, 4), dtype=torch.float32, device=self.device)
+        self.base_lin_vel = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.base_ang_vel = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.gravity_vector = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)                  
+        self.joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+
+        # Privileged data
+        self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
+        self.friction_coefficient = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
+
+        # Command
+        self.command_inputs_b   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+
+        # Action regularization
+        self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
+                                    (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
+        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.applied_torque = self._robot.data.applied_torque
+        self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
+
+
     
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
@@ -103,20 +138,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Spawn contact sensor
         contact_sensor = ContactSensor(cfg=self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = contact_sensor
-
-    def _reset_idx(self, env_ids: torch.Tensor):
-
-        # NOTE: Initializations (joint states, material properties, etc..) are implemented by domain randomizer
-        # Adjustment the Domain Randomization Parameters
-        # self.set_curriculum()
-        super()._reset_idx(env_ids)
-        # Reset previous action observation
-        self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
-        
-
-
-        # Update planning state
-        self._compute_intermediate_values()
+        # add commands cfg
+        self.cfg.commands.num_envs = self.scene.num_envs
+        self.cfg.commands.step_dt = self.step_dt
         
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         """
@@ -144,6 +168,17 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Combine torque commands
         self.torque_cmd = torch.cat((self.joint_torque_cmd, self.wheel_torque_cmd), dim=1)
         
+        if self.cfg.erfi_enabled:
+            erfi_perturbation = torch.zeros_like(self.torque_cmd)
+            # RFI Env : Random torque purterbation at each step
+            erfi_perturbation[self.rfi_env_mask] = sample_rfi_torque(
+                self.rfi_env_mask.sum(), self.cfg.num_total_joints,
+                self.cfg.rfi_torque_limit, self.device
+            )
+            # RAO Env : Random constant torque offset
+            erfi_perturbation[self.rao_env_mask] = self.rao_torque_offset[self.rao_env_mask]
+            self.torque_cmd = self.torque_cmd + erfi_perturbation
+
         # Load to sim buffer
         self._robot.set_joint_effort_target(self.torque_cmd)
 
@@ -157,9 +192,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         observation = torch.cat((self.base_lin_vel,                                      # [E, 3]
                                  self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
+                                 self.command_inputs_b,                                  # [E, 3]
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
-                                 self.joint_vel), dim=1)                                 # [E, 8]
+                                 self.joint_vel,                                         # [E, 8]
+                                 self.previous_actions,                                  # [E, 8]
+                                ), dim=1) 
 
         return observation
     
@@ -173,9 +211,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         observation = torch.cat((self.base_lin_vel,                                      # [E, 3]
                                  self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
+                                 self.command_inputs_b,                                  # [E, 3]
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
-                                 self.joint_vel), dim=1)                                 # [E, 8]
+                                 self.joint_vel,                                         # [E, 8]
+                                 self.previous_actions,                                  # [E, 8]
+                                 ), dim=1)                             
         
         # privileged_info = torch.cat((self.base_height,                      # [E, 1]
         #                              self.contact_force,                    # [E, 3]
@@ -191,12 +232,18 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         r_upright = torch.exp(-upright_error / 0.5**2)
 
         # Joint deviation reward
-        r_joint_deviation = torch.sum(torch.square(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
-        r_joint_deviation = torch.exp(-r_joint_deviation / 0.5**2)
- 
+        joint_deviation = torch.sum(torch.square(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
+        r_joint_deviation = torch.exp(-joint_deviation / 0.2**2)
+
+        # Command Tracking Reward
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.base_lin_vel[:, :2]), dim=1)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.5**2)
+
+        ang_vel_error = torch.square(self.command_inputs_b[:, 2] - self.base_ang_vel[:, 2])
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.5**2)
+
         # Regularization Penalty
-        p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
-        p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel), dim=1)
+        p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1) # Rolling & Pitching 
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
@@ -206,15 +253,16 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Total Reward Summation
         total_reward = (
-            self.cfg.r_upright_weight * r_upright                   +
-            self.cfg.r_joint_deviation_weight * r_joint_deviation   + 
-            self.cfg.p_lin_vel_weight * p_lin_vel                   +
-            self.cfg.p_ang_vel_weight * p_ang_vel                   +
-            self.cfg.p_joint_limit_weight * p_joint_limit           +
-            self.cfg.p_all_torque_limit_weight * p_all_torque_limit +
-            self.cfg.p_all_torque_weight * p_all_torque             +
-            self.cfg.p_joint_velocity_weight * p_joint_velocity     +
-            self.cfg.p_action_rate_weight * p_action_rate           +
+            self.cfg.r_upright_weight * r_upright                           +
+            self.cfg.r_joint_deviation_weight * r_joint_deviation           +
+            self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking         +
+            self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking         +
+            self.cfg.p_ang_vel_weight * p_ang_vel                           +
+            self.cfg.p_joint_limit_weight * p_joint_limit                   +
+            self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
+            self.cfg.p_all_torque_weight * p_all_torque                     +
+            self.cfg.p_joint_velocity_weight * p_joint_velocity             +
+            self.cfg.p_action_rate_weight * p_action_rate                   +
             self.cfg.p_terminated_weight * p_terminated
         )
 
@@ -222,12 +270,13 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Upright"          : self.cfg.r_upright_weight * r_upright,
-            "Task Reward / Joint_Deviation" : self.cfg.r_joint_deviation_weight * r_joint_deviation, 
+            "Task Reward / Upright"              : self.cfg.r_upright_weight * r_upright,
+            "Task Reward / Joint_Deviation"     : self.cfg.r_joint_deviation_weight * r_joint_deviation,
+            "Task Reward / Lin_Vel_Tracking"    : self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking,
+            "Task Reward / Ang_Vel_Tracking"    : self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Lin_Vel"         : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
@@ -254,31 +303,51 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         return terminated, truncated
 
-    def _compute_intermediate_values(self):
-        # Observation data
-        self.base_pos_w = self._robot.data.root_pos_w
-        self.base_rot_w = self._robot.data.root_quat_w # (w, x, y, z)
-        self.base_lin_vel = self._robot.data.root_lin_vel_b
-        self.base_ang_vel = self._robot.data.root_ang_vel_b
-        self.gravity_vector = self._robot.data.projected_gravity_b                     
-        self.joint_pos = self._robot.data.joint_pos
-        self.joint_vel = self._robot.data.joint_vel
+    def _reset_idx(self, env_ids: torch.Tensor):
 
-        # State(privileged) data
-        self.base_height = self._robot.data.root_pos_w[:, 2].unsqueeze(-1)
-        self.contact_force = self._contact_sensor.data.net_forces_w.view(self.num_envs, -1)
-        material_property = self._robot.root_physx_view.get_material_properties()                   # device is "cpu" not "cuda" 
-        self.friction_coefficient = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1).to(self.device)
+        # NOTE: Initializations (joint states, material properties, etc..) are implemented by domain randomizer
+        # Adjustment the Domain Randomization Parameters
+        # self.set_curriculum()
+        super()._reset_idx(env_ids)
+        # Reset previous action observation
+        self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
+        # Reset commands
+        self.commands.reset(env_ids)
+        # ERFI
+        if self.cfg.erfi_enabled:
+            rao_reset_ids = env_ids[self.rao_env_mask[env_ids]]
+            if len(rao_reset_ids) > 0:
+                self.rao_torque_offset[rao_reset_ids] = sample_rao_torque(
+                    rao_reset_ids, self.cfg.num_total_joints,
+                    self.cfg.rao_torque_limit, self.device
+                )
+            
+        # Update planning state
+        self._compute_intermediate_values(env_ids)
 
+    def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
+        i = env_ids if env_ids is not None else self._robot._ALL_INDICES
+        # Robot data
+        self.base_pos_w[i] = self._robot.data.root_pos_w[i]
+        self.base_rot_w[i] = self._robot.data.root_quat_w[i] # (w, x, y, z)
+        self.base_lin_vel[i] = self._robot.data.root_lin_vel_b[i]
+        self.base_ang_vel[i] = self._robot.data.root_ang_vel_b[i]
+        self.gravity_vector[i] = self._robot.data.projected_gravity_b[i]                  
+        self.joint_pos[i] = self._robot.data.joint_pos[i]
+        self.joint_vel[i] = self._robot.data.joint_vel[i]
+        # Privileged data
+        self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
+        material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
+        self.friction_coefficient[i] = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1)
+        # Information related to Commands Tracking
+        self.command_inputs_b[i] = self.commands.command_b[i]
+        self.command_inputs_w[i] = self.commands.command_w[i]
         # Action regularization
-        self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
-                                    (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
-        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
-        self.applied_torque = self._robot.data.applied_torque
-        self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
-        
-        # Extra Information data
-        self.extras["Curriculum"]["step_progress"] = self.common_step_counter
+        self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
+                                        (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
+        self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.applied_torque[i]       = self._robot.data.applied_torque[i]
+        self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
 
     def _update_viz_data(self):
         applied_torque = self._robot.data.applied_torque
