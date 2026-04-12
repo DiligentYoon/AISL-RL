@@ -54,7 +54,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
         scale=(1.0, 1.0, 1.0),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=True,
+            disable_gravity=False,
             retain_accelerations=False,
             linear_damping=0.0,
             angular_damping=0.0,
@@ -66,7 +66,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             enabled_self_collisions=True,
             solver_position_iteration_count=4,
             solver_velocity_iteration_count=0,
-            fix_root_link=True
+            fix_root_link=False
         ),
     ),
 

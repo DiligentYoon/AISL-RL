@@ -121,21 +121,21 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Reward Shaping ==================== ##
     soft_torque_limit = 0.8
 
-    r_upright_weight = 5.0
-    r_joint_deviation_weight = 5.0
+    r_upright_weight = 6.0
+    r_joint_deviation_weight = 6.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 0.5
-    p_all_torque_weight = 0.1
-    p_joint_velocity_weight = 0.05
+    p_all_torque_weight = 0.05
+    p_joint_velocity_weight = 0.02
     p_action_rate_weight = 0.5
-    p_terminated_weight = 300.0
+    p_terminated_weight = 400.0
 
     ## ==================== Reward Shaping ==================== ##
     curriculum = CurriculumManagerCfg(
-        warmup=0.0,
+        warmup=0.4,
         endup=0.7,
         params=[
             CurriculumParamCfg(
