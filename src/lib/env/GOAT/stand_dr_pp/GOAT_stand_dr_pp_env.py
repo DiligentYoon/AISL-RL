@@ -7,7 +7,7 @@ import numpy as np
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
-from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCfg
+from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCfg, GOATStandDRPPPlayEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
@@ -15,9 +15,9 @@ from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
 class GOATStandDRPPEnv(GOATBaseEnv):
-    cfg: GOATStandDRPPEnvCfg
+    cfg: GOATStandDRPPEnvCfg | GOATStandDRPPPlayEnvCfg
 
-    def __init__(self, cfg: GOATStandDRPPEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: GOATStandDRPPEnvCfg | GOATStandDRPPPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Config
@@ -91,8 +91,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.applied_torque = self._robot.data.applied_torque
         self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
 
-
-    
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
         self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
@@ -113,20 +111,43 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         if debug_vis:
             if not hasattr(self, "root_visualizer"):
                 self.root_visualizer = VisualizationMarkers(self.cfg.root_visualizer_cfg)
-            self.root_visualizer.set_visibility(True)
+                self.root_visualizer.set_visibility(True)
+            if not hasattr(self, "goal_vel_visualizer") and hasattr(self.cfg, "goal_vel_visualizer_cfg"):
+                self.goal_vel_visualizer = VisualizationMarkers(self.cfg.goal_vel_visualizer_cfg)
+                self.goal_vel_visualizer.set_visibility(True)
+            if not hasattr(self, "current_vel_visualizer") and hasattr(self.cfg, "current_vel_visualizer_cfg"):
+                self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
+                self.current_vel_visualizer.set_visibility(True)
         else:
             if hasattr(self, "root_visualizer"):
                 self.root_visualizer.set_visibility(False)
+            if hasattr(self, "goal_vel_visualizer"):
+                self.goal_vel_visualizer.set_visibility(False)
+            if hasattr(self, "current_vel_visualizer"):
+                self.current_vel_visualizer.set_visibility(False)
 
     def _debug_vis_callback(self, event):
         if not self._robot.is_initialized:
             return
-        
+
+        # ============== Arrow ================ # 
+        # Arrow: get marker location
+        base_pos_w = self._robot.data.root_pos_w.clone()
+        base_pos_w[:, 2] += 0.5
+        # Arrow: resolve the scales and quaternions
+        vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
+                                                                                              xy_velocity=self.commands.command_b)
+        vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
+                                                                                      xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
         root_pos = self.base_pos_w
         root_rot = self.base_rot_w
 
+        if hasattr(self, "goal_vel_visualizer"):
+            self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
+        if hasattr(self, "current_vel_visualizer"):   
+            self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
         self.root_visualizer.visualize(root_pos, root_rot)
-
+    
 
     def _setup_scene(self):
         super()._setup_scene()
@@ -141,6 +162,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # add commands cfg
         self.cfg.commands.num_envs = self.scene.num_envs
         self.cfg.commands.step_dt = self.step_dt
+
+        # Collision filtering
+        global_prim_paths = []
+        if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
+            global_prim_paths.append(self.cfg.terrain.prim_path)
+        self.scene.filter_collisions(global_prim_paths=global_prim_paths)
         
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         """
@@ -247,7 +274,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
-        p_joint_velocity    = -torch.sum(torch.square(self.joint_vel), dim=1)
+        p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_action_rate       = -torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
@@ -270,7 +297,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Upright"              : self.cfg.r_upright_weight * r_upright,
+            "Task Reward / Upright"             : self.cfg.r_upright_weight * r_upright,
             "Task Reward / Joint_Deviation"     : self.cfg.r_joint_deviation_weight * r_joint_deviation,
             "Task Reward / Lin_Vel_Tracking"    : self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking,
             "Task Reward / Ang_Vel_Tracking"    : self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking,
@@ -345,7 +372,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Action regularization
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
-        self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
 

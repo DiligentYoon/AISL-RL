@@ -11,7 +11,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
-from isaaclab.markers.config import FRAME_MARKER_CFG
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -116,16 +117,15 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ==================== Terminal condition ==================== ##
     height_reset_condition = 0.15                # meter (m)
-    base_tilt_reset_condition = 30              # degree
     termination_gravity = 0.6
 
     ## ==================== Reward Shaping ==================== ##
     soft_torque_limit = 0.8
 
-    r_upright_weight = 4.0
     r_joint_deviation_weight = 4.0
-    r_lin_vel_tracking_weight = 3.0
-    r_ang_vel_tracking_weight = 2.0
+    r_lin_vel_tracking_weight = 4.0
+    r_ang_vel_tracking_weight = 1.0
+    r_upright_weight = 2.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
@@ -134,7 +134,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_all_torque_weight = 0.1
     p_joint_velocity_weight = 0.02
     p_action_rate_weight = 0.5
-    p_terminated_weight = 400.0
+    p_terminated_weight = 300.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
@@ -143,7 +143,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ==================== Curriculum ==================== ##
     curriculum = CurriculumManagerCfg(
-        warmup=0.0,
+        warmup=0.3,
         endup=0.7,
         params=[
             CurriculumParamCfg(
@@ -199,7 +199,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.1, 0.1), heading=(0.0, 0.0)
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-0.1, 0.1), heading=(0.0, 0.0)
         ),
         is_body_frame=False,
     )
@@ -278,3 +278,23 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     )
 
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
+
+
+@configclass
+class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
+    curriculum = None
+
+    # visualization
+    goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_goal"
+    )
+
+    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_current"
+    )
+
+    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    # plot
+    plotter = None
