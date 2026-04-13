@@ -237,6 +237,9 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            restitution=0.0,
         ),
     )
 
