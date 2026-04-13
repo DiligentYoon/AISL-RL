@@ -100,7 +100,7 @@ class G1SafeEnv(G1BaseEnv):
         # Regularization
         self.out_of_limits_joint    = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
-        self.deviation_hip_xz       = torch.zeros((self.num_envs, len(self.hip_xz_joint_ids)), dtype=torch.float, device=self.device)
+        self.deviation_hip_xyz      = torch.zeros((self.num_envs, len(self.hip_xyz_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
@@ -287,7 +287,7 @@ class G1SafeEnv(G1BaseEnv):
         # Termination
         terminate_penalty = -self.reset_terminated.float()
         # Regularization
-        joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
+        joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xyz), dim=-1)
         # joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
         # joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
@@ -440,8 +440,8 @@ class G1SafeEnv(G1BaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
-        # self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
-        self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xyz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xyz_joint_ids]
+        # self.deviation_hip_xyz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
+        self.deviation_hip_xyz[i]     = self.joint_pos[i][:, self.hip_xyz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xyz_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
 
