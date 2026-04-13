@@ -55,7 +55,48 @@ class EventCfg:
           "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
           "static_friction_range": (0.5, 0.6),
           "dynamic_friction_range": (0.4, 0.5),
-          "restitution_range": (1.0, 1.0),
+          "restitution_range": (0.0, 0.02),
+          "num_buckets": 500,
+          "make_consistent": True,
+      },
+  )
+    
+@configclass
+class EventPlayCfg:
+    """Configuration for domain-randomization events."""
+
+    reset_body = EventTerm(
+        func=randomizer.reset_root_state_uniform,
+        mode='reset',
+        params={
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (-0.05, 0.05),
+                "y": (-0.05, 0.05),
+                "z": (-0.05, 0.05),
+                "roll": (-0.01, 0.01),
+                "pitch": (-0.01, 0.01),
+                "yaw": (-0.01, 0.01)},
+        },
+    )
+
+    reset_robot_joints = EventTerm(
+        func=randomizer.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "position_range": (1.0, 1.3),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    wheel_physics_material = EventTerm(
+      func=randomizer.randomize_rigid_body_material,
+      mode='reset',
+      params={
+          "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
+          "static_friction_range": (0.3, 0.8),
+          "dynamic_friction_range": (0.2, 0.7),
+          "restitution_range": (0.0, 0.02),
           "num_buckets": 500,
           "make_consistent": True,
       },
@@ -95,7 +136,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Controller gain ==================== ##
     joint_kp = torch.tensor([[2.0, 2.0, 2.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.01]])
+    wheel_kp = torch.tensor([[0.05]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 0.9
     PI_LPF_gain = 0.9
@@ -113,7 +154,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Terrain ==================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
     default_terrain_dynamic_friction = 0.5
-    default_terrain_restitution = 0.4
+    default_terrain_restitution = 0.0
 
     ## ==================== Terminal condition ==================== ##
     height_reset_condition = 0.15                # meter (m)
@@ -144,7 +185,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Commands ==================== ##
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(2.0, 4.0),
+        resampling_time_range=(4.0, 5.0),
         prob_standing_envs=1.0,
         prob_heading_envs=0.0,
         heading_command=False,
@@ -204,8 +245,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
             CurriculumParamCfg(
                 name="stop_command_ratio",
                 attr_path="cfg/commands/prob_standing_envs",
-                start_value=1.0,
-                end_value=0.3,
+                start_value=0.7,
+                end_value=0.2,
                 schedule="linear"
             ),
         ]
@@ -237,9 +278,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
         ),
     )
 
@@ -252,6 +290,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         terrain_type="plane",
         env_spacing=3.0,
         physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
             static_friction=default_terrain_static_friction,
             dynamic_friction=default_terrain_dynamic_friction,
             restitution=default_terrain_restitution                 # Collision
@@ -290,6 +330,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 @configclass
 class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     curriculum = None
+    events = EventPlayCfg()
 
     # visualization
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
@@ -302,6 +343,33 @@ class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
 
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    # Curriculum parameters (Max Difference)
+    rfi_torque_limit: float = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]  # N·m 
+    rao_torque_limit: float = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]  # N·m
+
+    action_noise_params: dict = {
+        "mean": 0.0,
+        "std": 0.1,
+        "operation": "add",
+    }
+    observation_noise_params: dict = {
+        "mean": 0.0,
+        "std": 0.1,
+        "operation": "add",
+    }
+
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=0.2,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ),
+    )
 
     # plot
     plotter = None
