@@ -11,11 +11,13 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
-from isaaclab.markers.config import FRAME_MARKER_CFG
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from isaaclab.managers import SceneEntityCfg
 
 @configclass
@@ -51,8 +53,8 @@ class EventCfg:
       mode='reset',
       params={
           "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
-          "static_friction_range": (0.6, 1.3),
-          "dynamic_friction_range": (0.6, 1.3),
+          "static_friction_range": (0.5, 0.6),
+          "dynamic_friction_range": (0.4, 0.5),
           "restitution_range": (1.0, 1.0),
           "num_buckets": 500,
           "make_consistent": True,
@@ -82,12 +84,12 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         )
 
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 5.0
+    episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 30                      # Observation space
-    state_space = 30                            # State space including privilege information
+    observation_space = 41                      # Observation space
+    state_space = 41                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
@@ -115,41 +117,47 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ==================== Terminal condition ==================== ##
     height_reset_condition = 0.15                # meter (m)
-    base_tilt_reset_condition = 30              # degree
     termination_gravity = 0.6
 
     ## ==================== Reward Shaping ==================== ##
     soft_torque_limit = 0.8
 
-    r_upright_weight = 5.0
-    r_joint_deviation_weight = 5.0
+    r_joint_deviation_weight = 4.0
+    r_lin_vel_tracking_weight = 4.0
+    r_ang_vel_tracking_weight = 1.0
+    r_upright_weight = 2.0
 
     p_lin_vel_weight = 0.1
     p_ang_vel_weight = 0.1
     p_joint_limit_weight = 10.0
-    p_all_torque_limit_weight = 0.5
+    p_all_torque_limit_weight = 1.0
     p_all_torque_weight = 0.1
-    p_joint_velocity_weight = 0.05
+    p_joint_velocity_weight = 0.02
     p_action_rate_weight = 0.5
-    p_terminated_weight = 300.0
+    p_terminated_weight = 200.0
 
-    ## ==================== Reward Shaping ==================== ##
+    ## ==================== ERFI Configuration ==================== ##
+    erfi_enabled: bool = True
+    rfi_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m 
+    rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m
+
+    ## ==================== Curriculum ==================== ##
     curriculum = CurriculumManagerCfg(
-        warmup=0.0,
-        endup=0.7,
+        warmup=0.3,
+        endup=0.8,
         params=[
             CurriculumParamCfg(
                 name="static_friction_coefficient",
                 attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
-                start_value= (0.6, 1.3),
-                end_value=(0.4, 1.5),
+                start_value= (0.5, 0.6),
+                end_value=(0.3, 0.8),
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="dynamic_friction_coefficient",
                 attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
-                start_value= (0.6, 1.3),
-                end_value=(0.4, 1.5),
+                start_value= (0.4, 0.5),
+                end_value=(0.2, 0.7),
                 schedule="linear",
             ),
             CurriculumParamCfg(
@@ -166,10 +174,35 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
                 end_value=0.1,
                 schedule="linear",
             ),
+            CurriculumParamCfg(
+                name="rfi_torque_limit",
+                attr_path="cfg/rfi_torque_limit",
+                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125],
+                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.25, 0.25],
+                schedule="linear",
+            ),
+            CurriculumParamCfg(
+                name="rao_torque_limit",
+                attr_path="cfg/rao_torque_limit",
+                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125],
+                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.25, 0.25],
+                schedule="linear",
+            ),
         ]
     )
-    
 
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(2.0, 4.0),
+        prob_standing_envs=0.25,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ),
+    )
+    
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
         "left_hip_torque (Nm)": 0.0,
@@ -244,3 +277,23 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     )
 
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
+
+
+@configclass
+class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
+    curriculum = None
+
+    # visualization
+    goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_goal"
+    )
+
+    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_current"
+    )
+
+    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    # plot
+    plotter = None

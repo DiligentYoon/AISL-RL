@@ -236,3 +236,6 @@ class EnvCfg:
 
     total_timesteps: int | None = None
     """Total timesteps for time-progress based curriculum learning."""
+
+    erfi_enabled: bool = False
+    """Whether apply Extened Random Force Injection (ERFI) Domain Randomization or not"""

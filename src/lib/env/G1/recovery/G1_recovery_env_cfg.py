@@ -200,7 +200,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         ranges=UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
-        is_body_frame=False,
     )
 
     # Terrain

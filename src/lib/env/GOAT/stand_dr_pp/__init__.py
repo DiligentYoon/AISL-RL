@@ -11,4 +11,15 @@ gym.register(
     }
 )
 
+gym.register(
+    id="GOAT-stand-dr-pp-play", 
+    entry_point=f"{__name__}.GOAT_stand_dr_pp_env:GOATStandDRPPEnv",
+    disable_env_checker=True,
+    kwargs={
+        # Environment-Specific Entry Point for Env Cfg Class
+        "env_cfg_entry_point": f"{__name__}.GOAT_stand_dr_pp_env_cfg:GOATStandDRPPPlayEnvCfg",
+        "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+    }
+)
+
 print(f"Registration is Complete.")
