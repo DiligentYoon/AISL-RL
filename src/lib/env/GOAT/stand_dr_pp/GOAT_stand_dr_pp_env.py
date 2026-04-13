@@ -340,6 +340,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # self.set_curriculum()
         super()._reset_idx(env_ids)
         # Reset previous action observation
+        self.hist_count[env_ids] = 0
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
         self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
         # Reset commands

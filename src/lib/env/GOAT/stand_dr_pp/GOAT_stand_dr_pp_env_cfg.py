@@ -93,15 +93,15 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
-    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kp = torch.tensor([[2.0, 2.0, 2.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.1]])
+    wheel_kp = torch.tensor([[0.01]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 0.9
     PI_LPF_gain = 0.9
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
-    pos_margin_factor = 1.2
+    pos_margin_factor = 1.5
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
@@ -123,29 +123,41 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.8
 
     r_joint_deviation_weight = 4.0
-    r_lin_vel_tracking_weight = 4.0
-    r_ang_vel_tracking_weight = 1.0
-    r_upright_weight = 2.0
+    r_lin_vel_tracking_weight = 6.0
+    r_ang_vel_tracking_weight = 2.0
+    r_upright_weight = 1.0
 
-    p_lin_vel_weight = 0.1
-    p_ang_vel_weight = 0.1
+    p_ang_vel_weight = 2.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 1.0
     p_all_torque_weight = 0.1
-    p_joint_velocity_weight = 0.02
+    p_joint_velocity_weight = 0.05
     p_action_rate_weight = 0.5
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
-    rfi_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m 
-    rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m
+    rfi_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]    # N·m 
+    rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]   # N·m
     vel_hist_length: int = 4
+
+    ## ==================== Commands ==================== ##
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(2.0, 4.0),
+        prob_standing_envs=1.0,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ),
+    )
 
     ## ==================== Curriculum ==================== ##
     curriculum = CurriculumManagerCfg(
-        warmup=0.3,
-        endup=0.8,
+        warmup=0.2,
+        endup=0.7,
         params=[
             CurriculumParamCfg(
                 name="static_friction_coefficient",
@@ -178,30 +190,25 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
             CurriculumParamCfg(
                 name="rfi_torque_limit",
                 attr_path="cfg/rfi_torque_limit",
-                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125],
-                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.25, 0.25],
+                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08],
+                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1],
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="rao_torque_limit",
                 attr_path="cfg/rao_torque_limit",
-                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125],
-                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.25, 0.25],
+                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08],
+                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1],
                 schedule="linear",
             ),
+            CurriculumParamCfg(
+                name="stop_command_ratio",
+                attr_path="cfg/commands/prob_standing_envs",
+                start_value=1.0,
+                end_value=0.3,
+                schedule="linear"
+            ),
         ]
-    )
-
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(2.0, 4.0),
-        prob_standing_envs=0.4,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.5, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
-        ),
     )
     
     ## ==================== Plot variables ==================== ##
@@ -230,9 +237,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
         ),
     )
 

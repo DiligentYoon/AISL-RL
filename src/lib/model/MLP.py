@@ -428,5 +428,5 @@ class ActorInference(nn.Module):
         if self.squash:
             a = torch.tanh(a)
 
-        a = a * 0.1 * self.action_scale_factor
+        a = a * self.action_scale_factor
         return a
