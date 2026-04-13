@@ -134,7 +134,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_all_torque_weight = 0.1
     p_joint_velocity_weight = 0.02
     p_action_rate_weight = 0.5
-    p_terminated_weight = 300.0
+    p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
@@ -144,7 +144,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ==================== Curriculum ==================== ##
     curriculum = CurriculumManagerCfg(
         warmup=0.3,
-        endup=0.7,
+        endup=0.8,
         params=[
             CurriculumParamCfg(
                 name="static_friction_coefficient",
@@ -199,9 +199,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.5, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-0.1, 0.1), heading=(0.0, 0.0)
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
-        is_body_frame=False,
     )
     
     ## ==================== Plot variables ==================== ##

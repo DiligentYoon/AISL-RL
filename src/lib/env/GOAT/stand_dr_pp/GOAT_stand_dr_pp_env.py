@@ -11,7 +11,7 @@ from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCf
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
-from lib.domain_randomizer.commander import UniformVelocityCommand
+from lib.domain_randomizer.commander import UniformNonHolonomicCommand
 from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
 class GOATStandDRPPEnv(GOATBaseEnv):
@@ -39,7 +39,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
 
         # Commands for reference generator
-        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
+        self.commands = UniformNonHolonomicCommand(self.cfg.commands, self._robot, self.device)
 
         # Torque controller initialization
         self.leg_controller = PD_Controller(kp=self.cfg.joint_kp,
