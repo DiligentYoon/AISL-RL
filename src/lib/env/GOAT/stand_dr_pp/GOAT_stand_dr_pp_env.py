@@ -66,7 +66,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               joint_vel_limits=self.joint_vel_limits,
                                               torque_limits=self.torque_limits)
 
-
         # Robot data
         self.base_pos_w = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
         self.base_rot_w = torch.zeros((self.num_envs, 4), dtype=torch.float32, device=self.device)
@@ -75,6 +74,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.gravity_vector = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)                  
         self.joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.joint_vel_hist = torch.zeros((self.num_envs, self.cfg.vel_hist_length, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.hist_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # Privileged data
         self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
@@ -223,6 +224,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
+                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  self.previous_actions,                                  # [E, 8]
                                 ), dim=1) 
 
@@ -242,6 +244,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
+                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  self.previous_actions,                                  # [E, 8]
                                  ), dim=1)                             
         
@@ -338,6 +341,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         super()._reset_idx(env_ids)
         # Reset previous action observation
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
+        self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
         # Reset commands
         self.commands.reset(env_ids)
         # ERFI
@@ -362,6 +366,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.gravity_vector[i] = self._robot.data.projected_gravity_b[i]                  
         self.joint_pos[i] = self._robot.data.joint_pos[i]
         self.joint_vel[i] = self._robot.data.joint_vel[i]
+        self.joint_vel_hist[i, (self.hist_count[i] % self.cfg.vel_hist_length), :] = self._robot.data.joint_vel[i]
         # Privileged data
         self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
         material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
@@ -375,6 +380,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
+        # Update count
+        self.hist_count[i] += 1
 
     def _update_viz_data(self):
         applied_torque = self._robot.data.applied_torque

@@ -88,14 +88,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 41                      # Observation space
-    state_space = 41                            # State space including privilege information
+    observation_space = 73                      # Observation space
+    state_space = 73                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ==================== Controller gain ==================== ##
     joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
-    joint_kd = torch.tensor([[0.3, 0.3, 0.3]])
-    wheel_kp = torch.tensor([[3.0]])
+    joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
+    wheel_kp = torch.tensor([[0.1]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 0.9
     PI_LPF_gain = 0.9
@@ -140,6 +140,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     erfi_enabled: bool = True
     rfi_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m 
     rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.125, 0.125]    # N·m
+    vel_hist_length: int = 4
 
     ## ==================== Curriculum ==================== ##
     curriculum = CurriculumManagerCfg(
@@ -194,7 +195,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(2.0, 4.0),
-        prob_standing_envs=0.25,
+        prob_standing_envs=0.4,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
