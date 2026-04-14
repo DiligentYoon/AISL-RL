@@ -87,17 +87,17 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 73                      # Observation space
-    state_space = 73                            # State space including privilege information
+    observation_space = 70                      # Observation space
+    state_space = 70                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    joint_kp = torch.tensor([[2.0, 2.0, 2.0]])
+    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
     wheel_kp = torch.tensor([[0.05]])
     wheel_ki = torch.tensor([[0.0]])
-    PD_LPF_gain = 0.9
-    PI_LPF_gain = 0.9
+    PD_LPF_gain = 1.0
+    PI_LPF_gain = 1.0
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
     pos_margin_factor = 1.5
@@ -122,21 +122,21 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.8
 
     r_joint_deviation_weight = 4.0
-    r_lin_vel_tracking_weight = 6.0
+    r_lin_vel_tracking_weight = 2.0
     r_ang_vel_tracking_weight = 2.0
     r_upright_weight = 1.0
 
-    p_ang_vel_weight = 2.0
+    p_ang_vel_weight = 5.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 1.0
     p_all_torque_weight = 0.1
     p_joint_velocity_weight = 0.05
-    p_action_rate_weight = 0.5
+    p_action_rate_weight = 2.0
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
-    rfi_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]    # N·m 
+    rfi_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.0, 0.0]    # N·m 
     rao_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]    # N·m
     vel_hist_length: int = 4
 
@@ -151,7 +151,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
     obs_noise_groups_start = {
-        "base_lin_vel":      {"dim": 3,  "std": 0.1},   # IMU accelerometer
         "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
         "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
         "command_inputs_b":  {"dim": 3,  "std": 0.0},   # Internal command (no noise)
@@ -162,7 +161,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "joint_vel_hist":    {"dim": 32, "std": 0.0},   # Velocity history (no noise)
     }
     obs_noise_groups_end = {
-        "base_lin_vel":      {"dim": 3,  "std": 0.2},
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
         "base_rot_w":        {"dim": 4,  "std": 0.03},
         "command_inputs_b":  {"dim": 3,  "std": 0.0},
@@ -175,12 +173,12 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
 
-    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
-    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
-    rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
+    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.0, 0.0]
+    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.0, 0.0]
+    rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
-    stop_ratio_start = 0.7
-    stop_ratio_end = 0.3
+    stop_ratio_start = 1.0
+    stop_ratio_end = 1.0
 
     curriculum = CurriculumManagerCfg(
         warmup=warmup,

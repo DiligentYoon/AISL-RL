@@ -218,8 +218,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_lin_vel,                                      # [E, 3]
-                                 self.base_ang_vel,                                      # [E, 3]
+        observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
                                  self.command_inputs_b,                                  # [E, 3]
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
@@ -238,8 +237,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_lin_vel,                                      # [E, 3]
-                                 self.base_ang_vel,                                      # [E, 3]
+        observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
                                  self.command_inputs_b,                                  # [E, 3]
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
