@@ -16,6 +16,7 @@ from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKE
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.noise_model import build_noise_std_vector
+from lib.utils.plot_utils import PNGSavePlotter
 from isaaclab.managers import EventTermCfg as EventTerm
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
@@ -335,4 +336,4 @@ class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # plot
-    plotter = None
+    plotter = PNGSavePlotter
