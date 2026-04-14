@@ -196,57 +196,74 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     )
 
     ## ==================== Curriculum ==================== ##
+    warmup = 0.2
+    endup = 0.7
+    static_friction_start = (0.5, 0.6)
+    static_friction_end = (0.3, 0.8)
+    dynamic_friction_start = (0.4, 0.5)
+    dynamic_friction_end = (0.2, 0.7)
+    obs_noise_start = 0.05
+    obs_noise_end = 0.1
+    act_noise_start = 0.02
+    act_noise_end = 0.075
+    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
+    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
+    rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
+    rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
+    stop_ratio_start = 0.7
+    stop_ratio_end = 0.3
+
     curriculum = CurriculumManagerCfg(
-        warmup=0.2,
-        endup=0.7,
+        warmup=warmup,
+        endup=endup,
         params=[
             CurriculumParamCfg(
                 name="static_friction_coefficient",
                 attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
-                start_value= (0.5, 0.6),
-                end_value=(0.3, 0.8),
+                start_value= static_friction_start,
+                end_value=static_friction_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="dynamic_friction_coefficient",
                 attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
-                start_value= (0.4, 0.5),
-                end_value=(0.2, 0.7),
+                start_value= dynamic_friction_start,
+                end_value=dynamic_friction_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="observation_noise",
                 attr_path="cfg/observation_noise_params/std",
-                start_value=0.05,
-                end_value=0.1,
+                start_value=obs_noise_start,
+                end_value=obs_noise_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="action_noise",
                 attr_path="cfg/action_noise_params/std",
-                start_value= 0.05,
-                end_value=0.1,
+                start_value=act_noise_start,
+                end_value=act_noise_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="rfi_torque_limit",
                 attr_path="cfg/rfi_torque_limit",
-                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08],
-                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1],
+                start_value=rfi_start,
+                end_value=rfi_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="rao_torque_limit",
                 attr_path="cfg/rao_torque_limit",
-                start_value=[0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08],
-                end_value=[0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1],
+                start_value=rao_start,
+                end_value=rao_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
                 name="stop_command_ratio",
                 attr_path="cfg/commands/prob_standing_envs",
-                start_value=0.7,
-                end_value=0.2,
+                start_value=stop_ratio_start,
+                end_value=stop_ratio_end,
                 schedule="linear"
             ),
         ]
@@ -308,15 +325,15 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     # Noise Model
     action_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     action_noise_params: dict = {
-        "mean": 0.0,
-        "std": 0.05,
-        "operation": "add",
+        "mean": 1.0,
+        "std": 0.075,
+        "operation": "scale",
     }
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": 0.05,
-        "operation": "add",
+        "mean": 1.0,
+        "std": 0.1,
+        "operation": "scale",
     }
 
     # Visualization
@@ -330,7 +347,37 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 @configclass
 class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     curriculum = None
+
+    # ================ Set max difficulty to curriculum variables ====================
     events = EventPlayCfg()
+    events.wheel_physics_material.params["static_friction_range"] = GOATStandDRPPEnvCfg.static_friction_end
+    events.wheel_physics_material.params["dynamic_friction_range"] = GOATStandDRPPEnvCfg.dynamic_friction_end
+
+    action_noise_params: dict = {
+        "mean": 1.0,
+        "std": GOATStandDRPPEnvCfg.act_noise_end,
+        "operation": "scale",
+    }
+    observation_noise_params: dict = {
+        "mean": 1.0,
+        "std": GOATStandDRPPEnvCfg.obs_noise_end,
+        "operation": "scale",
+    }
+
+    rfi_torque_limit: float = GOATStandDRPPEnvCfg.rfi_end  # N·m 
+    rao_torque_limit: float = GOATStandDRPPEnvCfg.rao_end  # N·m
+
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=GOATStandDRPPEnvCfg.stop_ratio_end,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ),
+    )
 
     # visualization
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
@@ -343,33 +390,6 @@ class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
 
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-
-    # Curriculum parameters (Max Difference)
-    rfi_torque_limit: float = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]  # N·m 
-    rao_torque_limit: float = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]  # N·m
-
-    action_noise_params: dict = {
-        "mean": 0.0,
-        "std": 0.1,
-        "operation": "add",
-    }
-    observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": 0.1,
-        "operation": "add",
-    }
-
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.2,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
-        ),
-    )
 
     # plot
     plotter = None
