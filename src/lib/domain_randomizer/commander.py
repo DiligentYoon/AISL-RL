@@ -222,6 +222,11 @@ class UniformVelocityCommand():
 
         # standing env selection (probabilistic)
         self.is_standing_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.prob_standing_envs
+        # apply zero command
+        standing_ids = env_ids[self.is_standing_env[env_ids]]
+        if standing_ids.numel() > 0:
+            self.vel_command_b[standing_ids, :] = 0.0
+            self.vel_command_w[standing_ids, :] = 0.0
 
         # count
         self.command_counter[env_ids] += 1
@@ -237,12 +242,6 @@ class UniformVelocityCommand():
                     min=self.cfg.ranges.ang_vel_z[0],
                     max=self.cfg.ranges.ang_vel_z[1],)
                 self.vel_command_b[ids, 2] = self.vel_command_w[ids, 2]
-
-        # standing: zero command
-        standing_ids = self.is_standing_env.nonzero(as_tuple=False).flatten()
-        if standing_ids.numel() > 0:
-            self.vel_command_b[standing_ids, :] = 0.0
-            self.vel_command_w[standing_ids, :] = 0.0
 
     def _update_metrics(self):
         # same normalization as original
@@ -312,12 +311,17 @@ class UniformNonHolonomicCommand(UniformVelocityCommand):
         self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)   # wz
 
         self.is_standing_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.prob_standing_envs
+
+        # apply zero command
+        standing_env_ids = env_ids[self.is_standing_env[env_ids]]
+        if standing_env_ids.numel() > 0:
+            self.vel_command_b[standing_env_ids, :] = 0.0
+            self.vel_command_w[standing_env_ids, :] = 0.0
+
         self.command_counter[env_ids] += 1
 
     def _post_process(self):
-        standing_ids = self.is_standing_env.nonzero(as_tuple=False).flatten()
-        if standing_ids.numel() > 0:
-            self.vel_command_b[standing_ids, :] = 0.0
+        pass
 
     def _update_metrics(self):
         max_command_time = self.cfg.resampling_time_range[1]
