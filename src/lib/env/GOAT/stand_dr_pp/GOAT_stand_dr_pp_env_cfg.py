@@ -108,7 +108,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Wheel per legs
-    torque_limits = [2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 2.5, 2.5]
+    torque_limits = [2.5, 2.5, 2.5, 2.5, 5.0, 5.0, 2.5, 2.5]
     
     ## ========================== Terrain ========================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
@@ -143,7 +143,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ======================== Curriculum ======================= ##
     warmup = 0.2
-    endup = 0.7
+    endup = 0.6
     static_friction_start: tuple[float, float] = (0.5, 0.6)
     static_friction_end: tuple[float, float] = (0.3, 0.8)
     dynamic_friction_start: tuple[float, float] = (0.4, 0.5)
@@ -156,7 +156,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
         "command_inputs_b":  {"dim": 3,  "std": 0.0},   # Internal command (no noise)
         "default_joint_pos": {"dim": 6,  "std": 0.0},   # Constant default (no noise)
-        "joint_pos":         {"dim": 6,  "std": 0.01},  # Joint encoder
+        "joint_pos":         {"dim": 6,  "std": 0.005}, # Joint encoder
         "joint_vel":         {"dim": 8,  "std": 0.5},   # Encoder derivative (noisy)
         "previous_actions":  {"dim": 8,  "std": 0.0},   # Internal action buffer (no noise)
         "joint_vel_hist":    {"dim": 32, "std": 0.0},   # Velocity history (no noise)
@@ -166,7 +166,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "base_rot_w":        {"dim": 4,  "std": 0.03},
         "command_inputs_b":  {"dim": 3,  "std": 0.0},
         "default_joint_pos": {"dim": 6,  "std": 0.0},
-        "joint_pos":         {"dim": 6,  "std": 0.03},
+        "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
         "joint_vel_hist":    {"dim": 32, "std": 0.0},
