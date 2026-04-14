@@ -19,6 +19,10 @@ from lib.domain_randomizer.commander import UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
 from lib.env.G1.pusher.G1_pusher_env_cfg import G1PusherEnvCfg
 
+# NOTE: action이 "arm", "leg", "adv"로 dict key 로 묶인 상태로 들어옴
+# NOTE: observation도 "arm", "leg", "adv"로 묶어서 뱉어줘야한다.
+# NOTE: reward는 2 + n개의 index로 뱉어야한다.
+
 class G1PusherEnv(G1BaseEnv):
     cfg: G1PusherEnvCfg
 

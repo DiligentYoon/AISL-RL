@@ -39,7 +39,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
-args_cli.headless = True                    # Headless mode
+args_cli.headless = False                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -86,15 +86,15 @@ def main():
     # =========================================== Env Spawn & Wrapper Test =======================================================
     # ============================================================================================================================
 
-    # cfg for viewpoint control
-    viewer_cfg = ViewerCfg(
-        origin_type="asset_root",
-        asset_name="robot",
-        env_index=0,
-        eye=(0.0, 4.0, 0.5),
-        lookat=(0.0, 0.0, 0.0)
-    )
-    env_cfg.viewer = viewer_cfg
+    # # cfg for viewpoint control
+    # viewer_cfg = ViewerCfg(
+    #     origin_type="asset_root",
+    #     asset_name="robot",
+    #     env_index=0,
+    #     eye=(0.0, 4.0, 0.5),
+    #     lookat=(0.0, 0.0, 0.0)
+    # )
+    # env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:

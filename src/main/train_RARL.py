@@ -437,10 +437,15 @@ def main():
             # agent stepping
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
             # env stepping
+            # NOTE: action을 dictionary로 묶어서 RA agent도 같이 dict로 env에 넘겨줘야한다
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
-        
+
+            # NOTE: curriculum에 따라 두 agent를 번갈아 insert_data, update 진행
+            # NOTE: observation, state를 agent별로 dict를 분해하여 넣어줘야한다.
+            # NOTE: reward[:2]는 arm, leg reward[2:]는 adv
+            
             # Insert data to the buffer
             agent.insert_data(observations=obs,
                               states=states,
