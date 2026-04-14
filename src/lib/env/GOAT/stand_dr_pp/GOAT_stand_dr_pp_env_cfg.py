@@ -15,6 +15,7 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
+from lib.domain_randomizer.noise_model import build_noise_std_vector
 from isaaclab.managers import EventTermCfg as EventTerm
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
@@ -133,7 +134,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     state_space = 73                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
-    ## ==================== Controller gain ==================== ##
+    ## ======================== Controller gain ======================= ##
     joint_kp = torch.tensor([[2.0, 2.0, 2.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
     wheel_kp = torch.tensor([[0.05]])
@@ -151,16 +152,16 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     num_total_joints = n_leg_j + num_leg        # Wheel per legs
     torque_limits = [2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 2.5, 2.5]
     
-    ## ==================== Terrain ==================== ##
+    ## ========================== Terrain ========================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
     default_terrain_dynamic_friction = 0.5
     default_terrain_restitution = 0.0
 
-    ## ==================== Terminal condition ==================== ##
+    ## ==================== Terminal condition ===================== ##
     height_reset_condition = 0.15                # meter (m)
     termination_gravity = 0.6
 
-    ## ==================== Reward Shaping ==================== ##
+    ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.8
 
     r_joint_deviation_weight = 4.0
@@ -182,7 +183,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]   # N·m
     vel_hist_length: int = 4
 
-    ## ==================== Commands ==================== ##
+    ## ======================== Commands ========================== ##
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
@@ -195,17 +196,41 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         ),
     )
 
-    ## ==================== Curriculum ==================== ##
+    ## ======================== Curriculum ======================= ##
     warmup = 0.2
     endup = 0.7
     static_friction_start = (0.5, 0.6)
     static_friction_end = (0.3, 0.8)
     dynamic_friction_start = (0.4, 0.5)
     dynamic_friction_end = (0.2, 0.7)
-    obs_noise_start = 0.05
-    obs_noise_end = 0.1
-    act_noise_start = 0.02
-    act_noise_end = 0.075
+
+    # Per-axis observation noise groups (must match _get_observations concat order)
+    # std=0.0 for internal values that require no sensor noise injection
+    obs_noise_groups_start = {
+        "base_lin_vel":      {"dim": 3,  "std": 0.1},   # IMU accelerometer
+        "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
+        "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
+        "command_inputs_b":  {"dim": 3,  "std": 0.0},   # Internal command (no noise)
+        "default_joint_pos": {"dim": 6,  "std": 0.0},   # Constant default (no noise)
+        "joint_pos":         {"dim": 6,  "std": 0.01},  # Joint encoder
+        "joint_vel":         {"dim": 8,  "std": 0.5},   # Encoder derivative (noisy)
+        "previous_actions":  {"dim": 8,  "std": 0.0},   # Internal action buffer (no noise)
+        "joint_vel_hist":    {"dim": 32, "std": 0.0},   # Velocity history (no noise)
+    }
+    obs_noise_groups_end = {
+        "base_lin_vel":      {"dim": 3,  "std": 0.2},
+        "base_ang_vel":      {"dim": 3,  "std": 0.2},
+        "base_rot_w":        {"dim": 4,  "std": 0.03},
+        "command_inputs_b":  {"dim": 3,  "std": 0.0},
+        "default_joint_pos": {"dim": 6,  "std": 0.0},
+        "joint_pos":         {"dim": 6,  "std": 0.03},
+        "joint_vel":         {"dim": 8,  "std": 1.5},
+        "previous_actions":  {"dim": 8,  "std": 0.0},
+        "joint_vel_hist":    {"dim": 32, "std": 0.0},
+    }
+    obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
+    obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
+
     rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
     rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]
@@ -236,13 +261,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
                 attr_path="cfg/observation_noise_params/std",
                 start_value=obs_noise_start,
                 end_value=obs_noise_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
-                name="action_noise",
-                attr_path="cfg/action_noise_params/std",
-                start_value=act_noise_start,
-                end_value=act_noise_end,
                 schedule="linear",
             ),
             CurriculumParamCfg(
@@ -316,24 +334,20 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         debug_vis=False
     )
 
+    # Sensor
     contact_sensor = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/.*wheel.*",
         history_length=0,
         update_period=0.0                                           # Update every period
     )
 
-    # Noise Model
-    action_noise_type: str = "gaussian" # [gaussian, uniform, constant]
-    action_noise_params: dict = {
-        "mean": 1.0,
-        "std": 0.075,
-        "operation": "scale",
-    }
+    # Noise Model — std is a list for per-axis control; initialized to max difficulty
+    # and overridden to start values by CurriculumManager on env init.
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
-        "mean": 1.0,
-        "std": 0.1,
-        "operation": "scale",
+        "mean": 0.0,
+        "std": obs_noise_end,
+        "operation": "add",
     }
 
     # Visualization
@@ -352,17 +366,6 @@ class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     events = EventPlayCfg()
     events.wheel_physics_material.params["static_friction_range"] = GOATStandDRPPEnvCfg.static_friction_end
     events.wheel_physics_material.params["dynamic_friction_range"] = GOATStandDRPPEnvCfg.dynamic_friction_end
-
-    action_noise_params: dict = {
-        "mean": 1.0,
-        "std": GOATStandDRPPEnvCfg.act_noise_end,
-        "operation": "scale",
-    }
-    observation_noise_params: dict = {
-        "mean": 1.0,
-        "std": GOATStandDRPPEnvCfg.obs_noise_end,
-        "operation": "scale",
-    }
 
     rfi_torque_limit: float = GOATStandDRPPEnvCfg.rfi_end  # N·m 
     rao_torque_limit: float = GOATStandDRPPEnvCfg.rao_end  # N·m

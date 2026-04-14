@@ -98,6 +98,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Previous action
         self.previous_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
+        self.previous_joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
 
         # Plotting boolean
         debug_vis = self.num_envs <= 32
@@ -182,7 +183,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.joint_pos_delta_cmd = self.actions[:, self.joint_ids]
         self.wheel_vel_cmd = self.actions[:, self.wheel_ids]
         
-    def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
+    def _apply_action(self):         
         # Current state
         joint_pos = self._robot.data.joint_pos
         joint_vel = self._robot.data.joint_vel
@@ -224,8 +225,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
-                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  self.previous_actions,                                  # [E, 8]
+                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                 ), dim=1) 
 
         return observation
@@ -244,8 +245,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self._robot.data.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
-                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  self.previous_actions,                                  # [E, 8]
+                                 self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  ), dim=1)                             
         
         # privileged_info = torch.cat((self.base_height,                      # [E, 1]
@@ -367,7 +368,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.gravity_vector[i] = self._robot.data.projected_gravity_b[i]                  
         self.joint_pos[i] = self._robot.data.joint_pos[i]
         self.joint_vel[i] = self._robot.data.joint_vel[i]
-        self.joint_vel_hist[i, (self.hist_count[i] % self.cfg.vel_hist_length), :] = self._robot.data.joint_vel[i]
         # Privileged data
         self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
         material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
@@ -381,6 +381,12 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
+        # History information (noisy)
+        if env_ids is not None:
+            self.joint_vel_hist[i, (self.hist_count[i] % self.cfg.vel_hist_length), :] = self._robot.data.joint_vel[i] # Reset env -> default value
+        else:
+            # NOTE: we assume the history values are assigned last in observation vector
+            self.joint_vel_hist[i, (self.hist_count[i] % self.cfg.vel_hist_length), :] = self.obs_buf[i, -self.joint_vel_hist.shape[-1]:].clone() # Noisy signal at previous step
         # Update count
         self.hist_count[i] += 1
 
@@ -407,4 +413,4 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 6]
         extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 7]
 
-        return extras
+        return extras 
