@@ -225,6 +225,7 @@ class Env(gym.Env):
         # setup curriculum manager
         if self.cfg.curriculum is not None:
             self.curriculum_manager = CurriculumManager(self.cfg.curriculum, self)
+            self.curriculum_manager.update(current_step=0) # Initialization (difficulty = 0)
         else:
             self.curriculum_manager = None
 
@@ -316,13 +317,29 @@ class Env(gym.Env):
         if self.cfg.wait_for_textures and self.sim.has_rtx_sensors():
             while SimulationManager.assets_loading():
                 self.sim.render()
-                
+        
+        # update observations
+        self.obs_buf = self._get_observations()
+        self.state_buf = self._get_states()
+
+        # add observation noise
+        # note: we apply no noise to the state space (since it is used for critic networks)
+        if self.cfg.observation_noise_type:
+            if self.cfg.observation_noise_type == "gaussian":
+                self.obs_buf = gaussian_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            elif self.cfg.observation_noise_type == "uniform":
+                self.obs_buf = uniform_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            elif self.cfg.observation_noise_type == "constant":
+                self.obs_buf = constant_noise(self.obs_buf, **self.cfg.observation_noise_params)
+            else:
+                raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
+
         # update viz data
         if (self.cfg.viz_data is not None) and (self.is_plot):
             self.extras = self._update_viz_data()
 
         # return observations
-        return self._get_observations(), self._get_states(), self.extras
+        return self.obs_buf, self.state_buf, self.extras
 
     def step(self, action: Union[torch.Tensor | Dict[str, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
@@ -417,7 +434,6 @@ class Env(gym.Env):
         if self.cfg.events:
             if "interval" in self.event_manager.available_modes:
                 self.event_manager.apply(mode="interval", dt=self.step_dt)
-
 
         # update observations
         self.obs_buf = self._get_observations()

@@ -61,52 +61,9 @@ class EventCfg:
           "make_consistent": True,
       },
   )
-    
-@configclass
-class EventPlayCfg:
-    """Configuration for domain-randomization events."""
-
-    reset_body = EventTerm(
-        func=randomizer.reset_root_state_uniform,
-        mode='reset',
-        params={
-            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (-0.05, 0.05),
-                "y": (-0.05, 0.05),
-                "z": (-0.05, 0.05),
-                "roll": (-0.01, 0.01),
-                "pitch": (-0.01, 0.01),
-                "yaw": (-0.01, 0.01)},
-        },
-    )
-
-    reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "position_range": (1.0, 1.3),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    wheel_physics_material = EventTerm(
-      func=randomizer.randomize_rigid_body_material,
-      mode='reset',
-      params={
-          "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
-          "static_friction_range": (0.3, 0.8),
-          "dynamic_friction_range": (0.2, 0.7),
-          "restitution_range": (0.0, 0.02),
-          "num_buckets": 500,
-          "make_consistent": True,
-      },
-  )
 
 @configclass
 class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
-    ## =========== Domain Randomization ============ ##
-    events = EventCfg()
 
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
@@ -179,30 +136,17 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
-    rfi_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]    # N·m 
-    rao_torque_limit: float = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.08, 0.08]   # N·m
+    rfi_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]    # N·m 
+    rao_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]    # N·m
     vel_hist_length: int = 4
-
-    ## ======================== Commands ========================== ##
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=1.0,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
-        ),
-    )
 
     ## ======================== Curriculum ======================= ##
     warmup = 0.2
     endup = 0.7
-    static_friction_start = (0.5, 0.6)
-    static_friction_end = (0.3, 0.8)
-    dynamic_friction_start = (0.4, 0.5)
-    dynamic_friction_end = (0.2, 0.7)
+    static_friction_start: tuple[float, float] = (0.5, 0.6)
+    static_friction_end: tuple[float, float] = (0.3, 0.8)
+    dynamic_friction_start: tuple[float, float] = (0.4, 0.5)
+    dynamic_friction_end: tuple[float, float] = (0.2, 0.7)
 
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
@@ -286,6 +230,24 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
             ),
         ]
     )
+
+    ## =================== Domain Randomization =================== ##
+    events = EventCfg()
+    events.wheel_physics_material.params["static_friction_range"] = static_friction_end
+    events.wheel_physics_material.params["dynamic_friction_range"] = dynamic_friction_end
+
+    ## ======================== Commands ========================== ##
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=stop_ratio_end,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ),
+    )
     
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
@@ -361,26 +323,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
 @configclass
 class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     curriculum = None
-
-    # ================ Set max difficulty to curriculum variables ====================
-    events = EventPlayCfg()
-    events.wheel_physics_material.params["static_friction_range"] = GOATStandDRPPEnvCfg.static_friction_end
-    events.wheel_physics_material.params["dynamic_friction_range"] = GOATStandDRPPEnvCfg.dynamic_friction_end
-
-    rfi_torque_limit: float = GOATStandDRPPEnvCfg.rfi_end  # N·m 
-    rao_torque_limit: float = GOATStandDRPPEnvCfg.rao_end  # N·m
-
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=GOATStandDRPPEnvCfg.stop_ratio_end,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
-        ),
-    )
 
     # visualization
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
