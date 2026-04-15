@@ -247,9 +247,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                  self.joint_vel_hist.reshape(self.num_envs, -1),         # [E, 8*t]
                                  ), dim=1)                             
         
-        # privileged_info = torch.cat((self.base_height,                      # [E, 1]
-        #                              self.contact_force,                    # [E, 3]
-        #                              self.friction_coefficient), dim=1)     # [E, 2]
+        privileged_info = torch.cat((self.base_lin_vel,                     # [E, 3]
+                                     self.base_height,                      # [E, 1]
+                                     self.friction_coefficient), dim=1)     # [E, 2]
         
         state = observation
 
@@ -369,7 +369,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Privileged data
         self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
         material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
-        self.friction_coefficient[i] = torch.stack([material_property[:, 0, 0], material_property[:, 0, 1]], dim=-1)
+        self.friction_coefficient[i] = torch.stack([material_property[:, -2, 0], material_property[:, -1, 1]], dim=-1) # Left, Right wheel
         # Information related to Commands Tracking
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
@@ -410,5 +410,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         extras["viz_data"]["right_knee_velocity (deg/s)"]  = joint_velocity[:, 5]
         extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 6]
         extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 7]
+
+        extras["viz_data"]["base_linear_velocity (m/s)"] = self.base_lin_vel[:, 0]
+        extras["viz_data"]["command_velocity (m/s)"] = self.command_inputs_b[:, 0]
 
         return extras 

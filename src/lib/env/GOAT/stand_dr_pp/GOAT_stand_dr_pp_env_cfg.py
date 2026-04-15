@@ -32,33 +32,33 @@ class EventCfg:
         params={
             "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (-0.05, 0.05),
-                "y": (-0.05, 0.05),
-                "z": (-0.05, 0.05),
-                "roll": (-0.01, 0.01),
-                "pitch": (-0.01, 0.01),
-                "yaw": (-0.01, 0.01)},
+                "x": (-0.01, 0.01),
+                "y": (-0.01, 0.01),
+                "z": (-0.01, 0.01),
+                "roll": (-0.005, 0.005),
+                "pitch": (-0.005, 0.005),
+                "yaw": (-0.005, 0.005)},
         },
     )
 
     reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_scale,
+        func=randomizer.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (1.0, 1.3),
+            "position_range": (-0.02, 0.02),
             "velocity_range": (0.0, 0.0),
         },
     )
 
     wheel_physics_material = EventTerm(
-      func=randomizer.randomize_rigid_body_material,
+      func=randomizer.randomize_rigid_body_material_shared,
       mode='reset',
       params={
           "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
           "static_friction_range": (0.5, 0.6),
           "dynamic_friction_range": (0.4, 0.5),
           "restitution_range": (0.0, 0.02),
-          "num_buckets": 500,
+          "num_buckets": 1000,
           "make_consistent": True,
       },
   )
@@ -123,31 +123,29 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.8
 
     r_joint_deviation_weight = 4.0
-    r_lin_vel_tracking_weight = 2.0
+    r_lin_vel_tracking_weight = 4.0
     r_ang_vel_tracking_weight = 2.0
     r_upright_weight = 1.0
 
     p_ang_vel_weight = 5.0
     p_joint_limit_weight = 10.0
-    p_all_torque_limit_weight = 1.0
-    p_all_torque_weight = 0.1
-    p_joint_velocity_weight = 0.05
+    p_all_torque_limit_weight = 2.0
+    p_all_torque_weight = 0.02
+    p_joint_velocity_weight = 0.1
     p_action_rate_weight = 2.0
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = True
-    rfi_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.0, 0.0]    # N·m 
-    rao_torque_limit: list[float] = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]    # N·m
     vel_hist_length: int = 4
 
     ## ======================== Curriculum ======================= ##
     warmup = 0.2
     endup = 0.6
-    static_friction_start: tuple[float, float] = (0.5, 0.6)
-    static_friction_end: tuple[float, float] = (0.3, 0.8)
-    dynamic_friction_start: tuple[float, float] = (0.4, 0.5)
-    dynamic_friction_end: tuple[float, float] = (0.2, 0.7)
+    static_friction_start: tuple[float, float] = (0.9, 1.2)
+    static_friction_end: tuple[float, float] = (0.7, 1.0)
+    dynamic_friction_start: tuple[float, float] = (0.6, 1.2)
+    dynamic_friction_end: tuple[float, float] = (0.5, 1.0)
 
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
@@ -174,12 +172,12 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
 
-    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.0, 0.0]
-    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.0, 0.0]
+    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.01, 0.01]
+    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
-    stop_ratio_start = 1.0
-    stop_ratio_end = 1.0
+    stop_ratio_start = 0.7
+    stop_ratio_end = 0.2
 
     curriculum = CurriculumManagerCfg(
         warmup=warmup,
@@ -235,7 +233,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     events.wheel_physics_material.params["static_friction_range"] = static_friction_end
     events.wheel_physics_material.params["dynamic_friction_range"] = dynamic_friction_end
 
-    ## ======================== Commands ========================== ##
+    # Command
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
@@ -244,10 +242,23 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     
+    # ERFI
+    rfi_torque_limit: list[float] = rfi_end    # N·m 
+    rao_torque_limit: list[float] = rao_end    # N·m
+
+    # Noise Model — std is a list for per-axis control; initialized to max difficulty
+    # and overridden to start values by CurriculumManager on env init.
+    observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
+    observation_noise_params: dict = {
+        "mean": 0.0,
+        "std": obs_noise_end,
+        "operation": "add",
+    }
+
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
         "left_hip_torque (Nm)": 0.0,
@@ -265,7 +276,10 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "left_knee_velocity (deg/s)": 0.0,
         "right_knee_velocity (deg/s)": 0.0,
         "left_wheel_velocity (deg/s)": 0.0,
-        "right_wheel_velocity (deg/s)": 0.0}
+        "right_wheel_velocity (deg/s)": 0.0,
+        "base_linear_velocity (m/s)": 0.0,
+        "command_velocity (m/s)": 0.0,
+        }
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(
@@ -302,22 +316,12 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         update_period=0.0                                           # Update every period
     )
 
-    # Noise Model — std is a list for per-axis control; initialized to max difficulty
-    # and overridden to start values by CurriculumManager on env init.
-    observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
-    observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": obs_noise_end,
-        "operation": "add",
-    }
-
     # Visualization
     root_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
         prim_path="/Visuals/Root"
     )
 
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
-
 
 @configclass
 class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):

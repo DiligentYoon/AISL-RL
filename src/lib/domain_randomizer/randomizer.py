@@ -314,6 +314,92 @@ class randomize_rigid_body_material(ManagerTermBase):
         self.asset.root_physx_view.set_material_properties(materials, env_ids)
 
 
+class randomize_rigid_body_material_shared(randomize_rigid_body_material):
+    """Randomize wheel physics material with the same values for left and right wheels.
+
+    Unlike the default randomize_rigid_body_material term, which samples material
+    bucket IDs independently per shape, this term samples exactly one material
+    bucket per environment and applies it to all selected wheel bodies.
+
+    As a result:
+        - left wheel and right wheel always share the same material values
+        - all collision shapes belonging to each selected wheel body also share
+          the same material values
+    """
+
+    def __call__(
+        self,
+        env: Env,
+        env_ids: torch.Tensor | None,
+        static_friction_range: tuple[float, float],
+        dynamic_friction_range: tuple[float, float],
+        restitution_range: tuple[float, float],
+        num_buckets: int,
+        asset_cfg: SceneEntityCfg,
+        make_consistent: bool = False,
+    ):
+        # Resolve environment IDs on CPU
+        if env_ids is None:
+            env_ids = torch.arange(env.scene.num_envs, device="cpu")
+        else:
+            env_ids = env_ids.cpu()
+
+        # Re-sample material buckets only if the curriculum changes the ranges
+        if (self.static_friction_range != static_friction_range) or (
+            self.dynamic_friction_range != dynamic_friction_range
+        ):
+            self.static_friction_range = static_friction_range
+            self.dynamic_friction_range = dynamic_friction_range
+
+            range_list = [self.static_friction_range, self.dynamic_friction_range, restitution_range]
+            ranges = torch.tensor(range_list, device="cpu")
+
+            self.material_buckets = math_utils.sample_uniform(
+                ranges[:, 0],
+                ranges[:, 1],
+                (num_buckets, 3),
+                device="cpu",
+            )
+
+            if make_consistent:
+                self.material_buckets[:, 1] = torch.min(
+                    self.material_buckets[:, 0],
+                    self.material_buckets[:, 1],
+                )
+
+        # Get current material buffer from PhysX
+        materials = self.asset.root_physx_view.get_material_properties()
+
+        # Sample one shared bucket per environment
+        shared_bucket_ids = torch.randint(
+            0, num_buckets, (len(env_ids),), device="cpu"
+        )
+        shared_samples = self.material_buckets[shared_bucket_ids]  # shape: (num_envs, 3)
+
+        # Apply the same sampled material to all selected wheel bodies
+        if self.num_shapes_per_body is not None:
+            for body_id in self.asset_cfg.body_ids:
+                # Find the shape index range for this body
+                start_idx = sum(self.num_shapes_per_body[:body_id])
+                end_idx = start_idx + self.num_shapes_per_body[body_id]
+
+                # Broadcast the same material to every shape of this body
+                num_shapes_in_body = end_idx - start_idx
+                materials[env_ids, start_idx:end_idx] = shared_samples.unsqueeze(1).repeat(
+                    1, num_shapes_in_body, 1
+                )
+        else:
+            # Fallback path: if shape-per-body indexing is unavailable,
+            # assign the same material to all shapes covered by the asset view.
+            total_num_shapes = self.asset.root_physx_view.max_shapes
+            materials[env_ids] = shared_samples.unsqueeze(1).repeat(
+                1, total_num_shapes, 1
+            )
+
+        # Push updated materials back to PhysX
+        self.asset.root_physx_view.set_material_properties(materials, env_ids)
+
+
 class randomize_rigid_body_mass(ManagerTermBase):
     """Randomize the mass of the bodies by adding, scaling, or setting random values.
 
