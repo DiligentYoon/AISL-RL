@@ -251,7 +251,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                      self.base_height,                      # [E, 1]
                                      self.friction_coefficient), dim=1)     # [E, 2]
         
-        state = observation
+        state = torch.cat([observation, privileged_info], dim=-1)
 
         return state
     

@@ -42,10 +42,11 @@ class EventCfg:
     )
 
     reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_offset,
+        func=randomizer.reset_joints_by_offset_and_bias,
         mode="reset",
         params={
-            "position_range": (-0.02, 0.02),
+            "bias": (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0),
+            "position_range": (-0.03, 0.03),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -69,7 +70,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.53),
+            pos=(0.0, 0.0, 0.51), # biased initial pos
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
@@ -89,13 +90,13 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 70                      # Observation space
-    state_space = 70                            # State space including privilege information
+    state_space = 76                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
     joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.05]])
+    wheel_kp = torch.tensor([[0.2]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 1.0
     PI_LPF_gain = 1.0
@@ -109,6 +110,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Wheel per legs
     torque_limits = [2.5, 2.5, 2.5, 2.5, 5.0, 5.0, 2.5, 2.5]
+    
     
     ## ========================== Terrain ========================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
@@ -242,7 +244,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     
