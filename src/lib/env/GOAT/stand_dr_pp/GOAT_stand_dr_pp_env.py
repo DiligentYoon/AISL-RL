@@ -371,8 +371,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
         
         # Reset controller
-        self.leg_controller.reset()
-        self.wheel_controller.reset()
+        self.leg_controller.reset(env_ids)
+        self.wheel_controller.reset(env_ids)
         
         # Reset commands
         self.commands.reset(env_ids)

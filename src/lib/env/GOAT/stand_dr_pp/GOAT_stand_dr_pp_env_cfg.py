@@ -175,7 +175,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
 
     min_action_delay_steps: int = 0                                   # Action delay
-    max_action_delay_steps: int = 0
+    max_action_delay_steps: int = 3
 
     rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.01, 0.01]
     rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
