@@ -95,6 +95,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque = self._robot.data.applied_torque
         self.joint_deviation = self.joint_pos - self._robot.data.default_joint_pos
+        self.joint_acc = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
 
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
@@ -292,7 +293,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Command Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.5**2)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.75**2)
 
         ang_vel_error = torch.square(self.command_inputs_b[:, 2] - self.base_ang_vel[:, 2])
         r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.5**2)
@@ -304,6 +305,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
+        p_joint_accel       = -torch.sum(torch.square(self.joint_acc), dim=1) # NOTE: wheel is included
         p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
@@ -338,6 +340,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
             "Task Penalty / Torque"          : self.cfg.p_all_torque_weight * p_all_torque,
             "Task Penalty / Joint_Vel"       : self.cfg.p_joint_velocity_weight * p_joint_velocity,
+            "Task Penalty / Joint_Acc"       : self.cfg.p_joint_accel_weight * p_joint_accel,
             "Task Penalty / Action_Rate"     : self.cfg.p_action_rate_weight * p_action_rate,
         }
 
@@ -371,9 +374,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
         
         # Reset controller
-        self.leg_controller.reset()
-        self.wheel_controller.reset()
-        
+        self.leg_controller.reset(env_ids)
+        self.wheel_controller.reset(env_ids)
+
         # Reset commands
         self.commands.reset(env_ids)
         
@@ -412,6 +415,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
+        self.joint_acc[i] = self._robot.data.joint_acc[i]
         # History information (noisy)
         if env_ids is not None:
             self.joint_vel_hist[i, (self.hist_count[i] % self.cfg.vel_hist_length), :] = self._robot.data.joint_vel[i] # Reset env -> default value
@@ -446,5 +450,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         extras["viz_data"]["base_linear_velocity (m/s)"] = self.base_lin_vel[:, 0]
         extras["viz_data"]["command_velocity (m/s)"] = self.command_inputs_b[:, 0]
+        extras["viz_data"]["command_angular_velocity (deg/s)"] = torch.rad2deg(self.command_inputs_b[:, 2])
 
         return extras 

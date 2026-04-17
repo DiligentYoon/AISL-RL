@@ -70,7 +70,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.51), # biased initial pos
+            pos=(0.0, 0.0, 0.5), # biased initial pos
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
@@ -96,14 +96,14 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ======================== Controller gain ======================= ##
     joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.2]])
+    wheel_kp = torch.tensor([[0.02]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 1.0
     PI_LPF_gain = 1.0
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
     
-    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0] # NOTE: Temporary
+    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0] # NOTE: Temporary
     pos_margin_factor = 1.5
     
     ## ==================== Robot configuration ==================== ##
@@ -136,11 +136,12 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.05
-    p_action_rate_weight = 0.05
+    p_joint_accel_weight = 2.0e-6
+    p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
-    erfi_enabled: bool = True
+    erfi_enabled: bool = False
     vel_hist_length: int = 4
 
     ## ======================== Curriculum ======================= ##
@@ -189,20 +190,6 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         endup=endup,
         params=[
             CurriculumParamCfg(
-                name="static_friction_coefficient",
-                attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
-                start_value= static_friction_start,
-                end_value=static_friction_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
-                name="dynamic_friction_coefficient",
-                attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
-                start_value= dynamic_friction_start,
-                end_value=dynamic_friction_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
                 name="observation_noise",
                 attr_path="cfg/observation_noise_params/std",
                 start_value=obs_noise_start,
@@ -223,6 +210,20 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
                 end_value=rao_end,
                 schedule="linear",
             ),
+            # CurriculumParamCfg(
+            #     name="static_friction_coefficient",
+            #     attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
+            #     start_value= static_friction_start,
+            #     end_value=static_friction_end,
+            #     schedule="linear",
+            # ),
+            # CurriculumParamCfg(
+            #     name="dynamic_friction_coefficient",
+            #     attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
+            #     start_value= dynamic_friction_start,
+            #     end_value=dynamic_friction_end,
+            #     schedule="linear",
+            # ),
             # CurriculumParamCfg(
             #     name="stop_command_ratio",
             #     attr_path="cfg/commands/prob_standing_envs",
@@ -247,7 +248,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 0.7), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     
@@ -284,6 +285,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         "right_wheel_velocity (deg/s)": 0.0,
         "base_linear_velocity (m/s)": 0.0,
         "command_velocity (m/s)": 0.0,
+        "command_angular_velocity (deg/s)": 0.0,
         }
 
     # Simulation
