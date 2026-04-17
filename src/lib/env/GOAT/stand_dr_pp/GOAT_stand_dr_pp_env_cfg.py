@@ -103,7 +103,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
     
-    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 30.0, 30.0] # NOTE: Temporary
+    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0] # NOTE: Temporary
     pos_margin_factor = 1.5
     
     ## ==================== Robot configuration ==================== ##
@@ -126,17 +126,17 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.8
 
-    r_lin_vel_tracking_weight = 2.0
+    r_lin_vel_tracking_weight = 3.0
     r_ang_vel_tracking_weight = 1.0
     r_upright_weight = 1.0
 
-    p_joint_deviation_weight = 4.0
-    p_ang_vel_weight = 5.0
+    p_joint_deviation_weight = 1.0
+    p_ang_vel_weight = 1.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.02
-    p_joint_velocity_weight = 0.1
-    p_action_rate_weight = 0.01
+    p_all_torque_weight = 0.01
+    p_joint_velocity_weight = 0.05
+    p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##

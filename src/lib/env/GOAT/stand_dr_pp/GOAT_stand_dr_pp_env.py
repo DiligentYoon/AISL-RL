@@ -49,6 +49,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                             num_envs=self.num_envs,
                                             num_dof=self.cfg.leg_dof,
                                             num_leg=self.cfg.num_leg,
+                                            min_delay=self.cfg.min_action_delay_steps,
+                                            max_delay=self.cfg.max_action_delay_steps,
                                             device=self.device,
                                             dt=self.cfg.sim_dt,
                                             pos_limits=self._robot.data.joint_limits,
@@ -61,6 +63,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
                                               num_envs=self.num_envs,
                                               num_dof=1,                        
                                               num_leg=self.cfg.num_leg,
+                                              min_delay=self.cfg.min_action_delay_steps,
+                                              max_delay=self.cfg.max_action_delay_steps,
                                               device=self.device,
                                               dt=self.cfg.sim_dt,
                                               joint_vel_limits=self.joint_vel_limits,
@@ -366,17 +370,9 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
         self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
         
-        # Random delay sampling index
-        sampled_delays = torch.randint(
-            self.cfg.min_action_delay_steps, 
-            self.cfg.max_action_delay_steps + 1, 
-            (len(env_ids),), 
-            device=self.device
-        )
-        self.delays_per_env[env_ids] = sampled_delays
-        
-        # Action buffer initialization
-        self.action_buffer[env_ids] = torch.zeros_like(self.action_buffer[env_ids], device=self.device)
+        # Reset controller
+        self.leg_controller.reset()
+        self.wheel_controller.reset()
         
         # Reset commands
         self.commands.reset(env_ids)
