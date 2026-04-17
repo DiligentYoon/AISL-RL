@@ -62,6 +62,9 @@ class EventCfg:
 class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## =========== Domain Randomization ============ ##
     events = EventCfg()
+    min_action_delay_steps: int = 0
+    max_action_delay_steps: int = 3
+
 
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
