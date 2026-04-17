@@ -94,7 +94,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
     wheel_kp = torch.tensor([[0.2]])
     wheel_ki = torch.tensor([[0.0]])
@@ -102,6 +102,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     PI_LPF_gain = 1.0
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
+    
+    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 30.0, 30.0] # NOTE: Temporary
     pos_margin_factor = 1.5
     
     ## ==================== Robot configuration ==================== ##
@@ -134,7 +136,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.02
     p_joint_velocity_weight = 0.1
-    p_action_rate_weight = 2.0
+    p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
@@ -171,6 +173,9 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     }
     obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
+
+    min_action_delay_steps: int = 0                                   # Action delay
+    max_action_delay_steps: int = 0
 
     rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.01, 0.01]
     rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
@@ -242,7 +247,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     

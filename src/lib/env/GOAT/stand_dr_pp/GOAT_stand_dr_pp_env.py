@@ -95,7 +95,24 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
         self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
+        self.action_scale_factor = torch.tensor(self.cfg.train_action_scale_factor, device=self.device).repeat((self.num_envs, 1))
 
+        # Action Buffer for action delay
+        self.action_buffer = torch.zeros(
+            (self.num_envs, self.cfg.max_action_delay_steps + 1, self.cfg.action_space),
+            device=self.device
+        )
+        
+        # Delays for each environments
+        self.delays_per_env = torch.zeros(
+            self.num_envs, 
+            dtype=torch.long, 
+            device=self.device
+        )
+        
+        # batch index
+        self.batch_indices = torch.arange(self.num_envs, device=self.device)
+        
         # Previous action
         self.previous_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
         self.previous_joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -179,9 +196,20 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             actions (torch.Tensor): Joint pos command (angle), wheel's velocity for each legs in shape (num_envs, 2, 4)
         """
         # Refine command
+        # Pop
+        # self.action_buffer = torch.roll(self.action_buffer, shifts=1, dims=1)
+        
+        # # Action update
+        # self.action_buffer[:, 0, :] = actions.clone()
+        # delayed_actions = self.action_buffer[self.batch_indices, self.delays_per_env, :]
+
+        # self.joint_pos_delta_cmd = delayed_actions[:, self.joint_ids]
+        # self.wheel_vel_cmd = delayed_actions[:, self.wheel_ids]
+
         self.actions = actions.clone()
-        self.joint_pos_delta_cmd = self.actions[:, self.joint_ids]
-        self.wheel_vel_cmd = self.actions[:, self.wheel_ids]
+        self.processed_actions = actions.clone() * self.action_scale_factor
+        self.joint_pos_delta_cmd = self.processed_actions[:, self.joint_ids]
+        self.wheel_vel_cmd = self.processed_actions[:, self.wheel_ids]
         
     def _apply_action(self):         
         # Current state
@@ -272,7 +300,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
-        p_action_rate       = -torch.sum(torch.square(self.actions - self.previous_actions), dim=1)
+        p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
@@ -337,8 +365,22 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.hist_count[env_ids] = 0
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
         self.joint_vel_hist[env_ids] = torch.zeros_like(self.joint_vel_hist[env_ids], device=self.device)
+        
+        # Random delay sampling index
+        sampled_delays = torch.randint(
+            self.cfg.min_action_delay_steps, 
+            self.cfg.max_action_delay_steps + 1, 
+            (len(env_ids),), 
+            device=self.device
+        )
+        self.delays_per_env[env_ids] = sampled_delays
+        
+        # Action buffer initialization
+        self.action_buffer[env_ids] = torch.zeros_like(self.action_buffer[env_ids], device=self.device)
+        
         # Reset commands
         self.commands.reset(env_ids)
+        
         # ERFI
         if self.cfg.erfi_enabled:
             rao_reset_ids = env_ids[self.rao_env_mask[env_ids]]
