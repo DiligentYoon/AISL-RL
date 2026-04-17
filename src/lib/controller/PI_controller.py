@@ -9,7 +9,8 @@ class PI_Controller():
 
     def __init__(self, 
                  kp, ki, alpha, 
-                 num_envs: int, num_dof: int, num_leg: int, 
+                 num_envs: int, num_dof: int, num_leg: int,
+                 min_delay: int, max_delay: int,
                  device: str, dt: float,
                  joint_vel_limits: torch.Tensor, torque_limits: torch.Tensor):
         """
@@ -22,6 +23,7 @@ class PI_Controller():
             num_envs (int): Number of pararell training environments.
             num_dof (int): controllable dof per leg.
             num_leg (int): Number of legs
+            max_delay (int): Maximum amount for action delay
             device (str): "cuda:0" or "cpu".
             dt (float): Simulation time-step.
         """
@@ -30,11 +32,34 @@ class PI_Controller():
         self.num_envs = num_envs
         self.num_dof = num_dof
         self.num_leg = num_leg
+        self.min_delay = min_delay
+        self.max_delay = max_delay
         self.dt = dt
         self.alpha = alpha
         self.joint_vel_limits = joint_vel_limits
         self.torque_limits = torque_limits
         self.old_torque = torch.zeros(self.num_envs, num_dof * num_leg, device=self.device)
+
+        # Robot dof
+        leg_dof = self.num_dof                          # wheel joint
+        self.num_joint = leg_dof * self.num_leg
+
+        # Action buffer
+        self.action_buffer = torch.zeros(
+            (self.num_envs, self.max_delay + 1, self.num_joint), 
+            dtype=torch.float32, 
+            device=self.device
+        )
+        
+        # Delay level of each environment
+        self.env_delays = torch.zeros(
+            self.num_envs, 
+            dtype=torch.long, 
+            device=self.device
+        )
+        
+        # Batch index
+        self.batch_indices = torch.arange(self.num_envs, device=self.device)
 
         # Isaac sim's Joint order: ['hip_L_Joint', 'hip_R_Joint', 'thigh_L_Joint', 'thigh_R_Joint', 'knee_L_Joint', 'knee_R_Joint', 'wheel_L_Joint', 'wheel_R_Joint']
         self.left_leg_indices = torch.tensor([6], device=self.device, dtype=torch.long)                                      # Hard coded
@@ -77,20 +102,25 @@ class PI_Controller():
         Returns:
             torch.Tensor: Joint torque.
         """
-        # Robot dof
-        leg_dof = self.num_dof                          # wheel joint
-        num_joint = leg_dof * self.num_leg
+        # Pop queue
+        self.action_buffer = torch.roll(self.action_buffer, shifts=1, dims=1)
+        
+        # Push queue
+        self.action_buffer[:, 0, :] = joint_vel_cmd
+
+        # Delayed command
+        delayed_actions = self.action_buffer[self.batch_indices, self.env_delays, :]
 
         torque_limits = self.torque_limits[:, 6:]            # Extract wheel torque limits
 
         # --- Left Leg slicing ---
         joint_vel_left = torch.index_select(joint_vel, 1, self.left_leg_indices)
-        joint_vel_cmd_left = joint_vel_cmd[:, 0].unsqueeze(-1)
+        joint_vel_cmd_left = delayed_actions[:, 0].unsqueeze(-1)
         joint_vel_limits_left = torch.index_select(self.joint_vel_limits, 1, self.left_leg_indices)
 
         # --- Right Leg slicing ---
         joint_vel_right = torch.index_select(joint_vel, 1, self.right_leg_indices)
-        joint_vel_cmd_right = joint_vel_cmd[:, 1].unsqueeze(-1)
+        joint_vel_cmd_right = delayed_actions[:, 1].unsqueeze(-1)
         joint_vel_limits_right = torch.index_select(self.joint_vel_limits, 1, self.right_leg_indices)
 
         # Left foot PI control
@@ -104,7 +134,7 @@ class PI_Controller():
         torque_right = self.kp * joint_vel_right_error + self.ki * joint_vel_right_error * self.dt                      # PI feedback
         
         # Combine torque inputs
-        torque = torch.zeros(self.num_envs, num_joint, device=self.device)
+        torque = torch.zeros(self.num_envs, self.num_joint, device=self.device)
         torque = torch.cat((torque_left, torque_right), dim=1)
         
         # LPF for torque
@@ -115,3 +145,16 @@ class PI_Controller():
         torque = torch.clamp(torque, -torque_limits, torque_limits)
         
         return torque
+    
+    def reset(self, env_ids: torch.tensor):
+        # New delay level
+        sampled_delays = torch.randint(
+            self.min_delay, 
+            self.max_delay + 1, 
+            (len(env_ids),), 
+            device=self.device
+        )
+        self.env_delays[env_ids] = sampled_delays
+        
+        # Reset buffer
+        self.action_buffer[env_ids] = 0.0
