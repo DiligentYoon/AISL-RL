@@ -376,7 +376,11 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Reset controller
         self.leg_controller.reset(env_ids)
         self.wheel_controller.reset(env_ids)
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 2784d51d15d6087772d537afb83d0919bb5e260c
         # Reset commands
         self.commands.reset(env_ids)
         
