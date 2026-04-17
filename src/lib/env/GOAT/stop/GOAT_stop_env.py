@@ -7,17 +7,17 @@ import numpy as np
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
-from lib.env.GOAT.stand_dr_pp.GOAT_stand_dr_pp_env_cfg import GOATStandDRPPEnvCfg, GOATStandDRPPPlayEnvCfg
+from lib.env.GOAT.stop.GOAT_stop_env_cfg import GOATStopEnvCfg, GOATStopPlayEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
 from lib.controller.PD_controller import PD_Controller
 from lib.controller.PI_controller import PI_Controller
 from lib.domain_randomizer.commander import UniformNonHolonomicCommand
 from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
-class GOATStandDRPPEnv(GOATBaseEnv):
-    cfg: GOATStandDRPPEnvCfg | GOATStandDRPPPlayEnvCfg
+class GOATStopDRPPEnv(GOATBaseEnv):
+    cfg: GOATStopEnvCfg | GOATStopPlayEnvCfg
 
-    def __init__(self, cfg: GOATStandDRPPEnvCfg | GOATStandDRPPPlayEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: GOATStopEnvCfg | GOATStopPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Config
@@ -82,6 +82,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         self.friction_coefficient = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
 
         # Command
+        self.stop_sign = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
         self.command_inputs_b   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
         self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
 
@@ -368,6 +369,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
+        self.stop_sign[i] = (torch.norm(self.command_inputs_b[i], dim=-1) <= 1e-6).unsqueeze(-1).float()
         # Action regularization
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)

@@ -65,7 +65,7 @@ class EventCfg:
   )
 
 @configclass
-class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
+class GOATStopEnvCfg(GOATBaseEnvCfg):
 
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
@@ -124,11 +124,11 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.8
 
-    r_lin_vel_tracking_weight = 2.0
-    r_ang_vel_tracking_weight = 1.0
-    r_upright_weight = 1.0
+    r_lin_vel_tracking_weight = 5.0
+    r_ang_vel_tracking_weight = 2.0
+    r_upright_weight = 2.0
 
-    p_joint_deviation_weight = 4.0
+    p_joint_deviation_weight = 1.5
     p_ang_vel_weight = 5.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
@@ -145,8 +145,8 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     warmup = 0.2
     endup = 0.6
     static_friction_start: tuple[float, float] = (0.9, 1.2)
-    static_friction_end: tuple[float, float] = (0.6, 1.2)
-    dynamic_friction_start: tuple[float, float] = (0.7, 1.0)
+    static_friction_end: tuple[float, float] = (0.7, 1.0)
+    dynamic_friction_start: tuple[float, float] = (0.6, 1.2)
     dynamic_friction_end: tuple[float, float] = (0.5, 1.0)
 
     # Per-axis observation noise groups (must match _get_observations concat order)
@@ -177,7 +177,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
     stop_ratio_start = 0.6
-    stop_ratio_end = 0.01
+    stop_ratio_end = 0.1
 
     curriculum = CurriculumManagerCfg(
         warmup=warmup,
@@ -236,13 +236,13 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     # Command
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 4.0),
+        resampling_time_range=(4.0, 5.0),
         prob_standing_envs=stop_ratio_end,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     
@@ -324,7 +324,7 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
 
 @configclass
-class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
+class GOATStopPlayEnvCfg(GOATStopEnvCfg):
     curriculum = None
 
     # visualization
