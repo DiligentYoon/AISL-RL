@@ -155,6 +155,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             joint_names_expr=["knee_.*",],
             effort_limit=9.0,
             velocity_limit=7.5,
+            gamma=1.0,
             gear_ratio=2.0,
             min_delay=0,
             max_delay=0,

@@ -61,9 +61,8 @@ class GOATTrackEnv(GOATBaseEnv):
         self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
 
         # Action regularization
-        self.out_of_limits_joint = -(self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 0]).clip(max=0.0) + \
-                                    (self.joint_pos - self._robot.data.soft_joint_pos_limits[:, :, 1]).clip(min=0.0)
-        self.out_of_limits_torque = (torch.abs(self._robot.data.applied_torque) - self.torque_limits * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.out_of_limits_joint = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.out_of_limits_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.applied_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_deviation = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_acc = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -180,9 +179,8 @@ class GOATTrackEnv(GOATBaseEnv):
             # RAO Env : Random constant torque offset
             erfi_perturbation[self.rao_env_mask] = self.rao_torque_offset[self.rao_env_mask]
             self.erfi_torque = erfi_perturbation
-
-        # Load to sim buffer
-        self._robot.set_joint_effort_target(self.erfi_torque)
+            # Load to sim buffer
+            self._robot.set_joint_effort_target(self.erfi_torque)
 
     def _get_observations(self) -> torch.Tensor:
         """
@@ -245,7 +243,7 @@ class GOATTrackEnv(GOATBaseEnv):
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_wheel_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.wheel_ids]), dim=1) 
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc), dim=1) # NOTE: wheel is included
-        p_action_rate       = -torch.sum(torch.abs((self.actions - self.previous_actions)), dim=1)
+        p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation

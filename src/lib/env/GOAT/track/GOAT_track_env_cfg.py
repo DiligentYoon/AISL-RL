@@ -88,30 +88,22 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 64                      # Observation space
-    state_space = 70                            # State space including privilege information
+    observation_space = 32                      # Observation space
+    state_space = 38                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
-    joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.02]])
-    wheel_ki = torch.tensor([[0.0]])
-    PD_LPF_gain = 1.0
-    PI_LPF_gain = 1.0
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
     
     train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0] # NOTE: Temporary
-    pos_margin_factor = 1.5
+    # torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
     num_leg = 2                                 # Bipedal
     n_leg_j = leg_dof * num_leg
     num_total_joints = n_leg_j + num_leg        # Wheel per legs
-    torque_limits = [2.5, 2.5, 2.5, 2.5, 5.0, 5.0, 2.5, 2.5]
-    
     
     ## ========================== Terrain ========================== ##
     default_terrain_static_friction = 0.7       # Default terrain configuration
@@ -123,7 +115,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     termination_gravity = 0.6
 
     ## ======================= Reward Shaping ====================== ##
-    soft_torque_limit = 0.8
+    soft_torque_limit = 0.7
 
     r_lin_vel_tracking_weight = 3.0
     r_ang_vel_tracking_weight = 1.0
@@ -342,4 +334,4 @@ class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # plot
-    # plotter = PNGSavePlotter
+    plotter = PNGSavePlotter
