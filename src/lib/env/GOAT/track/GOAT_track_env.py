@@ -85,6 +85,11 @@ class GOATTrackEnv(GOATBaseEnv):
 
         # Default config
         self.default_joint_pos = self._robot.data.default_joint_pos
+
+        # Contact sensor
+        self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["base_Link",
+                                                                         r"hip_L_Link",
+                                                                         f"hip_R_Link"])
     
 
     def _set_debug_vis_impl(self, debug_vis: bool):
@@ -131,18 +136,13 @@ class GOATTrackEnv(GOATBaseEnv):
 
     def _setup_scene(self):
         super()._setup_scene()
-
+        # Terrain
         self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
-
-        # Spawn contact sensor
-        contact_sensor = ContactSensor(cfg=self.cfg.contact_sensor)
-        self.scene.sensors["contact_sensor"] = contact_sensor
         # add commands cfg
         self.cfg.commands.num_envs = self.scene.num_envs
         self.cfg.commands.step_dt = self.step_dt
-
         # Collision filtering
         global_prim_paths = []
         if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
@@ -291,13 +291,14 @@ class GOATTrackEnv(GOATBaseEnv):
     def _get_dones(self):
         self._compute_intermediate_values()
 
-        projected_gravity_x = self.gravity_vector[:, 0]
-        projected_gravity_y = self.gravity_vector[:, 1]
-        died_fall   = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
+        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.contact_base_link_id]
+        # projected_gravity_x = self.gravity_vector[:, 0]
+        # projected_gravity_y = self.gravity_vector[:, 1]
+        # died_fall   = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
         # died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
         #                                torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         
-        terminated = died_fall
+        terminated = torch.sum(torch.norm(critical_contact_forces, dim=-1), dim=-1) > 1.0
         # terminated = died_fall | died_fall_2
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 

@@ -11,6 +11,7 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.actuators import DCMotorCfg, DelayedPDActuatorCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.sim.spawners.materials import RigidBodyMaterialCfg
 from lib.env.env_cfg import EnvCfg
@@ -290,6 +291,9 @@ class GOATBaseEnvCfg(EnvCfg):
 
     # Scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=3.0, replicate_physics=True)
+
+    # sensor
+    contact_sensors = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*")
 
     # Simulation
     sim: SimulationCfg = SimulationCfg(

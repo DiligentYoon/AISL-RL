@@ -2,9 +2,7 @@ import torch
 
 from abc import abstractmethod
 from isaaclab.assets import Articulation
-from isaaclab.envs import DirectRLEnv
-from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.terrains import TerrainImporter
+from isaaclab.sensors import ContactSensor
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 from lib.env.env import Env 
 
@@ -29,9 +27,15 @@ class GOATBaseEnv(Env):
         
     # Create scene
     def _setup_scene(self):
+        # robot
         self._robot = Articulation(self.cfg.GOAT_cfg)
         self.scene.articulations["robot"] = self._robot
-        self.scene.clone_environments(copy_from_source=True)          # clone environents
+        # sensor
+        self.scene.sensors["contact_sensor"] = ContactSensor(self.cfg.contact_sensors)
+        self.contact_sensors = self.scene.sensors["contact_sensor"]
+        self.contact_sensors.update_period = self.cfg.sim_dt
+        # clone env
+        self.scene.clone_environments(copy_from_source=True)         
 
     # Reset Env
     def _reset_idx(self, env_ids: torch.Tensor):

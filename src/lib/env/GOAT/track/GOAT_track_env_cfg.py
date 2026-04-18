@@ -97,7 +97,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
                            "wheel" : [1.0, ()]}
     
     train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0] # NOTE: Temporary
-    # torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
+    torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
     
     ## ==================== Robot configuration ==================== ##
     leg_dof = 3                                 # Hip, Thigh, Knee
@@ -301,13 +301,6 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
             restitution=default_terrain_restitution                 # Collision
         ),
         debug_vis=False
-    )
-
-    # Sensor
-    contact_sensor = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/.*wheel.*",
-        history_length=0,
-        update_period=0.0                                           # Update every period
     )
 
     # Visualization
