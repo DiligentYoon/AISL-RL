@@ -305,6 +305,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
+        p_wheel_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.wheel_ids]), dim=1) 
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc), dim=1) # NOTE: wheel is included
         p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
@@ -320,6 +321,8 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
+            self.cfg.p_wheel_velocity_weight * p_wheel_velocity             +
+            self.cfg.p_joint_accel_weight * p_joint_accel                   +
             self.cfg.p_action_rate_weight * p_action_rate                   +
             self.cfg.p_terminated_weight * p_terminated
         )
@@ -340,6 +343,7 @@ class GOATStandDRPPEnv(GOATBaseEnv):
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
             "Task Penalty / Torque"          : self.cfg.p_all_torque_weight * p_all_torque,
             "Task Penalty / Joint_Vel"       : self.cfg.p_joint_velocity_weight * p_joint_velocity,
+            "Task Penalty / Wheel_Vel"       : self.cfg.p_wheel_velocity_weight * p_wheel_velocity,
             "Task Penalty / Joint_Acc"       : self.cfg.p_joint_accel_weight * p_joint_accel,
             "Task Penalty / Action_Rate"     : self.cfg.p_action_rate_weight * p_action_rate,
         }
@@ -363,10 +367,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         return terminated, truncated
 
     def _reset_idx(self, env_ids: torch.Tensor):
-
-        # NOTE: Initializations (joint states, material properties, etc..) are implemented by domain randomizer
-        # Adjustment the Domain Randomization Parameters
-        # self.set_curriculum()
         super()._reset_idx(env_ids)
         # Reset previous action observation
         self.hist_count[env_ids] = 0
@@ -376,11 +376,6 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Reset controller
         self.leg_controller.reset(env_ids)
         self.wheel_controller.reset(env_ids)
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> 2784d51d15d6087772d537afb83d0919bb5e260c
         # Reset commands
         self.commands.reset(env_ids)
         

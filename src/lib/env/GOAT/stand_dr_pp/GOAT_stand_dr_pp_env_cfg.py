@@ -131,12 +131,13 @@ class GOATStandDRPPEnvCfg(GOATBaseEnvCfg):
     r_upright_weight = 1.0
 
     p_joint_deviation_weight = 1.0
-    p_ang_vel_weight = 1.0
+    p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.05
-    p_joint_accel_weight = 2.0e-6
+    p_wheel_velocity_weight = 5e-3
+    p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
 
@@ -347,4 +348,4 @@ class GOATStandDRPPPlayEnvCfg(GOATStandDRPPEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # plot
-    plotter = PNGSavePlotter
+    # plotter = PNGSavePlotter
