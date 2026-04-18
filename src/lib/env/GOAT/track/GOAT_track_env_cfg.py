@@ -111,7 +111,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     default_terrain_restitution = 0.0
 
     ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.15                # meter (m)
+    height_reset_condition = 0.1                # meter (m)
     termination_gravity = 0.6
 
     ## ======================= Reward Shaping ====================== ##

@@ -294,10 +294,11 @@ class GOATTrackEnv(GOATBaseEnv):
         projected_gravity_x = self.gravity_vector[:, 0]
         projected_gravity_y = self.gravity_vector[:, 1]
         died_fall   = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
-        died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
-                                       torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
+        # died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
+        #                                torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         
-        terminated = died_fall | died_fall_2
+        terminated = died_fall
+        # terminated = died_fall | died_fall_2
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated
