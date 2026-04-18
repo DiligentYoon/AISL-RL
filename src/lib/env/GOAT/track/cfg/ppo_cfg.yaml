@@ -40,7 +40,7 @@ agent:
 
   # Logging and checkpoint
   experiment:
-    directory: "GOAT_Stand_DR_PP"
+    directory: "GOAT_track"
     experiment_name: ""
     write_interval: auto
     checkpoint_interval: auto

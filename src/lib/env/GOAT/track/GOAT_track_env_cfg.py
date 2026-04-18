@@ -3,8 +3,7 @@ import gymnasium
 import torch
 
 from isaaclab.sim import SimulationCfg
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.actuators import DCMotorCfg
+from isaaclab.assets import ArticulationCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -65,12 +64,12 @@ class EventCfg:
   )
 
 @configclass
-class GOATStopEnvCfg(GOATBaseEnvCfg):
+class GOATTrackEnvCfg(GOATBaseEnvCfg):
 
     ## =========== Robot Variation (Init pos) ============== ##
     GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.51), # biased initial pos
+            pos=(0.0, 0.0, 0.5), # biased initial pos
             joint_pos={
                 "hip_L_Joint": 0.0,
                 "hip_R_Joint": 0.0,
@@ -94,14 +93,16 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    joint_kp = torch.tensor([[3.0, 3.0, 3.0]])
+    joint_kp = torch.tensor([[5.0, 5.0, 5.0]])
     joint_kd = torch.tensor([[0.1, 0.1, 0.1]])
-    wheel_kp = torch.tensor([[0.2]])
+    wheel_kp = torch.tensor([[0.02]])
     wheel_ki = torch.tensor([[0.0]])
     PD_LPF_gain = 1.0
     PI_LPF_gain = 1.0
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
+    
+    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0] # NOTE: Temporary
     pos_margin_factor = 1.5
     
     ## ==================== Robot configuration ==================== ##
@@ -124,29 +125,31 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.8
 
-    r_lin_vel_tracking_weight = 5.0
-    r_ang_vel_tracking_weight = 2.0
-    r_upright_weight = 2.0
+    r_lin_vel_tracking_weight = 3.0
+    r_ang_vel_tracking_weight = 1.0
+    r_upright_weight = 1.0
 
-    p_joint_deviation_weight = 1.5
-    p_ang_vel_weight = 5.0
+    p_joint_deviation_weight = 1.0
+    p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.02
-    p_joint_velocity_weight = 0.1
-    p_action_rate_weight = 2.0
+    p_all_torque_weight = 0.01
+    p_joint_velocity_weight = 0.05
+    p_wheel_velocity_weight = 5e-3
+    p_joint_accel_weight = 5.0e-7
+    p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
-    erfi_enabled: bool = True
+    erfi_enabled: bool = False
     vel_hist_length: int = 4
 
     ## ======================== Curriculum ======================= ##
     warmup = 0.2
     endup = 0.6
     static_friction_start: tuple[float, float] = (0.9, 1.2)
-    static_friction_end: tuple[float, float] = (0.7, 1.0)
-    dynamic_friction_start: tuple[float, float] = (0.6, 1.2)
+    static_friction_end: tuple[float, float] = (0.6, 1.2)
+    dynamic_friction_start: tuple[float, float] = (0.7, 1.0)
     dynamic_friction_end: tuple[float, float] = (0.5, 1.0)
 
     # Per-axis observation noise groups (must match _get_observations concat order)
@@ -158,7 +161,6 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
         "joint_pos":         {"dim": 6,  "std": 0.005}, # Joint encoder
         "joint_vel":         {"dim": 8,  "std": 0.5},   # Encoder derivative (noisy)
         "previous_actions":  {"dim": 8,  "std": 0.0},   # Internal action buffer (no noise)
-        "joint_vel_hist":    {"dim": 32, "std": 0.0},   # Velocity history (no noise)
     }
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
@@ -167,7 +169,6 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
-        "joint_vel_hist":    {"dim": 32, "std": 0.0},
     }
     obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
@@ -177,26 +178,12 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
     stop_ratio_start = 0.6
-    stop_ratio_end = 0.1
+    stop_ratio_end = 0.01
 
     curriculum = CurriculumManagerCfg(
         warmup=warmup,
         endup=endup,
         params=[
-            CurriculumParamCfg(
-                name="static_friction_coefficient",
-                attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
-                start_value= static_friction_start,
-                end_value=static_friction_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
-                name="dynamic_friction_coefficient",
-                attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
-                start_value= dynamic_friction_start,
-                end_value=dynamic_friction_end,
-                schedule="linear",
-            ),
             CurriculumParamCfg(
                 name="observation_noise",
                 attr_path="cfg/observation_noise_params/std",
@@ -219,6 +206,20 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
                 schedule="linear",
             ),
             # CurriculumParamCfg(
+            #     name="static_friction_coefficient",
+            #     attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
+            #     start_value= static_friction_start,
+            #     end_value=static_friction_end,
+            #     schedule="linear",
+            # ),
+            # CurriculumParamCfg(
+            #     name="dynamic_friction_coefficient",
+            #     attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
+            #     start_value= dynamic_friction_start,
+            #     end_value=dynamic_friction_end,
+            #     schedule="linear",
+            # ),
+            # CurriculumParamCfg(
             #     name="stop_command_ratio",
             #     attr_path="cfg/commands/prob_standing_envs",
             #     start_value=stop_ratio_start,
@@ -236,13 +237,13 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
     # Command
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
+        resampling_time_range=(3.0, 4.0),
         prob_standing_envs=stop_ratio_end,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 0.7), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
         ),
     )
     
@@ -279,6 +280,7 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
         "right_wheel_velocity (deg/s)": 0.0,
         "base_linear_velocity (m/s)": 0.0,
         "command_velocity (m/s)": 0.0,
+        "command_angular_velocity (deg/s)": 0.0,
         }
 
     # Simulation
@@ -324,7 +326,7 @@ class GOATStopEnvCfg(GOATBaseEnvCfg):
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
 
 @configclass
-class GOATStopPlayEnvCfg(GOATStopEnvCfg):
+class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
     curriculum = None
 
     # visualization
@@ -340,4 +342,4 @@ class GOATStopPlayEnvCfg(GOATStopEnvCfg):
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     # plot
-    plotter = PNGSavePlotter
+    # plotter = PNGSavePlotter

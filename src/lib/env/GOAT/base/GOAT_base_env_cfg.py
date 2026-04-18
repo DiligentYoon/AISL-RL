@@ -8,20 +8,21 @@ import isaaclab.sim as sim_utils
 
 from isaaclab.sim import SimulationCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.actuators import DCMotorCfg
+from isaaclab.actuators import DCMotorCfg, DelayedPDActuatorCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.sim.spawners.materials import RigidBodyMaterialCfg
 from lib.env.env_cfg import EnvCfg
+from lib.assets.actuators.actuator_cfg import GearDelayedPDActuatorCfg
 
 
 # Robot asset paths
 current_dir = os.path.dirname(__file__)
 WF_GOAT_ASSET = {
-    "urdf_path": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/urdf/WF_GOAT.urdf"),
-    "usd_path": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/usd/WF_GOAT.usd"),
-    "usd_place": os.path.join(current_dir, "../../../assets/GOAT/WF_GOAT/usd/"),
+    "urdf_path": os.path.join(current_dir, "../../../assets/robots/GOAT/WF_GOAT/urdf/WF_GOAT.urdf"),
+    "usd_path": os.path.join(current_dir, "../../../assets/robots/GOAT/WF_GOAT/usd/WF_GOAT.usd"),
+    "usd_place": os.path.join(current_dir, "../../../assets/robots/GOAT/WF_GOAT/usd/"),
     "usd_filename": "WF_GOAT.usd"
 }
 
@@ -102,54 +103,154 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
 
     # Actuators cfg
     actuators={
-        "hip": DCMotorCfg(
+        "hip": DelayedPDActuatorCfg(
             joint_names_expr=["hip_.*",],
             effort_limit=4.5,
-            saturation_effort=4.5,
             velocity_limit=15.0,
-            stiffness=0.0,                                      # Internal PD controller not used
-            damping=0.0,                                        # Internal PD controller not used
-            friction=0.12,                                      # Static friction coefficient
-            dynamic_friction=5.646268e-02,                      # Dynamic friction coefficient 
-            viscous_friction=3.190248e-01,                      # Viscous friction coefficient
+            min_delay=0,
+            max_delay=0,
+            stiffness={
+                "hip_L_Joint": 5.0,
+                "hip_R_Joint": 5.0,
+            },                                      
+            damping={
+                "hip_L_Joint": 0.1,
+                "hip_R_Joint": 0.1,
+            },
+            friction={
+                "hip_L_Joint": 0.0,
+                "hip_R_Joint": 0.0,
+            },                    
+            armature={
+                "hip_L_Joint": 0.01,
+                "hip_R_Joint": 0.01,
+            }             
         ),
 
-        "thigh": DCMotorCfg(
+        "thigh": DelayedPDActuatorCfg(
             joint_names_expr=["thigh_.*",],
             effort_limit=4.5,
-            saturation_effort=4.5,
             velocity_limit=15.0,
-            stiffness=0.0,
-            damping=0.0,
-            friction=0.12,
-            dynamic_friction=5.646268e-02,
-            viscous_friction=3.190248e-01,
+            min_delay=0,
+            max_delay=0,
+            stiffness={
+                "thigh_L_Joint": 5.0,
+                "thigh_R_Joint": 5.0,
+            },                                      
+            damping={
+                "thigh_L_Joint": 0.1,
+                "thigh_R_Joint": 0.1,
+            },
+            friction={
+                "thigh_L_Joint": 0.0,
+                "thigh_R_Joint": 0.0,
+            },                    
+            armature={
+                "thigh_L_Joint": 0.01,
+                "thigh_R_Joint": 0.01,
+            }             
         ),
 
-        "knee": DCMotorCfg(
+        "knee": GearDelayedPDActuatorCfg(
             joint_names_expr=["knee_.*",],
-            effort_limit=4.5,
-            saturation_effort=4.5,
-            velocity_limit=15.0,
-            stiffness=0.0,
-            damping=0.0,
-            friction=0.12,
-            dynamic_friction=5.373143e-02,
-            viscous_friction=8.441387e-02,
+            effort_limit=9.0,
+            velocity_limit=7.5,
+            gear_ratio=2.0,
+            min_delay=0,
+            max_delay=0,
+            stiffness={
+                "knee_L_Joint": 5.0,
+                "knee_R_Joint": 5.0,
+            },                                      
+            damping={
+                "knee_L_Joint": 0.1,
+                "knee_R_Joint": 0.1,
+            },
+            friction={
+                "knee_L_Joint": 0.0,
+                "knee_R_Joint": 0.0,
+            },                    
+            armature={
+                "knee_L_Joint": 0.01,
+                "knee_R_Joint": 0.01,
+            }             
         ),
         
-        "wheel": DCMotorCfg(
-            joint_names_expr=["wheel_.*"],
+        "wheel": DelayedPDActuatorCfg(
+            joint_names_expr=["wheel_.*",],
             effort_limit=2.5,
-            saturation_effort=2.5,
             velocity_limit=15.0,
-            stiffness=0.0,
-            damping=0.0,
-            friction=0.07,
-            dynamic_friction=3.218126e-02,
-            viscous_friction=1.715931e-02,
-        )
+            min_delay=0,
+            max_delay=0,
+            stiffness={
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+            },                                      
+            damping={
+                "wheel_L_Joint": 0.02,
+                "wheel_R_Joint": 0.02,
+            },
+            friction={
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+            },                    
+            armature={
+                "wheel_L_Joint": 0.01,
+                "wheel_R_Joint": 0.01,
+            }             
+        ),
     }
+
+
+    # actuators={
+    #     "hip": DCMotorCfg(
+    #         joint_names_expr=["hip_.*",],
+    #         effort_limit=4.5,
+    #         saturation_effort=4.5,
+    #         velocity_limit=15.0,
+    #         stiffness=0.0,                                      # Internal PD controller not used
+    #         damping=0.0,                                        # Internal PD controller not used
+    #         friction=0.12,                                      # Static friction coefficient
+    #         dynamic_friction=5.646268e-02,                      # Dynamic friction coefficient 
+    #         viscous_friction=3.190248e-01,                      # Viscous friction coefficient
+    #     ),
+
+    #     "thigh": DCMotorCfg(
+    #         joint_names_expr=["thigh_.*",],
+    #         effort_limit=4.5,
+    #         saturation_effort=4.5,
+    #         velocity_limit=15.0,
+    #         stiffness=0.0,
+    #         damping=0.0,
+    #         friction=0.12,
+    #         dynamic_friction=5.646268e-02,
+    #         viscous_friction=3.190248e-01,
+    #     ),
+
+    #     "knee": DCMotorCfg(
+    #         joint_names_expr=["knee_.*",],
+    #         effort_limit=4.5,
+    #         saturation_effort=4.5,
+    #         velocity_limit=15.0,
+    #         stiffness=0.0,
+    #         damping=0.0,
+    #         friction=0.12,
+    #         dynamic_friction=5.373143e-02,
+    #         viscous_friction=8.441387e-02,
+    #     ),
+        
+    #     "wheel": DCMotorCfg(
+    #         joint_names_expr=["wheel_.*"],
+    #         effort_limit=2.5,
+    #         saturation_effort=2.5,
+    #         velocity_limit=15.0,
+    #         stiffness=0.0,
+    #         damping=0.0,
+    #         friction=0.07,
+    #         dynamic_friction=3.218126e-02,
+    #         viscous_friction=1.715931e-02,
+    #     )
+    # }
 )
 
 @configclass
