@@ -15,6 +15,9 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.sim.spawners.materials import RigidBodyMaterialCfg
 from lib.env.env_cfg import EnvCfg
+from lib.domain_randomizer import randomizer
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import SceneEntityCfg
 from lib.assets.actuators.actuator_cfg import GearDelayedPDActuatorCfg
 
 
@@ -256,6 +259,122 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
 )
 
 @configclass
+class EventCfg:
+    """Configuration for domain-randomization events."""
+    # startup
+    add_base_mass = EventTerm(
+        func=randomizer.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg":SceneEntityCfg("robot", body_names="base_Link"),
+            "mass_distribution_params": (-1.0, 1.0),
+            "operation": "add",
+        }
+    )
+    add_link_mass = EventTerm(
+        func=randomizer.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_[LR]_Link"),
+            "mass_distribution_params": (0.8, 1.2),
+            "operation": "scale",
+        },
+    )
+    radomize_rigid_body_mass_inertia = EventTerm(
+        func=randomizer.randomize_rigid_body_mass_inertia,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mass_inertia_distribution_params": (0.8, 1.2),
+            "operation": "scale",
+        },
+    )
+    robot_wo_wheel_physics_material = EventTerm(
+        func=randomizer.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]),
+            "static_friction_range": (0.4, 1.2),
+            "dynamic_friction_range": (0.7, 0.9),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 1000,
+            "make_consistent": True,
+        },
+    )
+    robot_wheel_physics_material = EventTerm(
+      func=randomizer.randomize_rigid_body_material_shared,
+      mode='startup',
+      params={
+          "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
+          "static_friction_range": (0.4, 1.2),
+          "dynamic_friction_range": (0.7, 0.9),
+          "restitution_range": (0.0, 0.0),
+          "num_buckets": 1000,
+          "make_consistent": True,
+        },
+    )
+    robot_leg_actuator_gain = EventTerm(
+        func=randomizer.randomize_actuator_gains,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["^(?!wheel_).*$"]),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+    robot_wheel_actuator_gain = EventTerm(
+        func=randomizer.randomize_actuator_gains,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+    robot_center_of_mass = EventTerm(
+        func=randomizer.randomize_rigid_body_coms,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "com_distribution_params": ((-0.075, 0.075), (-0.075, 0.075), (-0.075, 0.075)),
+            "operation": "add",
+            "distribution": "uniform",
+        },
+    )
+
+    # reset
+    reset_body = EventTerm(
+        func=randomizer.reset_root_state_uniform,
+        mode='reset',
+        params={
+            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
+            "velocity_range": {
+                "x": (-0.1, 0.1),
+                "y": (-0.1, 0.1),
+                "z": (-0.1, 0.1),
+                "roll": (-0.1, 0.1),
+                "pitch": (-0.1, 0.1),
+                "yaw": (-0.1, 0.1)},
+        },
+    )
+    reset_robot_joints = EventTerm(
+        func=randomizer.reset_joints_by_offset_and_bias,
+        mode="reset",
+        params={
+            # "bias": (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0),
+            "bias": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            "position_range": (-0.03, 0.03),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+
+
+@configclass
 class GOATBaseEnvCfg(EnvCfg):
     # Env
     episode_length_s: int = 10       # Episode length in seconds
@@ -288,6 +407,9 @@ class GOATBaseEnvCfg(EnvCfg):
     dome_light_cfg = AssetBaseCfg(
         prim_path="/World/Light", spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75))
     )
+
+    # event
+    events: EventCfg = EventCfg()
 
     # Scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=3.0, replicate_physics=True)

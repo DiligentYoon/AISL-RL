@@ -87,9 +87,7 @@ class GOATTrackEnv(GOATBaseEnv):
         self.default_joint_pos = self._robot.data.default_joint_pos
 
         # Contact sensor
-        self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["base_Link",
-                                                                         r"hip_L_Link",
-                                                                         f"hip_R_Link"])
+        self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["base_Link"])
     
 
     def _set_debug_vis_impl(self, debug_vis: bool):

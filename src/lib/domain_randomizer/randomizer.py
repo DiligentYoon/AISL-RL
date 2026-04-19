@@ -513,6 +513,90 @@ class randomize_rigid_body_mass(ManagerTermBase):
             # set the inertia tensors into the physics simulation
             self.asset.root_physx_view.set_inertias(inertias, env_ids)
 
+def randomize_rigid_body_mass_inertia(
+    env: Env,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    mass_inertia_distribution_params: tuple[float, float],
+    operation: Literal["add", "scale", "abs"],
+    distribution: Literal["uniform", "log_uniform", "gaussian"] = "uniform",
+):
+    """Randomize the inertia of the bodies by adding, scaling, or setting random values.
+
+    This function allows randomizing the mass of the bodies of the asset. The function samples random values from the
+    given distribution parameters and adds, scales, or sets the values into the physics simulation based on the operation.
+
+    .. tip::
+        This function uses CPU tensors to assign the body masses. It is recommended to use this function
+        only during the initialization of the environment.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+
+    # resolve environment ids
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    # resolve body indices
+    if asset_cfg.body_ids == slice(None):
+        body_ids = torch.arange(asset.num_bodies, dtype=torch.int, device="cpu")
+    else:
+        body_ids = torch.tensor(asset_cfg.body_ids, dtype=torch.int, device="cpu")
+
+    # get the current inertias of the bodies (num_assets, num_bodies)
+    inertias = asset.root_physx_view.get_inertias().clone()
+    masses = asset.root_physx_view.get_masses().clone()
+
+    masses = _randomize_prop_by_op(
+        masses, mass_inertia_distribution_params, env_ids, body_ids, operation=operation, distribution=distribution
+    )
+    scale = masses / asset.root_physx_view.get_masses()
+    inertias *= scale.unsqueeze(-1)
+
+    asset.root_physx_view.set_masses(masses, env_ids)
+    asset.root_physx_view.set_inertias(inertias, env_ids)
+
+
+def randomize_rigid_body_coms(
+    env: Env,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    com_distribution_params: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+    operation: Literal["add", "scale", "abs"],
+    distribution: Literal["uniform", "log_uniform", "gaussian"] = "uniform",
+):
+    """
+    Randomize the center of mass (COM) of the bodies by adding, scaling, or setting random values for each dimension.
+    """
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    if asset_cfg.body_ids == slice(None):
+        body_ids = torch.arange(asset.num_bodies, dtype=torch.int, device="cpu")
+    else:
+        body_ids = torch.tensor(asset_cfg.body_ids, dtype=torch.int, device="cpu")
+
+    coms = asset.root_physx_view.get_coms().clone()
+
+    # Apply randomization to each dimension separately
+    for dim in range(3):  # 0=x, 1=y, 2=z
+        coms[..., dim] = _randomize_prop_by_op(
+            coms[..., dim],
+            com_distribution_params[dim],
+            env_ids,
+            body_ids,
+            operation=operation,
+            distribution=distribution,
+        )
+
+    asset.root_physx_view.set_coms(coms, env_ids)
+
 
 def randomize_rigid_body_com(
     env: Env,

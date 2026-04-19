@@ -13,55 +13,12 @@ from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG
 
-from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.utils.plot_utils import PNGSavePlotter
 from isaaclab.managers import EventTermCfg as EventTerm
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from isaaclab.managers import SceneEntityCfg
-
-@configclass
-class EventCfg:
-    """Configuration for domain-randomization events."""
-
-    reset_body = EventTerm(
-        func=randomizer.reset_root_state_uniform,
-        mode='reset',
-        params={
-            "pose_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (-0.01, 0.01),
-                "y": (-0.01, 0.01),
-                "z": (-0.01, 0.01),
-                "roll": (-0.005, 0.005),
-                "pitch": (-0.005, 0.005),
-                "yaw": (-0.005, 0.005)},
-        },
-    )
-
-    reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_offset_and_bias,
-        mode="reset",
-        params={
-            "bias": (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0),
-            "position_range": (-0.03, 0.03),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    wheel_physics_material = EventTerm(
-      func=randomizer.randomize_rigid_body_material_shared,
-      mode='reset',
-      params={
-          "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
-          "static_friction_range": (0.5, 0.6),
-          "dynamic_friction_range": (0.4, 0.5),
-          "restitution_range": (0.0, 0.02),
-          "num_buckets": 1000,
-          "make_consistent": True,
-      },
-  )
 
 @configclass
 class GOATTrackEnvCfg(GOATBaseEnvCfg):
@@ -86,7 +43,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
-    decimation = 2                              # 100Hz policy
+    decimation = 4                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 32                      # Observation space
     state_space = 38                            # State space including privilege information
@@ -106,8 +63,8 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     num_total_joints = n_leg_j + num_leg        # Wheel per legs
     
     ## ========================== Terrain ========================== ##
-    default_terrain_static_friction = 0.7       # Default terrain configuration
-    default_terrain_dynamic_friction = 0.5
+    default_terrain_static_friction = 1.0       # Default terrain configuration
+    default_terrain_dynamic_friction = 1.0
     default_terrain_restitution = 0.0
 
     ## ==================== Terminal condition ===================== ##
@@ -221,11 +178,6 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
         ]
     )
 
-    ## =================== Domain Randomization =================== ##
-    events = EventCfg()
-    events.wheel_physics_material.params["static_friction_range"] = static_friction_end
-    events.wheel_physics_material.params["dynamic_friction_range"] = dynamic_friction_end
-
     # Command
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
@@ -309,6 +261,10 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     )
 
     root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
 
 @configclass
 class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
