@@ -187,23 +187,32 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
 
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
+        self.events.robot_wheel_actuator_gain = None
         self.events.push_robot = None
 
 @configclass
 class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
-    curriculum = None
+    def __post_init__(self):
+        self.curriculum = None
 
-    # visualization
-    goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/velocity_goal"
-    )
+        # visualization
+        self.goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_goal"
+        )
 
-    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
-        prim_path="/Visuals/Command/velocity_current"
-    )
+        self.current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_current"
+        )
 
-    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+        # disable randomization
+        self.events.add_base_mass = None
+        self.events.add_link_mass = None
+        # disable noise
+        self.observation_noise_type = None
+        self.observation_noise_params = None
 
-    # plot
-    plotter = PNGSavePlotter
+        self.goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+        self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+        # plot
+        self.plotter = PNGSavePlotter
