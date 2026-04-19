@@ -35,13 +35,8 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     action_scale_factor = {"joint" : [1.0, ()],
                            "wheel" : [1.0, ()]}
     
-    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0] # NOTE: Temporary
+    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0] # NOTE: Temporary
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
-    
-    ## ========================== Terrain ========================== ##
-    default_terrain_static_friction = 1.0       # Default terrain configuration
-    default_terrain_dynamic_friction = 1.0
-    default_terrain_restitution = 0.0
 
     ## ==================== Terminal condition ===================== ##
     height_reset_condition = 0.1                # meter (m)
@@ -60,7 +55,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.05
-    p_wheel_velocity_weight = 5e-3
+    p_wheel_velocity_weight = 1e-3
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
@@ -185,6 +180,11 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
                                               "knee_R_Joint": -1.462,
                                               "wheel_L_Joint": 0.0,
                                               "wheel_R_Joint": 0.0,}
+
+        self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
 
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
         self.events.push_robot = None
