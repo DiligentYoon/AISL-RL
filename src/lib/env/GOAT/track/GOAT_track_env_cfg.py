@@ -140,41 +140,6 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
                 end_value=obs_noise_end,
                 schedule="linear",
             ),
-            CurriculumParamCfg(
-                name="rfi_torque_limit",
-                attr_path="cfg/rfi_torque_limit",
-                start_value=rfi_start,
-                end_value=rfi_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
-                name="rao_torque_limit",
-                attr_path="cfg/rao_torque_limit",
-                start_value=rao_start,
-                end_value=rao_end,
-                schedule="linear",
-            ),
-            # CurriculumParamCfg(
-            #     name="static_friction_coefficient",
-            #     attr_path="event_manager/cfg/wheel_physics_material/params/static_friction_range",
-            #     start_value= static_friction_start,
-            #     end_value=static_friction_end,
-            #     schedule="linear",
-            # ),
-            # CurriculumParamCfg(
-            #     name="dynamic_friction_coefficient",
-            #     attr_path="event_manager/cfg/wheel_physics_material/params/dynamic_friction_range",
-            #     start_value= dynamic_friction_start,
-            #     end_value=dynamic_friction_end,
-            #     schedule="linear",
-            # ),
-            # CurriculumParamCfg(
-            #     name="stop_command_ratio",
-            #     attr_path="cfg/commands/prob_standing_envs",
-            #     start_value=stop_ratio_start,
-            #     end_value=stop_ratio_end,
-            #     schedule="linear"
-            # ),
         ]
     )
 
