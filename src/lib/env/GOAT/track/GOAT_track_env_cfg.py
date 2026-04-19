@@ -11,7 +11,7 @@ from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg, GOAT_Cfg
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.utils.plot_utils import PNGSavePlotter
@@ -22,24 +22,6 @@ from isaaclab.managers import SceneEntityCfg
 
 @configclass
 class GOATTrackEnvCfg(GOATBaseEnvCfg):
-
-    ## =========== Robot Variation (Init pos) ============== ##
-    GOAT_cfg: ArticulationCfg = GOAT_Cfg.replace(
-        init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.5), # biased initial pos
-            joint_pos={
-                "hip_L_Joint": 0.0,
-                "hip_R_Joint": 0.0,
-                "thigh_L_Joint": 0.738,
-                "thigh_R_Joint": -0.738,
-                "knee_L_Joint": 1.462,
-                "knee_R_Joint": -1.462,
-                "wheel_L_Joint": 0.0,
-                "wheel_R_Joint": 0.0,
-                },
-            ),
-        )
-
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -55,12 +37,6 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     
     train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 10.0] # NOTE: Temporary
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
-    
-    ## ==================== Robot configuration ==================== ##
-    leg_dof = 3                                 # Hip, Thigh, Knee
-    num_leg = 2                                 # Bipedal
-    n_leg_j = leg_dof * num_leg
-    num_total_joints = n_leg_j + num_leg        # Wheel per legs
     
     ## ========================== Terrain ========================== ##
     default_terrain_static_friction = 1.0       # Default terrain configuration
@@ -192,44 +168,26 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
         "command_angular_velocity (deg/s)": 0.0,
         }
 
-    # Simulation
-    sim: SimulationCfg = SimulationCfg(
-        dt=sim_dt,
-        render_interval=decimation,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-        ),
-    )
-
-    # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=3.0, replicate_physics=False)
-    
-    # Terrain
-    terrain_importer_cfg = TerrainImporterCfg(
-        prim_path="/World/ground",
-        terrain_type="plane",
-        env_spacing=3.0,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=default_terrain_static_friction,
-            dynamic_friction=default_terrain_dynamic_friction,
-            restitution=default_terrain_restitution                 # Collision
-        ),
-        debug_vis=False
-    )
-
-    # Visualization
-    root_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Root"
-    )
-
-    root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
-
     def __post_init__(self):
         super().__post_init__()
+        self.sim.dt = self.sim_dt
+        self.sim.render_interval = self.decimation
+
+        # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
+        self.scene.replicate_physics = False
+
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.5)
+        self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
+                                              "hip_R_Joint": 0.0,
+                                              "thigh_L_Joint": 0.738,
+                                              "thigh_R_Joint": -0.738,
+                                              "knee_L_Joint": 1.462,
+                                              "knee_R_Joint": -1.462,
+                                              "wheel_L_Joint": 0.0,
+                                              "wheel_R_Joint": 0.0,}
+
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
+        self.events.push_robot = None
 
 @configclass
 class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):

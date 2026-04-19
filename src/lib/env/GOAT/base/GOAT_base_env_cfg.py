@@ -18,6 +18,9 @@ from lib.env.env_cfg import EnvCfg
 from lib.domain_randomizer import randomizer
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.markers.config import FRAME_MARKER_CFG
+
 from lib.assets.actuators.actuator_cfg import GearDelayedPDActuatorCfg
 
 
@@ -92,17 +95,6 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
             },
-        # pos=(0.0, 0.0, 0.63),
-        # joint_pos={
-        #     "hip_L_Joint": 0.0,
-        #     "hip_R_Joint": 0.0,
-        #     "thigh_L_Joint": 0.0,
-        #     "thigh_R_Joint": -0.0,
-        #     "knee_L_Joint": 0.0,
-        #     "knee_R_Joint": -0.0,
-        #     "wheel_L_Joint": 0.0,
-        #     "wheel_R_Joint": 0.0,
-        #     },
         ),
 
     # Actuators cfg
@@ -372,6 +364,16 @@ class EventCfg:
         },
     )
 
+    # interval
+    push_robot = EventTerm(
+        func=randomizer.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(3.0, 4.0),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-1.0, 1.0), "pitch": (-1.0, 1.0)}},
+    )
+
 
 
 @configclass
@@ -387,20 +389,16 @@ class GOATBaseEnvCfg(EnvCfg):
     # Terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="plane",        # Should apply terrain generator later
+        terrain_type="plane",
         env_spacing=3.0,
         physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
             static_friction=1.0,
-            dynamic_friction=0.8,
-            restitution=0.0
+            dynamic_friction=1.0,
+            restitution=0.0                 # Collision
         ),
         debug_vis=False
-    )
-
-    physics_material: RigidBodyMaterialCfg = RigidBodyMaterialCfg(
-        static_friction=1.0,
-        dynamic_friction=1.0,
-        restitution=0.0,
     )
 
     # Light
@@ -429,6 +427,10 @@ class GOATBaseEnvCfg(EnvCfg):
             restitution=0.0,
         ),
     )
+
+    # Visualization
+    root_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Root")
+    root_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
 
     # GOAT cfg
     GOAT_cfg: ArticulationCfg = GOAT_Cfg

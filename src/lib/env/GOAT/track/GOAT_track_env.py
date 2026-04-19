@@ -30,7 +30,7 @@ class GOATTrackEnv(GOATBaseEnv):
         if self.cfg.erfi_enabled:
             # RAO offset buffer
             self.rao_torque_offset = torch.zeros(
-                self.num_envs, self.cfg.num_total_joints, device=self.device
+                self.num_envs, self._robot.num_joints, device=self.device
             )
             # Front 50% = RFI, Next 50% = RAO
             n_rfi = self.num_envs // 2
@@ -135,7 +135,7 @@ class GOATTrackEnv(GOATBaseEnv):
     def _setup_scene(self):
         super()._setup_scene()
         # Terrain
-        self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
+        self.terrain = TerrainImporter(self.cfg.terrain)
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
         # add commands cfg
@@ -171,7 +171,7 @@ class GOATTrackEnv(GOATBaseEnv):
             erfi_perturbation = torch.zeros_like(self.erfi_torque)
             # RFI Env : Random torque purterbation at each step
             erfi_perturbation[self.rfi_env_mask] = sample_rfi_torque(
-                self.rfi_env_mask.sum(), self.cfg.num_total_joints,
+                self.rfi_env_mask.sum(), self._robot.num_joints,
                 self.cfg.rfi_torque_limit, self.device
             )
             # RAO Env : Random constant torque offset
@@ -318,7 +318,7 @@ class GOATTrackEnv(GOATBaseEnv):
             rao_reset_ids = env_ids[self.rao_env_mask[env_ids]]
             if len(rao_reset_ids) > 0:
                 self.rao_torque_offset[rao_reset_ids] = sample_rao_torque(
-                    rao_reset_ids, self.cfg.num_total_joints,
+                    rao_reset_ids, self._robot.num_joints,
                     self.cfg.rao_torque_limit, self.device
                 )
             

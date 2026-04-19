@@ -60,10 +60,14 @@
             </material>
         </visual>
         <collision>
-            <origin xyz="-20E-03 0E-03 2E-03" rpy="0 0 0"/>
+            <origin xyz="-123.5E-03 0E-03 15.5E-03" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="../meshes/base_Link.stl"/>
+            </geometry>
+            <!-- <origin xyz="-20E-03 0E-03 2E-03" rpy="0 0 0"/>
             <geometry>
                 <box size="0.214 0.200 0.190"/>
-            </geometry>
+            </geometry> -->
         </collision>
     </link>
 
