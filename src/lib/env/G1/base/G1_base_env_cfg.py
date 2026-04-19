@@ -24,9 +24,9 @@ from lib.env.env_cfg import EnvCfg
 # Robot asset paths
 current_dir = os.path.dirname(__file__)
 G1_hand_ASSET = {
-    "urdf_path": os.path.join(current_dir, "../../../assets/G1/G1_hand/urdf/G1_hand.urdf"),
-    "usd_path": os.path.join(current_dir, "../../../assets/G1/G1_hand/usd/G1_hand.usd"),
-    "usd_place": os.path.join(current_dir, "../../../assets/G1/G1_hand/usd/"),
+    "urdf_path": os.path.join(current_dir, "../../../assets/robots/G1/G1_hand/urdf/G1_hand.urdf"),
+    "usd_path": os.path.join(current_dir, "../../../assets/robots/G1/G1_hand/usd/G1_hand.usd"),
+    "usd_place": os.path.join(current_dir, "../../../assets/robots/G1/G1_hand/usd/"),
     "usd_filename": "G1_hand.usd"
 }
 

@@ -13,6 +13,7 @@ from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.sensors import ContactSensorCfg
+from lib.utils.plot_utils import PNGSavePlotter
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
 
@@ -92,7 +93,7 @@ class EventCfg:
         interval_range_s=(4.0, 6.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-1.5, 1.5), "pitch": (-1.5, 1.5)}},
+            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0), "roll": (-3.0, 3.0), "pitch": (-3.0, 3.0)}},
     )
 
 @configclass
@@ -188,6 +189,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     #         ),
     #     ]
     # )
+    plotter: PNGSavePlotter = PNGSavePlotter
+
+    viz_data = {
+        "upper_body_torque": 0.0,
+        "body_angular_momentum": 0.0
+    }
 
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(

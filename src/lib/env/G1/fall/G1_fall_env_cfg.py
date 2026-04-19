@@ -18,7 +18,7 @@ from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKE
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
-from lib.utils.plot_utils import CapturabilityPlotter
+from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from isaaclab.managers import SceneEntityCfg
 
 
@@ -175,17 +175,24 @@ class G1FallEnvCfg(G1BaseEnvCfg):
     target_set_scale_factor = 0.3 
 
     # ==== Viz data ==== #
-    plotter = CapturabilityPlotter
+    # plotter = CapturabilityPlotter
+    # viz_data = {
+    #     "com_pos": 0,                  # (3,)
+    #     "left_foot_pos": 0,            # (3,)
+    #     "right_foot_pos": 0,           # (3,)
+    #     "icp_pos": 0,                  # (2,)
+    #     "capture_region_center": 0,    # (2,)
+    #     "capture_region_radius": 0,    # scalar
+    #     "time_hist": 0,                # scalar
+    #     "m_step_hist": 0,              # scalar
+    #     "icp_ankle_dist_hist": 0,      # scalar
+    # }
+
+    plotter: PNGSavePlotter = PNGSavePlotter
+
     viz_data = {
-        "com_pos": 0,                  # (3,)
-        "left_foot_pos": 0,            # (3,)
-        "right_foot_pos": 0,           # (3,)
-        "icp_pos": 0,                  # (2,)
-        "capture_region_center": 0,    # (2,)
-        "capture_region_radius": 0,    # scalar
-        "time_hist": 0,                # scalar
-        "m_step_hist": 0,              # scalar
-        "icp_ankle_dist_hist": 0,      # scalar
+        "upper_body_torque": 0.0,
+        "body_angular_momentum": 0.0
     }
 
 

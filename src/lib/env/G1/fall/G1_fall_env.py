@@ -88,6 +88,10 @@ class G1FallEnv(G1BaseEnv):
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
+        self.root_ang_momentum_b = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.root_ang_momentum_w = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.body_ang_momentum_b = torch.zeros((self.num_envs, self._robot.num_bodies, 3), dtype=torch.float, device=self.device)
+        self.body_ang_momentum_w = torch.zeros((self.num_envs, self._robot.num_bodies, 3), dtype=torch.float, device=self.device)
 
         # Foot states
         self.is_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
@@ -555,6 +559,21 @@ class G1FallEnv(G1BaseEnv):
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
         self.command_heading[i] = self.commands.heading[i]
+        # Angular momentum
+        body_inertia_b = self._robot.data.default_inertia.to(self.device)[i].view(-1, self._robot.num_bodies, 3, 3)
+        # body_com_ang_vel_w: angular velocity of each body's CoM in world frame
+        # rotate to body(link) frame to match inertia expression
+        body_ang_vel_b = quat_apply_inverse(self._robot.data.body_link_quat_w[i].reshape(-1, 4),
+                                            self._robot.data.body_com_ang_vel_w[i].reshape(-1, 3),).view(-1, self._robot.num_bodies, 3)
+        # H_b = I_b * w_b
+        self.body_ang_momentum_b[i] = torch.matmul(body_inertia_b, body_ang_vel_b.unsqueeze(-1)).squeeze(-1)
+
+        # rotate body angular momentum back to world frame if needed
+        self.body_ang_momentum_w[i] = quat_apply(self._robot.data.body_link_quat_w[i].reshape(-1, 4),
+                                                 self.body_ang_momentum_b[i].reshape(-1, 3),).view(-1, self._robot.num_bodies, 3)
+        # convenience: root(body 0) angular momentum
+        self.root_ang_momentum_b[i] = self.body_ang_momentum_b[i, 0]
+        self.root_ang_momentum_w[i] = self.body_ang_momentum_w[i, 0]
         # Information related to Contact
         self.air_time[i] = self.contact_sensors.data.current_air_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.contact_time[i] = self.contact_sensors.data.current_contact_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
@@ -648,18 +667,21 @@ class G1FallEnv(G1BaseEnv):
         
     def _update_viz_data(self):
         extras = copy.deepcopy(self.extras)
+        extras = copy.deepcopy(self.extras)
+        extras["viz_data"]["body_angular_momentum"] = torch.norm(self.root_ang_momentum_b[:, :2], dim=-1)
+        extras["viz_data"]["upper_body_torque"] = torch.mean(torch.abs(self._robot.data.applied_torque[:, self.arm_all_joint_ids]), dim=-1)
 
-        dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
+        # dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
 
-        extras["viz_data"]["com_pos"]               = self.CoM[0]
-        extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
-        extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
-        extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
-        extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
-        extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
-        extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
-        extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
-        extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
+        # extras["viz_data"]["com_pos"]               = self.CoM[0]
+        # extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
+        # extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
+        # extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
+        # extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
+        # extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
+        # extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
+        # extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
+        # extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
 
         return extras
 

@@ -29,6 +29,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
         self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
 
+
         self.leg_collision_link_ids, _ = self.contact_sensors.find_bodies([
             r"pelvis",
             r".*_hip_.*_link",
@@ -85,6 +86,10 @@ class G1RecoveryEnv(G1BaseEnv):
         # Robot property
         self.robot_mass = self._robot.data.default_mass.to(self.device)
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
+        self.root_ang_momentum_b = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.root_ang_momentum_w = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.body_ang_momentum_b = torch.zeros((self.num_envs, self._robot.num_bodies, 3), dtype=torch.float, device=self.device)
+        self.body_ang_momentum_w = torch.zeros((self.num_envs, self._robot.num_bodies, 3), dtype=torch.float, device=self.device)
 
         # Contact states
         self.is_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
@@ -529,6 +534,21 @@ class G1RecoveryEnv(G1BaseEnv):
         # Heading
         forward_root_w = quat_apply(self._robot.data.root_quat_w[i], self.forward_vec[i])
         self.root_heading[i] = torch.atan2(forward_root_w[:, 1], forward_root_w[:, 0]).unsqueeze(-1)
+        # Angular momentum
+        body_inertia_b = self._robot.data.default_inertia.to(self.device)[i].view(-1, self._robot.num_bodies, 3, 3)
+        # body_com_ang_vel_w: angular velocity of each body's CoM in world frame
+        # rotate to body(link) frame to match inertia expression
+        body_ang_vel_b = quat_apply_inverse(self._robot.data.body_link_quat_w[i].reshape(-1, 4),
+                                            self._robot.data.body_com_ang_vel_w[i].reshape(-1, 3),).view(-1, self._robot.num_bodies, 3)
+        # H_b = I_b * w_b
+        self.body_ang_momentum_b[i] = torch.matmul(body_inertia_b, body_ang_vel_b.unsqueeze(-1)).squeeze(-1)
+
+        # rotate body angular momentum back to world frame if needed
+        self.body_ang_momentum_w[i] = quat_apply(self._robot.data.body_link_quat_w[i].reshape(-1, 4),
+                                                 self.body_ang_momentum_b[i].reshape(-1, 3),).view(-1, self._robot.num_bodies, 3)
+        # convenience: root(body 0) angular momentum
+        self.root_ang_momentum_b[i] = self.body_ang_momentum_b[i, 0]
+        self.root_ang_momentum_w[i] = self.body_ang_momentum_w[i, 0]
         # Attitude
         self.projected_gravity[i] = self._robot.data.projected_gravity_b[i]
         # Joint Angle & Velocity
@@ -600,7 +620,14 @@ class G1RecoveryEnv(G1BaseEnv):
         self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
+    
+    def _update_viz_data(self):
+        
+        extras = copy.deepcopy(self.extras)
+        extras["viz_data"]["body_angular_momentum"] = torch.norm(self.root_ang_momentum_b[:, :2], dim=-1)
+        extras["viz_data"]["upper_body_torque"] = torch.mean(torch.abs(self._robot.data.applied_torque[:, self.arm_all_joint_ids]), dim=-1)
 
+        return extras
 
 @torch.jit.script
 def wrap_to_pi(angles):
