@@ -65,6 +65,23 @@ class GOATStandDRPPEnv(GOATBaseEnv):
 
         # Previous action
         self.previous_actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
+        
+        # Action Buffer: [환경 수, 최대 지연 스텝 + 1, 액션 차원]
+        self.action_buffer = torch.zeros(
+            (self.num_envs, self.cfg.max_action_delay_steps + 1, self.cfg.action_space),
+            device=self.device
+        )
+        
+        # 각 환경별 현재 지연 스텝 수를 저장하는 텐서
+        self.delays_per_env = torch.zeros(
+            self.num_envs, 
+            dtype=torch.long, 
+            device=self.device
+        )
+        
+        # 배치를 위한 인덱스 (미리 만들어두면 연산이 빠름)
+        self.batch_indices = torch.arange(self.num_envs, device=self.device)
+
 
         # Plotting boolean
         debug_vis = self.num_envs <= 32
@@ -111,7 +128,17 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         # Reset previous action observation
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
         
-
+        # Random delay sampling index
+        sampled_delays = torch.randint(
+            self.cfg.min_action_delay_steps, 
+            self.cfg.max_action_delay_steps + 1, 
+            (len(env_ids),), 
+            device=self.device
+        )
+        self.delays_per_env[env_ids] = sampled_delays
+        
+        # 2. 리셋된 환경의 액션 버퍼 초기화
+        self.action_buffer[env_ids] = torch.zeros_like(self.action_buffer[env_ids], device=self.device)
 
         # Update planning state
         self._compute_intermediate_values()
@@ -125,9 +152,19 @@ class GOATStandDRPPEnv(GOATBaseEnv):
         """
         
         # Refine command
-        self.actions = actions.clone()
-        self.joint_pos_delta_cmd = self.actions[:, self.joint_ids]
-        self.wheel_vel_cmd = self.actions[:, self.wheel_ids]
+        # 1. 버퍼를 한 칸씩 뒤로 밈 (과거 데이터 밀어내기)
+        # shifts=1은 인덱스 0을 비우고 기존 데이터를 뒤로 보냄
+        self.action_buffer = torch.roll(self.action_buffer, shifts=1, dims=1)
+        
+        # 2. 최신 액션을 인덱스 0에 저장
+        self.action_buffer[:, 0, :] = actions.clone()
+        
+        # 3. 각 환경별로 지정된 딜레이 값에 해당하는 과거 액션 추출 (고급 인덱싱)
+        # 예: env_delays[0]=2 이면 0번 환경은 action_buffer[0, 2, :] 를 가져옴
+        delayed_actions = self.action_buffer[self.batch_indices, self.delays_per_env, :]
+
+        self.joint_pos_delta_cmd = delayed_actions[:, self.joint_ids]
+        self.wheel_vel_cmd = delayed_actions[:, self.wheel_ids]
         
     def _apply_action(self):                    # Since it's inside the decimation loop, the low-level controller has to be located here
         # Current state
