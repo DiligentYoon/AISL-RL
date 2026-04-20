@@ -104,7 +104,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             effort_limit=4.5,
             velocity_limit=15.0,
             min_delay=0,
-            max_delay=0,
+            max_delay=4,
             stiffness={
                 "hip_L_Joint": 5.0,
                 "hip_R_Joint": 5.0,
@@ -128,7 +128,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             effort_limit=4.5,
             velocity_limit=15.0,
             min_delay=0,
-            max_delay=0,
+            max_delay=4,
             stiffness={
                 "thigh_L_Joint": 5.0,
                 "thigh_R_Joint": 5.0,
@@ -154,7 +154,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             gamma=1.0,
             gear_ratio=2.0,
             min_delay=0,
-            max_delay=0,
+            max_delay=4,
             stiffness={
                 "knee_L_Joint": 5.0,
                 "knee_R_Joint": 5.0,
@@ -178,7 +178,7 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             effort_limit=2.5,
             velocity_limit=15.0,
             min_delay=0,
-            max_delay=0,
+            max_delay=4,
             stiffness={
                 "wheel_L_Joint": 0.0,
                 "wheel_R_Joint": 0.0,

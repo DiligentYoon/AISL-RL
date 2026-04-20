@@ -187,8 +187,8 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
 
         # event
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
-        self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.9, 1.1)
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
+        self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
         # self.events.add_base_mass = None
@@ -230,4 +230,4 @@ class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
         self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
         # plot
-        self.plotter = PNGSavePlotter
+        # self.plotter = PNGSavePlotter
