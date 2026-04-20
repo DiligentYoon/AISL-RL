@@ -25,7 +25,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
-    decimation = 4                              # 50Hz policy
+    decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 32                      # Observation space
     state_space = 38                            # State space including privilege information
@@ -67,10 +67,10 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     ## ======================== Curriculum ======================= ##
     warmup = 0.2
     endup = 0.6
-    static_friction_start: tuple[float, float] = (0.9, 1.2)
-    static_friction_end: tuple[float, float] = (0.6, 1.2)
-    dynamic_friction_start: tuple[float, float] = (0.7, 1.0)
-    dynamic_friction_end: tuple[float, float] = (0.5, 1.0)
+    static_friction_start: tuple[float, float] = (0.6, 1.2)
+    static_friction_end: tuple[float, float] = (0.4, 1.2)
+    dynamic_friction_start: tuple[float, float] = (0.6, 0.9)
+    dynamic_friction_end: tuple[float, float] = (0.4, 0.9)
 
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
@@ -97,8 +97,6 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
-    stop_ratio_start = 0.6
-    stop_ratio_end = 0.01
 
     curriculum = CurriculumManagerCfg(
         warmup=warmup,
@@ -118,7 +116,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 4.0),
-        prob_standing_envs=stop_ratio_end,
+        prob_standing_envs=0.01,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
@@ -185,14 +183,27 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
         self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
-        self.events.robot_wheel_actuator_gain = None
+
+        # event
+        self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
+        self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.9, 1.1)
+        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
+        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
+        # self.events.add_base_mass = None
+        # self.events.robot_center_of_mass = None
+        # self.events.rigid_body_mass_inertia = Non
+        # self.events.robot_leg_actuator_gain = None
+        # self.events.robot_wheel_actuator_gain = None
+        # self.events.robot_center_of_mass = None
+
         self.events.push_robot = None
 
 @configclass
 class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
     def __post_init__(self):
+        super().__post_init__()
         self.curriculum = None
 
         # visualization
@@ -207,6 +218,10 @@ class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
         # disable randomization
         self.events.add_base_mass = None
         self.events.add_link_mass = None
+        self.events.rigid_body_mass_inertia = None
+        self.events.robot_leg_actuator_gain = None
+        self.events.robot_wheel_actuator_gain = None
+        self.events.robot_center_of_mass = None
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
