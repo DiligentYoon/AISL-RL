@@ -105,7 +105,7 @@ class Agent:
         Args:
             path: Path to load the model from
         """
-        modules = torch.load(path, map_location=self.device)
+        modules = torch.load(path, map_location=self.device, weights_only=False)
         if type(modules) is dict:
             for name, data in modules.items():
                 module = self.checkpoint_modules.get(name, None)
