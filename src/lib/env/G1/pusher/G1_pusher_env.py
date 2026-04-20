@@ -32,6 +32,7 @@ class G1PusherEnv(G1BaseEnv):
         total_body_ids, _ = self.contact_sensors.find_bodies(".*")
         self.allowed_collision_link_ids, _ = self.contact_sensors.find_bodies(self.cfg.allowed_collision_bodies)
         self.denied_collision_link_ids = [body_id for body_id in total_body_ids if body_id not in self.allowed_collision_link_ids]
+        self.adv_binary_decode_map = torch.tensor(cfg.adv_binary_decode_map, dtype=torch.int, device=self.device)
 
         self.leg_collision_link_ids, _ = self.contact_sensors.find_bodies([
             r"pelvis",
@@ -203,73 +204,48 @@ class G1PusherEnv(G1BaseEnv):
 
 
     def _apply_action(self):
-        if self.cfg.num_agents > 1:
-            # Multi Agent
-            arm_actions = self.actions["arm"]
-            leg_actions = self.actions["leg"]
+        # Multi Agent
+        arm_actions = self.actions["arm"]
+        leg_actions = self.actions["leg"]
+        adv_actions = self.actions["adv"]                                   # Adversarial agent's action
 
-            self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                                    min=self.arm_joint_limits[:, :, 0],
-                                    max=self.arm_joint_limits[:, :, 1]),
-                joint_ids=self.total_arm_joint_ids
-            )
+        # Adversarial agent(Pusher) action decoding
+        # 4(Binary encoding) + force(x, y) + torque(roll, pitch, yaw)
+        bodies_binary = torch.tensor(adv_actions[:, :4], device=self.device)
+        weights = torch.tensor([[8, 4, 2, 1]], device=self.device)
+        bodies_decimal = torch.sum(bodies_binary * weights, dim=1, keepdim=True)
+        bodies_ids = self.adv_binary_decode_map[bodies_decimal]
 
-            self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                                    min=self.leg_joint_limits[:, :, 0],
-                                    max=self.leg_joint_limits[:, :, 1]),
-                joint_ids=self.total_leg_joint_ids)
-        else:
-            # Single Agent
-            self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                                   min=self.joint_pos_limits[:, :, 0],
-                                   max=self.joint_pos_limits[:, :, 1]),
-                joint_ids=self._joint_dof_ids)
+        push_force = adv_actions[:, 4:6]
+        push_torque = adv_actions[:, 6:]
+
+        # Arm agent
+        self._robot.set_joint_position_target(
+            target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
+                                min=self.arm_joint_limits[:, :, 0],
+                                max=self.arm_joint_limits[:, :, 1]),
+            joint_ids=self.total_arm_joint_ids
+        )
         
-        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
-
+        # Leg agent
+        self._robot.set_joint_position_target(
+            target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                                min=self.leg_joint_limits[:, :, 0],
+                                max=self.leg_joint_limits[:, :, 1]),
+            joint_ids=self.total_leg_joint_ids)
+        
+        # Pusher agent
+        self._robot.set_external_force_and_torque(
+            forces=push_force,
+            torques=push_torque,
+            body_ids=bodies_ids
+        )
+        
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        if self.cfg.num_agents > 1:
-            # Multi Agent
-            observations = {
-                "arm": torch.cat(
-                    [
-                        self.root_pos_w[:, 2:3],                            # [E, 1]
-                        self.root_heading,                                  # [E, 1]
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
-                        self.joint_vel[:, self.total_arm_joint_ids]         # [E, 17]
-                    ],
-                    dim=-1
-                ),
-                "leg": torch.cat(
-                    [
-                        self.root_pos_w[:, 2:3],                            # [E, 1]
-                        self.root_heading,                                  # [E, 1]
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.joint_vel[:, self.total_leg_joint_ids]         # [E, 12]
-                    ],
-                    dim=-1
-                )
-            }
-        else:
-            # Single Agent
-            total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
-            observations = torch.cat(
+        # Multi Agent
+        observations = {
+            "arm": torch.cat(
                 [
                     self.root_pos_w[:, 2:3],                            # [E, 1]
                     self.root_heading,                                  # [E, 1]
@@ -279,9 +255,28 @@ class G1PusherEnv(G1BaseEnv):
                     self.command_inputs_b,                              # [E, 3]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos[:, total_joint_ids],                 # [E, 29]
-                    self.joint_vel[:, total_joint_ids],                 # [E, 29]
-                ], dim=-1) 
+                    self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
+                    self.joint_vel[:, self.total_arm_joint_ids]         # [E, 17]
+                ],
+                dim=-1
+            ),
+            "leg": torch.cat(
+                [
+                    self.root_pos_w[:, 2:3],                            # [E, 1]
+                    self.root_heading,                                  # [E, 1]
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                    self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
+                    self.joint_vel[:, self.total_leg_joint_ids]         # [E, 12]
+                ],
+                dim=-1
+            ),
+            "adv": torch.cat()
+        }
 
         return observations
 

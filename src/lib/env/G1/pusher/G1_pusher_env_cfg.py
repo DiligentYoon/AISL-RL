@@ -103,14 +103,15 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
     decimation = 4         
 
     ## ========== Multi Agent Setting =========== ##
-    possible_agents = ["arm", "leg", "pusher"]
-    action_space = {"arm": 17, "leg": 12, "pusher": 9}                         
-    observation_space = {"arm": 50, "leg": 40, "pusher": 1}                
+    possible_agents = ["arm", "leg", "adv"]                 # Adversarial agent
+    action_space = {"arm": 17, "leg": 12, "adv": 9}                         
+    observation_space = {"arm": 50, "leg": 40, "adv": 1}    # TODO: 나중에 수정            
     state_space = {"arm": 74, "leg": 74}
     num_agents = 3
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()],
-                           "pusher": [0.5, ()]}             # TODO: 나중에 수정
+                           "adv": [0.5, ()]}                # TODO: 나중에 수정
+    adv_binary_decode_map = []      # TODO: link ids 뽑아야됨
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
