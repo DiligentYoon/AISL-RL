@@ -106,8 +106,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             min_delay=0,
             max_delay=0,
             stiffness={
-                "hip_L_Joint": 10.0,
-                "hip_R_Joint": 10.0,
+                "hip_L_Joint": 5.0,
+                "hip_R_Joint": 5.0,
             },                                      
             damping={
                 "hip_L_Joint": 0.1,
@@ -130,8 +130,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             min_delay=0,
             max_delay=0,
             stiffness={
-                "thigh_L_Joint": 10.0,
-                "thigh_R_Joint": 10.0,
+                "thigh_L_Joint": 5.0,
+                "thigh_R_Joint": 5.0,
             },                                      
             damping={
                 "thigh_L_Joint": 0.1,
@@ -156,8 +156,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
             min_delay=0,
             max_delay=0,
             stiffness={
-                "knee_L_Joint": 10.0,
-                "knee_R_Joint": 10.0,
+                "knee_L_Joint": 5.0,
+                "knee_R_Joint": 5.0,
             },                                      
             damping={
                 "knee_L_Joint": 0.1,
@@ -184,8 +184,8 @@ GOAT_Cfg: ArticulationCfg = ArticulationCfg(
                 "wheel_R_Joint": 0.0,
             },                                      
             damping={
-                "wheel_L_Joint": 0.05,
-                "wheel_R_Joint": 0.05,
+                "wheel_L_Joint": 0.02,
+                "wheel_R_Joint": 0.02,
             },
             friction={
                 "wheel_L_Joint": 0.0,
@@ -272,7 +272,7 @@ class EventCfg:
             "operation": "scale",
         },
     )
-    radomize_rigid_body_mass_inertia = EventTerm(
+    rigid_body_mass_inertia = EventTerm(
         func=randomizer.randomize_rigid_body_mass_inertia,
         mode="startup",
         params={
