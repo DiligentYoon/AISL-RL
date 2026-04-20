@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="Stand_jig">
+
+  <link name="world"/>
+
+  <joint name="world_to_jig_joint" type="fixed">
+    <parent link="world"/>
+    <child link="jig_link"/>
+    <origin xyz="0 0 0" rpy="0 0 -1.570796"/> 
+  </joint>
+  
+  <link name="jig_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="10.0"/> <inertia ixx="0.05" ixy="0.0" ixz="0.0" iyy="0.05" iyz="0.0" izz="0.05"/>
+    </inertial>
+        <visual>
+            <origin xyz="-0.027 0.09 0" rpy="1.570796 0 0"/>
+            <geometry>
+                <mesh filename="../meshes/GOAT_gochu_stand7mm35cmd.stl" scale="1 1 1"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="-0.027 0.09 0" rpy="1.570796 0 0"/>
+            <geometry>
+                <mesh filename="../meshes/GOAT_gochu_stand7mm35cmd.stl" scale="1 1 1"/>
+            </geometry>
+    </collision>
+  </link>
+</robot>
