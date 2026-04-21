@@ -201,7 +201,7 @@ class GOATJigEnv(GOATBaseEnv):
         r_joint_deviation = torch.exp(-joint_deviation / 0.5**2)
 
         # Height tracking Reward
-        height_error = torch.abs(self.base_height - self.cfg.target_height)
+        height_error = torch.reshape(torch.abs(self.base_height - self.cfg.target_height), (-1,))
         r_height = torch.exp(-height_error / 0.2**2)
 
         # Regularization Penalty
@@ -220,7 +220,7 @@ class GOATJigEnv(GOATBaseEnv):
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_joint_deviation_weight * r_joint_deviation           +
-            self.cfg.r_height_weight * r_height                                    +
+            self.cfg.r_height_weight * r_height                             +
             self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
