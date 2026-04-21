@@ -40,17 +40,18 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.7
     target_height = 0.523
 
-    r_joint_deviation_weight = 3.0
+    r_joint_deviation_weight = 1.0
     r_upright_weight = 1.0
     r_height_weight = 3.0
 
-    p_lin_vel_weight = 0.2
+    p_base_deviation_weight = 3.0
+    p_lin_vel_weight = 0.5
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
     p_joint_velocity_weight = 0.05
-    p_wheel_velocity_weight = 1e-3
+    p_wheel_velocity_weight = 0.0
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.01
     p_terminated_weight = 200.0
@@ -172,6 +173,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, -0.038, 0.038, 0.4055, -0.4055, 0.0, 0.0)
+        self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
