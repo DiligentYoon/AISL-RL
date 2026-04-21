@@ -42,7 +42,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
 
     r_joint_deviation_weight = 3.0
     r_upright_weight = 1.0
-    r_height_weight = 1.0
+    r_height_weight = 3.0
 
     p_lin_vel_weight = 0.2
     p_ang_vel_weight = 0.5
