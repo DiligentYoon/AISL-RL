@@ -16,8 +16,8 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-dr-pp", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/GOAT_Stand_DR_PP/2026-04-15_18-51-49_ppo/agent_128000.pt", help="Path to model checkpoint.")
+parser.add_argument("--task", type=str, default="GOAT-jig-play", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -39,7 +39,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
-args_cli.headless = True                    # Headless mode
+# args_cli.headless = True                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -56,8 +56,6 @@ import collections
 from datetime import datetime
 
 import lib
-
-from isaaclab.envs.common import ViewerCfg
 
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.utils.plot_utils import GIFSavePlotter
@@ -85,17 +83,6 @@ def main():
     # ============================================================================================================================
     # =========================================== Env Spawn & Wrapper Test =======================================================
     # ============================================================================================================================
-
-    # cfg for viewpoint control
-    if args_cli.num_envs == 1:
-        viewer_cfg = ViewerCfg(
-            origin_type="asset_root",
-            asset_name="robot",
-            env_index=0,
-            eye=(0.0, 4.0, 0.5),
-            lookat=(0.0, 0.0, 0.0)
-        )
-        env_cfg.viewer = viewer_cfg
 
     # create isaac environment
     if args_cli.seed is not None:
