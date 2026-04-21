@@ -200,7 +200,12 @@ class GOATJigEnv(GOATBaseEnv):
         joint_deviation   = torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
         r_joint_deviation = torch.exp(-joint_deviation / 0.5**2)
 
+        # Height tracking Reward
+        height_error = torch.abs(self.base_height - self.cfg.target_height)
+        r_height = torch.exp(-height_error / 0.2**2)
+
         # Regularization Penalty
+        p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel), dim=1)
         p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1) # Rolling & Pitching 
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
@@ -215,6 +220,8 @@ class GOATJigEnv(GOATBaseEnv):
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_joint_deviation_weight * r_joint_deviation           +
+            self.cfg.r_height_weight * r_height                                    +
+            self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
@@ -232,9 +239,11 @@ class GOATJigEnv(GOATBaseEnv):
             # ==========================================
             "Task Reward / Upright"             : self.cfg.r_upright_weight * r_upright,
             "Task Reward / Joint_Deviation"     : self.cfg.r_joint_deviation_weight * r_joint_deviation,
+            "Task Reward / Height"              : self.cfg.r_height_weight * r_height,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
+            "Task Penalty / Lin_Vel"         : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
