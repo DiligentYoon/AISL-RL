@@ -357,7 +357,6 @@ class EventCfg:
         func=randomizer.reset_joints_by_offset_and_bias,
         mode="reset",
         params={
-            # "bias": (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0),
             "bias": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
             "position_range": (-0.03, 0.03),
             "velocity_range": (0.0, 0.0),

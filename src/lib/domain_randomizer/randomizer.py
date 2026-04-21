@@ -1707,8 +1707,8 @@ def reset_joints_by_offset_and_bias(
     joint_vel = asset.data.default_joint_vel[iter_env_ids, asset_cfg.joint_ids].clone()
     
     # add constant bias
-    signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-    joint_pos += signed_bias
+    # signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
+    joint_pos += torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
 
     # bias these values randomly
     joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)

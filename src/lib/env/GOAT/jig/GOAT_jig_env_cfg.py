@@ -38,6 +38,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
+    target_height = 0.523
 
     r_joint_deviation_weight = 3.0
     r_upright_weight = 1.0
@@ -146,8 +147,8 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
 
-        # self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.46)
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.58)
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4605)
+        # self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.523) # Target Height
         self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
                                               "hip_R_Joint": 0.0,
                                               "thigh_L_Joint": 0.738,
@@ -157,15 +158,18 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
                                               "wheel_L_Joint": 0.0,
                                               "wheel_R_Joint": 0.0,}
         
-        self.GOAT_cfg.spawn.rigid_props.disable_gravity = True
-        self.GOAT_cfg.spawn.articulation_props.fix_root_link = True
+        # robot
+        self.GOAT_cfg.actuators["hip"].max_delay = 0
+        self.GOAT_cfg.actuators["thigh"].max_delay = 0
+        self.GOAT_cfg.actuators["knee"].max_delay = 0
+        self.GOAT_cfg.actuators["wheel"].max_delay = 0
 
         # event
         self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
+        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, -0.038, 0.038, 0.4055, -0.4055, 0.0, 0.0)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
@@ -173,6 +177,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
 
+        # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
             func=reset_robot_and_object_root_state_uniform,
             mode="reset",

@@ -150,6 +150,8 @@ class GOATJigEnv(GOATBaseEnv):
             self.erfi_torque = erfi_perturbation
             # Load to sim buffer
             self._robot.set_joint_effort_target(self.erfi_torque)
+        
+        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
 
     def _get_observations(self) -> torch.Tensor:
         """
