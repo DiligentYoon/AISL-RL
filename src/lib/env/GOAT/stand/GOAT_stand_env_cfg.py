@@ -18,7 +18,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 from lib.assets.Jig.object import JIGCFG
 
 @configclass
-class GOATJigEnvCfg(GOATBaseEnvCfg):
+class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -222,7 +222,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         self.events.push_robot = None
 
 @configclass
-class GOATJigPlayEnvCfg(GOATJigEnvCfg):
+class GOATStandPlayEnvCfg(GOATStandEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
