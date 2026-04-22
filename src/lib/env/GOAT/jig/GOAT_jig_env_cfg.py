@@ -4,13 +4,15 @@ import torch
 
 from isaaclab.utils import configclass
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
-from isaaclab.assets import RigidObjectCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer.randomizer import reset_robot_and_object_root_state_uniform
 from lib.domain_randomizer.noise_model import build_noise_std_vector
+from lib.domain_randomizer.commander import UniformPositionCommandCfg
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.Jig.object import JIGCFG
@@ -34,18 +36,17 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.2                # meter (m)
+    height_reset_condition = 0.25                # meter (m)
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
     target_height = 0.523
 
-    r_joint_deviation_weight = 1.0
     r_upright_weight = 1.0
     r_height_weight = 3.0
 
-    p_base_deviation_weight = 3.0
-    p_lin_vel_weight = 0.5
+    p_joint_deviation_weight = 1.0
+    p_lin_vel_weight = 3.0
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
@@ -80,6 +81,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
         "base_rot_w":        {"dim": 4,  "std": 0.03},
+        "command_inputs_b":  {"dim": 3,  "std": 0.00},  # Command
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
@@ -120,7 +122,7 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
     }
 
     ## ===================== Jig Object ======================= ##
-    jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
+    # jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
 
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
@@ -141,6 +143,10 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         "left_wheel_velocity (deg/s)": 0.0,
         "right_wheel_velocity (deg/s)": 0.0,
         }
+    
+    ## ======================= Visualization ========================= ##
+    target_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Target")
+    target_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
 
     def __post_init__(self):
         super().__post_init__()
@@ -182,29 +188,29 @@ class GOATJigEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
 
         # robot must be syncronized with jig object. 
-        self.events.reset_body = EventTerm(
-            func=reset_robot_and_object_root_state_uniform,
-            mode="reset",
-            params={
-                "pose_range": {
-                    "x": (-0.0, 0.0),
-                    "y": (-0.0, 0.0),
-                    "yaw": (-3.14, 3.14),
-                },
-                "velocity_range": {
-                    "x": (-0.0, 0.0),
-                    "y": (-0.0, 0.0),
-                    "z": (-0.0, 0.0),
-                    "roll": (-0.0, 0.0),
-                    "pitch": (-0.0, 0.0),
-                    "yaw": (-0.0, 0.0),
-                },
-                "robot_cfg": SceneEntityCfg("robot"),
-                "object_cfg": SceneEntityCfg("jig"),
-                "object_relative_pos": (0.0, 0.0, 0.0),  
-                "object_relative_yaw": 0.0,          
-            }
-        )
+        # self.events.reset_body = EventTerm(
+        #     func=reset_robot_and_object_root_state_uniform,
+        #     mode="reset",
+        #     params={
+        #         "pose_range": {
+        #             "x": (-0.0, 0.0),
+        #             "y": (-0.0, 0.0),
+        #             "yaw": (-3.14, 3.14),
+        #         },
+        #         "velocity_range": {
+        #             "x": (-0.0, 0.0),
+        #             "y": (-0.0, 0.0),
+        #             "z": (-0.0, 0.0),
+        #             "roll": (-0.0, 0.0),
+        #             "pitch": (-0.0, 0.0),
+        #             "yaw": (-0.0, 0.0),
+        #         },
+        #         "robot_cfg": SceneEntityCfg("robot"),
+        #         "object_cfg": SceneEntityCfg("jig"),
+        #         "object_relative_pos": (0.0, 0.0, 0.0),  
+        #         "object_relative_yaw": 0.0,          
+        #     }
+        # )
 
         # self.events.add_base_mass = None
         # self.events.robot_center_of_mass = None
