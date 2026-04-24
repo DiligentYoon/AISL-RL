@@ -53,7 +53,6 @@ class GOATStandEnv(GOATBaseEnv):
         self.friction_coefficient = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
 
         # Action regularization
-        self.base_deviation = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
         self.out_of_limits_joint = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.out_of_limits_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.applied_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -84,6 +83,7 @@ class GOATStandEnv(GOATBaseEnv):
 
         # Contact sensor
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["^(?!wheel_).*$"]) # exclude wheel
+        self.illegal_force = torch.zeros((self.num_envs, len(self.contact_base_link_id)), dtype=torch.float32, device=self.device)
     
 
     def _set_debug_vis_impl(self, debug_vis: bool):
@@ -110,8 +110,8 @@ class GOATStandEnv(GOATBaseEnv):
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
         # Jig object
-        # self._jig = RigidObject(self.cfg.jig)
-        # self.scene.rigid_objects["jig"] = self._jig
+        self._jig = RigidObject(self.cfg.jig)
+        self.scene.rigid_objects["jig"] = self._jig
         # Collision filtering
         global_prim_paths = []
         if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
@@ -201,6 +201,7 @@ class GOATStandEnv(GOATBaseEnv):
         r_height = torch.exp(-height_error / 0.2**2)
 
         # Regularization Penalty
+        p_illegal_contact   = -torch.sum(self.illegal_force, dim=1)
         p_joint_deviation   = -torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
         p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel[:, :2]), dim=1)
         p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel[:, :3]), dim=1) # Rolling & Pitching & Yawing
@@ -216,8 +217,9 @@ class GOATStandEnv(GOATBaseEnv):
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_height_weight * r_height                             +
-            self.cfg.p_lin_vel_weight * p_lin_vel                           +
+            self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_joint_deviation_weight * p_joint_deviation           +
+            self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
@@ -237,6 +239,7 @@ class GOATStandEnv(GOATBaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
+            "Task Penalty / Contact"         : self.cfg.p_illegal_contact_weight * p_illegal_contact,
             "Task Penalty / Joint_Deviation" : self.cfg.p_joint_deviation_weight * p_joint_deviation,
             "Task Penalty / Lin_Vel"         : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
@@ -260,7 +263,7 @@ class GOATStandEnv(GOATBaseEnv):
 
         base_fall = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
         
-        terminated = base_fall | illegal_contact
+        terminated = base_fall & illegal_contact
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated
@@ -300,7 +303,7 @@ class GOATStandEnv(GOATBaseEnv):
         material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
         self.friction_coefficient[i] = torch.stack([material_property[:, -2, 0], material_property[:, -1, 1]], dim=-1) # Left, Right wheel
         # Action regularization
-        self.base_deviation[i] = self._robot.data.root_pos_w[i] - self.scene.env_origins[i]
+        self.illegal_force[i] = torch.norm(self.contact_sensors.data.net_forces_w[i][:, self.contact_base_link_id], dim=-1)
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)

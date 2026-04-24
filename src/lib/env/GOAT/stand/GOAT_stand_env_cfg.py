@@ -36,7 +36,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.25                # meter (m)
+    height_reset_condition = 0.2                # meter (m)
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
@@ -45,7 +45,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     r_upright_weight = 1.0
     r_height_weight = 3.0
 
-    p_joint_deviation_weight = 1.0
+    p_illegal_contact_weight = 0.1
+    p_joint_deviation_weight = 3.0
     p_lin_vel_weight = 3.0
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
@@ -55,7 +56,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     p_wheel_velocity_weight = 0.0
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.01
-    p_terminated_weight = 200.0
+    p_terminated_weight = 100.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = False
@@ -122,7 +123,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     }
 
     ## ===================== Jig Object ======================= ##
-    # jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
+    jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
 
     ## ==================== Plot variables ==================== ##
     viz_data: dict = {
@@ -143,10 +144,6 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         "left_wheel_velocity (deg/s)": 0.0,
         "right_wheel_velocity (deg/s)": 0.0,
         }
-    
-    ## ======================= Visualization ========================= ##
-    target_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Target")
-    target_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)
 
     def __post_init__(self):
         super().__post_init__()
@@ -168,17 +165,17 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
         
         # robot
-        self.GOAT_cfg.actuators["hip"].max_delay = 0
-        self.GOAT_cfg.actuators["thigh"].max_delay = 0
-        self.GOAT_cfg.actuators["knee"].max_delay = 0
-        self.GOAT_cfg.actuators["wheel"].max_delay = 0
+        self.GOAT_cfg.actuators["hip"].max_delay = 4
+        self.GOAT_cfg.actuators["thigh"].max_delay = 4
+        self.GOAT_cfg.actuators["knee"].max_delay = 4
+        self.GOAT_cfg.actuators["wheel"].max_delay = 4
 
         # event
         self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, -0.038, 0.038, 0.4055, -0.4055, 0.0, 0.0)
+        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.3563, -0.3563, 0.4232, -0.4232, 0.0, 0.0)
         self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
@@ -188,29 +185,29 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
 
         # robot must be syncronized with jig object. 
-        # self.events.reset_body = EventTerm(
-        #     func=reset_robot_and_object_root_state_uniform,
-        #     mode="reset",
-        #     params={
-        #         "pose_range": {
-        #             "x": (-0.0, 0.0),
-        #             "y": (-0.0, 0.0),
-        #             "yaw": (-3.14, 3.14),
-        #         },
-        #         "velocity_range": {
-        #             "x": (-0.0, 0.0),
-        #             "y": (-0.0, 0.0),
-        #             "z": (-0.0, 0.0),
-        #             "roll": (-0.0, 0.0),
-        #             "pitch": (-0.0, 0.0),
-        #             "yaw": (-0.0, 0.0),
-        #         },
-        #         "robot_cfg": SceneEntityCfg("robot"),
-        #         "object_cfg": SceneEntityCfg("jig"),
-        #         "object_relative_pos": (0.0, 0.0, 0.0),  
-        #         "object_relative_yaw": 0.0,          
-        #     }
-        # )
+        self.events.reset_body = EventTerm(
+            func=reset_robot_and_object_root_state_uniform,
+            mode="reset",
+            params={
+                "pose_range": {
+                    "x": (-0.0, 0.0),
+                    "y": (-0.0, 0.0),
+                    "yaw": (-3.14, 3.14),
+                },
+                "velocity_range": {
+                    "x": (-0.0, 0.0),
+                    "y": (-0.0, 0.0),
+                    "z": (-0.0, 0.0),
+                    "roll": (-0.0, 0.0),
+                    "pitch": (-0.0, 0.0),
+                    "yaw": (-0.0, 0.0),
+                },
+                "robot_cfg": SceneEntityCfg("robot"),
+                "object_cfg": SceneEntityCfg("jig"),
+                "object_relative_pos": (0.0, 0.0, 0.0),  
+                "object_relative_yaw": 0.0,          
+            }
+        )
 
         # self.events.add_base_mass = None
         # self.events.robot_center_of_mass = None
@@ -246,6 +243,12 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
+
+        # robot
+        self.GOAT_cfg.actuators["hip"].max_delay = 0
+        self.GOAT_cfg.actuators["thigh"].max_delay = 0
+        self.GOAT_cfg.actuators["knee"].max_delay = 0
+        self.GOAT_cfg.actuators["wheel"].max_delay = 0
 
         # plot
         # self.plotter = PNGSavePlotter
