@@ -13,6 +13,8 @@ class GearDelayedPDActuator(DelayedPDActuator):
     def compute(
         self, control_action: ArticulationActions, joint_pos, joint_vel
     ) -> ArticulationActions:
+        control_action.joint_positions = control_action.joint_positions * self.cfg.gear_ratio # TARGET_{joint space} -> TARGET_{motor space}
+        control_action.joint_velocities = control_action.joint_velocities * self.cfg.gear_ratio # TARGET_{joint space} -> TARGET_{motor space}
         joint_pos = joint_pos * self.cfg.gear_ratio # OBS_{joint space} -> OBS_{motor space}
         joint_vel = joint_vel * self.cfg.gear_ratio # OBS_{joint space} -> OBS_{motor space}
         # 먼저 DelayedPDActuator의 compute를 호출해서 delayed torque 계산

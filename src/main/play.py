@@ -16,8 +16,8 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-jig-play", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--task", type=str, default="GOAT-stand-play", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default="logs/GOAT_stand/2026-04-24_14-45-43_ppo/agent_128000.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -95,9 +95,18 @@ def main():
     env_cfg.curriculum = None
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
+    # Logging directory
+    if args_cli.checkpoint is not None:
+        log_dir = os.path.dirname(args_cli.checkpoint)
+    else:
+        log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
+        log_root_path = os.path.abspath(log_root_path)
+        log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
+        log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
+        log_dir = os.path.join(log_root_path, log_dir)
+
     # wrap for video recording
     if args_cli.video:
-        log_dir = os.path.dirname(args_cli.checkpoint)
         args_cli.video_interval = int(cfg["train"]["timesteps"] / 5)
         video_kwargs = {
             "video_folder": os.path.join(log_dir, "videos", "play"),

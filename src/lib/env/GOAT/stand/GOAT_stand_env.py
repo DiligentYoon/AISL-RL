@@ -53,6 +53,7 @@ class GOATStandEnv(GOATBaseEnv):
         self.friction_coefficient = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
 
         # Action regularization
+        self.out_of_limits_velocity = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.out_of_limits_joint = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.out_of_limits_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.applied_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -208,6 +209,7 @@ class GOATStandEnv(GOATBaseEnv):
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
+        p_velocity_limit    = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1) # wheel is not included
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc), dim=1) # NOTE: wheel is included
         p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
@@ -224,6 +226,7 @@ class GOATStandEnv(GOATBaseEnv):
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
+            self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
             self.cfg.p_action_rate_weight * p_action_rate                   +
@@ -246,6 +249,7 @@ class GOATStandEnv(GOATBaseEnv):
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
             "Task Penalty / Torque"          : self.cfg.p_all_torque_weight * p_all_torque,
+            "Task Penalty / Vel_Limit"       : self.cfg.p_joint_vel_limit_weight * p_velocity_limit, 
             "Task Penalty / Joint_Vel"       : self.cfg.p_joint_velocity_weight * p_joint_velocity,
             "Task Penalty / Joint_Acc"       : self.cfg.p_joint_accel_weight * p_joint_accel,
             "Task Penalty / Action_Rate"     : self.cfg.p_action_rate_weight * p_action_rate,
@@ -307,6 +311,7 @@ class GOATStandEnv(GOATBaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
+        self.out_of_limits_velocity[i] = (torch.abs(self.joint_vel[i]) - self.cfg.joint_vel_limit).clip(min=0.0)
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
         self.joint_acc[i] = self._robot.data.joint_acc[i]

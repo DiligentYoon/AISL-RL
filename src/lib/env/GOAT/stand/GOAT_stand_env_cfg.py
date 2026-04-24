@@ -36,26 +36,27 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.2                # meter (m)
+    height_reset_condition = 0.2 # meter (m)
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
+    joint_vel_limit = 1.0 # rad/s
     target_height = 0.523
 
     r_upright_weight = 1.0
     r_height_weight = 3.0
 
     p_illegal_contact_weight = 0.1
-    p_joint_deviation_weight = 3.0
+    p_joint_deviation_weight = 1.0
     p_lin_vel_weight = 3.0
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
+    p_joint_vel_limit_weight = 1.0
     p_joint_velocity_weight = 0.05
-    p_wheel_velocity_weight = 0.0
     p_joint_accel_weight = 5.0e-7
-    p_action_rate_weight = 0.01
+    p_action_rate_weight = 0.02
     p_terminated_weight = 100.0
 
     ## ==================== ERFI Configuration ==================== ##
@@ -169,6 +170,15 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.GOAT_cfg.actuators["thigh"].max_delay = 4
         self.GOAT_cfg.actuators["knee"].max_delay = 4
         self.GOAT_cfg.actuators["wheel"].max_delay = 4
+        
+        # self.GOAT_cfg.actuators["hip"].stiffness = 0.0
+        # self.GOAT_cfg.actuators["hip"].damping = 0.0
+        # self.GOAT_cfg.actuators["thigh"].stiffness = 0.0
+        # self.GOAT_cfg.actuators["thigh"].damping = 0.0
+        # self.GOAT_cfg.actuators["knee"].stiffness = 0.0
+        # self.GOAT_cfg.actuators["knee"].damping = 0.0
+        # self.GOAT_cfg.actuators["wheel"].stiffness = 0.0
+        # self.GOAT_cfg.actuators["wheel"].damping = 0.0
 
         # event
         self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
@@ -225,13 +235,13 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.curriculum = None
 
         # viewer
-        # self.viewer = ViewerCfg(
-        #     origin_type="asset_root",
-        #     asset_name="robot",
-        #     env_index=0,
-        #     eye=(0.0, 4.0, 0.5),
-        #     lookat=(0.0, 0.0, 0.0)
-        # )
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
 
         # disable randomization
         self.events.add_base_mass = None
@@ -240,6 +250,8 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.events.robot_leg_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
         self.events.robot_center_of_mass = None
+        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
@@ -251,4 +263,4 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.GOAT_cfg.actuators["wheel"].max_delay = 0
 
         # plot
-        # self.plotter = PNGSavePlotter
+        self.plotter = PNGSavePlotter
