@@ -17,7 +17,7 @@ parser.add_argument("--video_interval", type=int, default=2000, help="Interval b
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="GOAT-stand-play", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/GOAT_stand/2026-04-24_14-45-43_ppo/agent_128000.pt", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/GOAT_stand/2026-04-25_00-07-07_ppo/agent_128000.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
