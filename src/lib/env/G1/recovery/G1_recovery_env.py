@@ -188,9 +188,9 @@ class G1RecoveryEnv(G1BaseEnv):
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # add ground plane
-        self.cfg.terrain_importer_cfg.num_envs = self.scene.cfg.num_envs
-        self.cfg.terrain_importer_cfg.env_spacing = self.scene.cfg.env_spacing
-        self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
+        self.cfg.terrain.num_envs = self.scene.cfg.num_envs
+        self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
+        self.terrain = TerrainImporter(self.cfg.terrain)
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -210,26 +210,20 @@ class G1RecoveryEnv(G1BaseEnv):
             leg_actions = self.actions["leg"]
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                                    min=self.arm_joint_limits[:, :, 0],
-                                    max=self.arm_joint_limits[:, :, 1]),
+                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
                 joint_ids=self.total_arm_joint_ids
             )
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                                    min=self.leg_joint_limits[:, :, 0],
-                                    max=self.leg_joint_limits[:, :, 1]),
-                joint_ids=self.total_leg_joint_ids)
+                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                joint_ids=self.total_leg_joint_ids
+            )
         else:
             # Single Agent
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                                   min=self.joint_pos_limits[:, :, 0],
-                                   max=self.joint_pos_limits[:, :, 1]),
-                joint_ids=self._joint_dof_ids)
-        
-        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
+                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
+                joint_ids=self._joint_dof_ids
+            )
 
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
@@ -513,11 +507,11 @@ class G1RecoveryEnv(G1BaseEnv):
 
         # Command resampling
         self.commands.reset(env_ids)
-        self.step_period, self.full_step_period= resample_commands(self.step_period,
-                                                                   self.full_step_period,
-                                                                   env_ids,
-                                                                   self.step_dt,
-                                                                   self.cfg.time_period_min, self.cfg.time_period_max,)
+        self.step_period, self.full_step_period = resample_commands(self.step_period,
+                                                                    self.full_step_period,
+                                                                    env_ids,
+                                                                    self.step_dt,
+                                                                    self.cfg.time_period_min, self.cfg.time_period_max,)
 
         self._compute_intermediate_values(env_ids)
 

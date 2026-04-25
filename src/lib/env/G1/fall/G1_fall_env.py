@@ -212,25 +212,20 @@ class G1FallEnv(G1BaseEnv):
             leg_actions = self.actions["leg"]
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                                    min=self.arm_joint_limits[:, :, 0],
-                                    max=self.arm_joint_limits[:, :, 1]),
+                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
                 joint_ids=self.total_arm_joint_ids
             )
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                                    min=self.leg_joint_limits[:, :, 0],
-                                    max=self.leg_joint_limits[:, :, 1]),
-                joint_ids=self.total_leg_joint_ids)
+                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                joint_ids=self.total_leg_joint_ids
+            )
         else:
             # Single Agent
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                                   min=self.joint_pos_limits[:, :, 0],
-                                   max=self.joint_pos_limits[:, :, 1]),
-                joint_ids=self._joint_dof_ids)
-
+                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
+                joint_ids=self._joint_dof_ids
+            )
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
         if self.cfg.num_agents > 1:
@@ -665,13 +660,10 @@ class G1FallEnv(G1BaseEnv):
 
         return xi_t_x, xi_t_y, radius
         
-    def _update_viz_data(self):
-        extras = copy.deepcopy(self.extras)
-        extras = copy.deepcopy(self.extras)
-        extras["viz_data"]["body_angular_momentum"] = torch.norm(self.root_ang_momentum_b[:, :2], dim=-1)
-        extras["viz_data"]["upper_body_torque"] = torch.mean(torch.abs(self._robot.data.applied_torque[:, self.arm_all_joint_ids]), dim=-1)
+    # def _update_viz_data(self):
+    #     extras = copy.deepcopy(self.extras)
 
-        # dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
+    #     # dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
 
         # extras["viz_data"]["com_pos"]               = self.CoM[0]
         # extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
@@ -683,7 +675,7 @@ class G1FallEnv(G1BaseEnv):
         # extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
         # extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
 
-        return extras
+    #     return extras
 
 @torch.jit.script
 def wrap_to_pi(angles):

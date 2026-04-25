@@ -15,7 +15,7 @@ from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.domain_randomizer.commander import UniformPositionCommandCfg
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-from lib.assets.Jig.object import JIGCFG
+from lib.assets.objects.Jig.object import JIGCFG
 
 @configclass
 class GOATStandEnvCfg(GOATBaseEnvCfg):

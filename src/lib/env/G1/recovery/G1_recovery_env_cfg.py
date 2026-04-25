@@ -23,79 +23,6 @@ from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from isaaclab.managers import SceneEntityCfg
 
-
-@configclass
-class EventCfg:
-    """Configuration for events."""
-
-    # startup
-    # physics_material = EventTerm(
-    #     func=randomizer.randomize_rigid_body_material,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-    #         "static_friction_range": (0.8, 0.8),
-    #         "dynamic_friction_range": (0.6, 0.6),
-    #         "restitution_range": (0.0, 0.0),
-    #         "num_buckets": 64,
-    #     },
-    # )
-
-    # add_base_mass = EventTerm(
-    #     func=randomizer.randomize_rigid_body_mass,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "mass_distribution_params": (-5.0, 5.0),
-    #         "operation": "add",
-    #     },
-    # )
-
-    # base_com = EventTerm(
-    #     func=randomizer.randomize_rigid_body_com,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
-    #     },
-    # )
-
-    # reset
-    reset_base = EventTerm(
-        func=randomizer.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (0.0, 0.0),
-                "y": (-0.0, 0.0),
-                "z": (-0.0, 0.0),
-                "roll": (-0.0, 0.0),
-                "pitch": (-0.0, 0.0),
-                "yaw": (-0.0, 0.0),
-            },
-        },
-    )
-
-    reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "position_range": (1.0, 1.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    # interval
-    push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(4.0, 6.0),
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0), "roll": (-3.0, 3.0), "pitch": (-3.0, 3.0)}},
-    )
-
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
@@ -170,25 +97,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
                                 "waist_yaw_link",
                                 "waist_roll_link"]
 
-    # Simulation
-    sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
-
-    # Event
-    events: EventCfg = EventCfg()
-
-    # Curriculum
-    # curriculum = CurriculumManagerCfg(
-    #     warmup=0.4,
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="push_velocity",
-    #             attr_path="event_manager/cfg/push_robot/params/velocity_range",
-    #             start_value={"x": (0.0, 0.0), "y": (0.0, 0.0), "roll": (0.0, 0.0), "pitch": (0.0, 0.0)},
-    #             end_value={"x": (-1.5, 1.5), "y": (-1.5, 1.5), "roll": (-3.5, 3.5), "pitch": (-3.5, 3.5)},
-    #             schedule="linear",
-    #         ),
-    #     ]
-    # )
     plotter: PNGSavePlotter = PNGSavePlotter
 
     viz_data = {
@@ -209,34 +117,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         ),
     )
 
-    # Terrain
-    terrain_importer_cfg = TerrainImporterCfg(
-        prim_path="/World/ground",
-        terrain_type="plane",
-        env_spacing=3.0,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="average",
-            restitution_combine_mode="average",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
-        ),
-        debug_vis=False,
-    )
-
-    # sensors
-    # height_scanner = RayCasterCfg(
-    #     prim_path="/World/envs/env_.*/Robot/torso_link",
-    #     offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-    #     ray_alignment="yaw",
-    #     pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
-    #     debug_vis=False,
-    #     mesh_prim_paths=["/World/ground"],
-    # )
-    contact_forces = ContactSensorCfg(prim_path="/World/envs/env_.*/Robot/.*", 
-                                      history_length=3, 
-                                      track_air_time=True)
-
     # visualization
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/Command/velocity_goal"
@@ -246,35 +126,6 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         prim_path="/Visuals/Command/velocity_current"
     )
 
-    target_foot_visualizer_cfg: VisualizationMarkersCfg = CUBOID_MARKER_CFG.replace(
-        prim_path="/Visuals/Footsteps",
-        markers = {
-            "swing_foot": sim_utils.CuboidCfg(
-                size=(0.2, 0.1, 0.005),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0), opacity=1.0)
-            ),
-            "support_foot": sim_utils.CuboidCfg(
-                size=(0.2, 0.1, 0.005),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0), opacity=1.0)
-            ),
-        }
-    )
-
-    target_foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Target_foot_rotation"
-    )
-
-    foot_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Foot_rotation"
-    )
-
-    torso_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
-        prim_path="/Visuals/Torso_rotation"
-    )
-
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-    target_foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-    foot_rotation_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-    torso_rotation_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)

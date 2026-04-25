@@ -58,9 +58,6 @@ class G1SafeEnv(G1BaseEnv):
         self.torso_joint_ids, _ = self._robot.find_joints([r"waist_yaw_joint",])
         self.hip_xyz_joint_ids, _ = self._robot.find_joints(r".*_hip_(pitch|roll|yaw)_joint")
 
-        # Commands for reference generator
-        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
-
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
                     
@@ -93,9 +90,6 @@ class G1SafeEnv(G1BaseEnv):
         # Foot states
         self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
 
-        # Post-impact stable counter for early termination
-        self.stable_counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-
         # Geometry vector
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
         self.left_vec = torch.tensor([0.0, 1.0, 0.0], device=self.device).repeat(self.num_envs, 1)
@@ -114,20 +108,10 @@ class G1SafeEnv(G1BaseEnv):
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         if debug_vis:
-            if not hasattr(self, "goal_vel_visualizer"):
-                self.goal_vel_visualizer = VisualizationMarkers(self.cfg.goal_vel_visualizer_cfg)
-            if not hasattr(self, "current_vel_visualizer"):
-                self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
             if not hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
-            self.goal_vel_visualizer.set_visibility(True)
-            self.current_vel_visualizer.set_visibility(True)
             self.torso_rotation_visalizer.set_visibility(True)
         else:
-            if hasattr(self, "goal_vel_visualizer"):
-                self.goal_vel_visualizer.set_visibility(False)
-            if hasattr(self, "current_vel_visualizer"):
-                self.current_vel_visualizer.set_visibility(False)
             if hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer.set_visibility(False)
 
@@ -140,19 +124,12 @@ class G1SafeEnv(G1BaseEnv):
         # Arrow: get marker location
         base_pos_w = self._robot.data.root_pos_w.clone()
         base_pos_w[:, 2] += 0.5
-        # Arrow: resolve the scales and quaternions
-        vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
-                                                                                              xy_velocity=self.commands.command_b)
-        vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
-                                                                                      xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
 
         # =============== Torso ================
         torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
         torso_rot = self._robot.data.body_link_quat_w[:, self.torso_link_ids].reshape(-1, 4)
 
         # display markers
-        self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
-        self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
         self.torso_rotation_visalizer.visualize(translations=torso_pos,
                                                 orientations=torso_rot)
 
@@ -162,15 +139,12 @@ class G1SafeEnv(G1BaseEnv):
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
         # add ground plane
-        self.cfg.terrain_importer_cfg.num_envs = self.scene.cfg.num_envs
-        self.cfg.terrain_importer_cfg.env_spacing = self.scene.cfg.env_spacing
-        self.terrain = TerrainImporter(self.cfg.terrain_importer_cfg)
+        self.cfg.terrain.num_envs = self.scene.cfg.num_envs
+        self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
+        self.terrain = TerrainImporter(self.cfg.terrain)
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
-        # add commands cfg
-        self.cfg.commands.num_envs = self.scene.num_envs
-        self.cfg.commands.step_dt = self.step_dt
 
 
     def _pre_physics_step(self, actions: dict[str, torch.Tensor] | torch.Tensor):
@@ -184,24 +158,20 @@ class G1SafeEnv(G1BaseEnv):
             leg_actions = self.actions["leg"]
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                                    min=self.arm_joint_limits[:, :, 0],
-                                    max=self.arm_joint_limits[:, :, 1]),
+                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
                 joint_ids=self.total_arm_joint_ids
             )
 
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                                    min=self.leg_joint_limits[:, :, 0],
-                                    max=self.leg_joint_limits[:, :, 1]),
-                joint_ids=self.total_leg_joint_ids)
+                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                joint_ids=self.total_leg_joint_ids
+            )
         else:
             # Single Agent
             self._robot.set_joint_position_target(
-                target=torch.clamp(self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                                   min=self.joint_pos_limits[:, :, 0],
-                                   max=self.joint_pos_limits[:, :, 1]),
-                joint_ids=self._joint_dof_ids)
+                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
+                joint_ids=self._joint_dof_ids
+            )
 
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
@@ -266,15 +236,13 @@ class G1SafeEnv(G1BaseEnv):
                 "leg": shared_states
             }
         else:
-            # Single Agent
+            # Single Agent (Syncronous Actor-Critic)
             states = None
 
         return states
     
 
     def _get_rewards(self) -> torch.Tensor:
-        # Alive
-        alive_reward = (~self.reset_terminated).float()
         # Collision
         upper_leg_collision = (self.contact_force[:, self.collision_upper_leg_link_ids])
         lower_leg_collision = (self.contact_force[:, self.collision_lower_leg_link_ids])
@@ -289,11 +257,6 @@ class G1SafeEnv(G1BaseEnv):
 
         # Termination
         terminate_penalty = -self.reset_terminated.float()
-        # Post-impact stillness reward
-        is_grounded = (self.CoM[:, 2] < self.cfg.grounded_height_threshold).float()
-        joint_vel_norm = torch.sum(torch.square(self.joint_vel), dim=-1)
-        root_vel_norm  = torch.sum(torch.square(self.root_lin_vel_b), dim=-1) + torch.sum(torch.square(self.root_ang_vel_b), dim=-1)
-        stillness_reward = is_grounded * torch.exp(-(joint_vel_norm + root_vel_norm) / self.cfg.stillness_vel_sigma**2)
 
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xyz), dim=-1)
@@ -320,9 +283,7 @@ class G1SafeEnv(G1BaseEnv):
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
 
         # Reward summation
-        common_rewards = self.cfg.w_alive           * alive_reward                    + \
-                         self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
-                         self.cfg.w_stillness       * stillness_reward                + \
+        common_rewards = self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
                          self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                     + \
@@ -358,7 +319,6 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Stillness"          : self.cfg.w_stillness             * stillness_reward,
 
             # ==========================================
             # Task Penalty (-)
@@ -393,15 +353,8 @@ class G1SafeEnv(G1BaseEnv):
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         died = died_collision
 
-        # Post-impact early termination (success): grounded + low velocity for N steps
-        is_grounded = self.CoM[:, 2] < self.cfg.grounded_height_threshold
-        total_vel = torch.norm(self.root_lin_vel_b, dim=-1) + torch.norm(self.root_ang_vel_b, dim=-1)
-        is_stable = is_grounded & (total_vel < self.cfg.stable_vel_threshold)
-        self.stable_counter[is_stable] += 1
-        self.stable_counter[~is_stable] = 0
-        success_done = (self.stable_counter >= self.cfg.stable_steps_for_done)
         # Success termination is treated as time_out (truncated) for bootstrapping
-        time_out = time_out | success_done
+        time_out = time_out
 
         return died, time_out
 
@@ -431,12 +384,6 @@ class G1SafeEnv(G1BaseEnv):
             else:
                 # Single Agent
                 self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
-
-        # Reset stable counter
-        self.stable_counter[env_ids] = 0
-
-        # Command resampling
-        self.commands.reset(env_ids)
 
         self._compute_intermediate_values(env_ids)
 
@@ -469,39 +416,3 @@ class G1SafeEnv(G1BaseEnv):
         self.deviation_hip_xyz[i]     = self.joint_pos[i][:, self.hip_xyz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xyz_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
-
-
-@torch.jit.script
-def wrap_to_pi(angles):
-    angles %= 2*torch.pi
-    angles -= 2*torch.pi * (angles > torch.pi)
-    return angles
-
-@torch.jit.script
-def smooth_sqr_wave(phase):
-    p = 2.*torch.pi*phase
-    eps = 0.2
-    return torch.sin(p) / torch.sqrt(torch.sin(p)**2. + eps**2.)
-
-@torch.jit.script
-def resample_commands(step_period: torch.Tensor,
-                      full_step_period: torch.Tensor,
-                      env_ids: torch.Tensor,
-                      sim_dt: float,
-                      time_period_min: float, time_period_max: float):
-    """ 
-    Randomly select foot step commands one/two steps ahead
-    """
-    period_min = int(time_period_min / sim_dt)
-    period_max = int(time_period_max / sim_dt)
-
-    if period_max == period_min:
-        step_period[env_ids] = torch.tensor(period_min, dtype=torch.long,device=step_period.device).repeat(len(env_ids))
-    else:
-        step_period[env_ids] = torch.randint(low=period_min, 
-                                            high=period_max,
-                                            size=(len(env_ids),), device=step_period.device)
-    
-    full_step_period[env_ids] = 2 * step_period[env_ids]
-
-    return step_period, full_step_period
