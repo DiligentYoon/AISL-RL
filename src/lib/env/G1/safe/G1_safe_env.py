@@ -75,7 +75,6 @@ class G1SafeEnv(G1BaseEnv):
         self.root_ang_vel_w      = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.root_lin_vel_b      = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.root_ang_vel_b      = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
-        self.vel_yaw             = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.CoM                 = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.root_heading        = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.projected_gravity   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
@@ -394,7 +393,6 @@ class G1SafeEnv(G1BaseEnv):
         self.root_pos_w[i], self.root_rot_w[i] = self._robot.data.root_pos_w[i], self._robot.data.root_quat_w[i]
         self.root_lin_vel_w[i], self.root_ang_vel_w[i] = self._robot.data.root_lin_vel_w[i], self._robot.data.root_ang_vel_w[i]
         self.root_lin_vel_b[i], self.root_ang_vel_b[i] = self._robot.data.root_lin_vel_b[i], self._robot.data.root_ang_vel_b[i]
-        self.vel_yaw[i] = quat_apply_inverse(yaw_quat(self.root_rot_w[i]), self.root_lin_vel_w[i, :3])
         # Center of Mass (CoM)
         self.CoM[i] = (self._robot.data.body_link_pos_w[i] * self.robot_mass[i].unsqueeze(-1)).sum(dim=1) / self.total_mass[i].unsqueeze(-1)
         # Heading

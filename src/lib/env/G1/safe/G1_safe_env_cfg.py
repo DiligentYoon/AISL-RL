@@ -4,7 +4,6 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
-from lib.utils.plot_utils import CapturabilityPlotter
 from isaaclab.managers import SceneEntityCfg
 
 
