@@ -1,27 +1,15 @@
 
 from __future__ import annotations
 
-import math
-import os
-
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
-from isaaclab.sim import SimulationCfg
-from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.assets import ArticulationCfg
-from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.sensors import ContactSensorCfg
-from lib.utils.plot_utils import PNGSavePlotter
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
-from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-from isaaclab.managers import SceneEntityCfg
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -33,11 +21,11 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 50, "leg": 40}                
-    state_space = {"arm": 74, "leg": 74}
+    observation_space = {"arm": 66, "leg": 51}                
+    state_space = {"arm": 103, "leg": 103}
     num_agents = 2
-    action_scale_factor = {"arm": [0.5, ()], 
-                           "leg": [0.5, ()]}
+    action_scale_factor = {"arm": [1.0, ()], 
+                           "leg": [1.0, ()]}
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
@@ -47,16 +35,14 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 4.0
-    w_track_heading: float = 2.0
+    w_track_lin_vel: float = 2.0
+    w_track_heading: float = 1.0
     w_track_height : float = 1.0
+    w_feet_gait:     float = 2.0
+    w_flat:          float = 1.0
 
-    w_feet_gait:      float = 6.0
-    w_feet_slide:     float = 2.0
-    w_support_xy:     float = 0.2
-    w_self_collision: float = 0.01
-    w_flat:           float = 2.0
-
+    w_feet_slide:         float = 1.0
+    w_support_xy:         float = 0.1
     w_lin_vel_z:          float = 0.5
     w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
@@ -65,29 +51,20 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
-    w_deviation_hip:     float = 2.0
-    w_deviation_torso:   float = 2.0
+    w_deviation_hip:     float = 1.0
+    w_deviation_torso:   float = 1.0
     w_deviation_arm:     float = 0.2
-    w_action_rate:       float = 0.05
+    w_action_rate:       float = 0.02
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.5
+    termination_gravity: float = 0.3
     termination_ang_vel: float = 15.0
-    termination_target_foot: float = 1.0
-
-    soft_torque_limit: float = 0.8
 
     # ===== Gait guidance ===== #
-    self_collision_threshold = 0.2
-    time_period_min = 0.34
-    time_period_max = 0.34
-    dstep_min = 0.25
-    dstep_max = 0.25
-    z_c_min = 0.75
-    z_c_max = 0.75
-    w_foot_loc = 0.0
-    w_foot_rot = 0.0
+    time_period = 0.34
+    z_c = 0.75
+
 
     ## ============== Self collision =============== ##
     allowed_collision_bodies = ["left_ankle_pitch_link",
@@ -97,23 +74,16 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
                                 "waist_yaw_link",
                                 "waist_roll_link"]
 
-    plotter: PNGSavePlotter = PNGSavePlotter
-
-    viz_data = {
-        "upper_body_torque": 0.0,
-        "body_angular_momentum": 0.0
-    }
-
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.02,
-        prob_heading_envs=1.0,
-        heading_command=True,
-        heading_control_stiffness=0.5,
+        prob_standing_envs=0.01,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.1, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 

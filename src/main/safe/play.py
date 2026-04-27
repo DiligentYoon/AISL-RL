@@ -105,16 +105,6 @@ def main():
 
     # ============================ Env & Wrapper Spawn ================================
 
-    # cfg for viewpoint control
-    viewer_cfg = ViewerCfg(
-        origin_type="asset_root",
-        asset_name="robot",
-        env_index=0,
-        eye=(0.0, 4.0, 0.5),
-        lookat=(0.0, 0.0, 0.0)
-    )
-    env_cfg.viewer = viewer_cfg
-
     # Create isaac environment
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
@@ -122,13 +112,11 @@ def main():
         ra_cfg["agent"]["seed"] = args_cli.seed
         safe_cfg["agent"]["seed"] = args_cli.seed
     else:
-        env_cfg.seed = cfg.get("seed", None)
+        env_cfg.seed = cfg.get("seed", 42)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         safe_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-    # Predicted RA value
-    if env_cfg.viz_data is not None:
-        env_cfg.viz_data["RA_value"] = 0.0
+
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -142,12 +130,6 @@ def main():
         }
         print("[INFO] Recording videos during training.")
         env = RecordVideo(env, **video_kwargs)
-
-    # Get environment (step) dt for real-time evaluation
-    try:
-        dt = env.step_dt
-    except AttributeError:
-        dt = env.unwrapped.step_dt
 
     # Wrap around environment
     env = IsaacLabWrapper(env)  
@@ -230,7 +212,7 @@ def main():
                           device=env.device,
                           cfg=cfg["agent"])
         
-        elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
+        elif model_manager.model_type == "shared":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                     state_space=env.state_space,
@@ -384,9 +366,9 @@ def main():
             nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
             # action processing by RA Value function
-            actions = torch.where(RA_value > 0.1, safe_actions, nominal_actions)
+            # actions = torch.where(RA_value > 0.1, safe_actions, nominal_actions)
             # env stepping
-            next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
+            next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(safe_actions)
             # update rollout number
             timestep += 1
 

@@ -9,7 +9,7 @@ gym.register(
         "env_cfg_entry_point": f"{__name__}.G1_safe_env_cfg:G1SafeEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
-        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml"
+        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
     }
 )
 
