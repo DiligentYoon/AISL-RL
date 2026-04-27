@@ -107,6 +107,7 @@ class G1BaseEnvCfg(EnvCfg):
     action_space = 0
     observation_space = 0 
     state_space = 0
+    soft_torque_limit = 0.8
 
     # simulation
     sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)

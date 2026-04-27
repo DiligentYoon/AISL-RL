@@ -55,8 +55,6 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
 
     w_termination: float = 300
 
-    soft_torque_limit: float = 0.8
-
     def __post_init__(self):
         super().__post_init__()
         self.sim.render_interval = self.decimation
