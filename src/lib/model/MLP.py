@@ -333,13 +333,13 @@ class Critic(Model):
         self.critic_standardizer = RunningMeanStd(shape=self.num_states, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_states, 256),
+        self.net = nn.Sequential(nn.Linear(self.num_states, 512),
+                                 nn.ELU(),
+                                 nn.Linear(512, 256),
                                  nn.ELU(),
                                  nn.Linear(256, 128),
                                  nn.ELU(),
-                                 nn.Linear(128, 64),
-                                 nn.ELU(),
-                                 nn.Linear(64, 1))
+                                 nn.Linear(128, 1))
 
         # Initialize parameters
         self.init_weights()

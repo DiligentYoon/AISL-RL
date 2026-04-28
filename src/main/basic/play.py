@@ -16,18 +16,18 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand-play", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/GOAT_stand/2026-04-25_00-07-07_ppo/agent_128000.pt", help="Path to model checkpoint.")
+parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-04-28_01-07-25_mappo/agent_51200.pt", help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Communet"],
                     help="The NN model used for training the agent.")
 

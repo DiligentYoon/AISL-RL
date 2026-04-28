@@ -45,17 +45,17 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_feet_slide:         float = 1.0
     w_support_xy:         float = 0.1
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.01
-    w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 1.0e-4
-    w_joint_acc:          float = 1.0e-6
-    w_joint_vel:          float = 5.0e-4
+    w_ang_vel_xy:         float = 0.02
+    w_joint_torque:       float = 2.0e-6
+    w_joint_torque_limit: float = 2.0e-5
+    w_joint_acc:          float = 2.0e-7
+    w_joint_vel:          float = 2.0e-4
 
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
     w_deviation_arm:     float = 0.1
-    w_action_rate:       float = 0.02
+    w_action_rate:       float = 0.01
 
     w_termination: float = 200
     termination_height: float = 0.3
