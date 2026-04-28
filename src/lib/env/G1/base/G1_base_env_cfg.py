@@ -141,7 +141,7 @@ class G1BaseEnvCfg(EnvCfg):
                                 track_air_time=True)
 
     # robot
-    robot: ArticulationCfg = G1_BOX_FOOT_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+    robot: ArticulationCfg = G1CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
 
     # visualization

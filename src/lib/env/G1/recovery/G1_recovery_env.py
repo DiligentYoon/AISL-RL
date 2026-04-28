@@ -100,8 +100,8 @@ class G1RecoveryEnv(G1BaseEnv):
         self.command_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self.update_command_ids = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
-        self.step_period = self.cfg.time_period * torch.ones(self.num_envs, dtype=torch.long, device=self.device)
-        self.full_step_period = 2 * self.cfg.time_period * torch.ones(self.num_envs, dtype=torch.long, device=self.device)
+        self.step_period = int(self.cfg.time_period / self.step_dt) * torch.ones(self.num_envs, dtype=torch.long, device=self.device)
+        self.full_step_period = int(2 * self.cfg.time_period / self.step_dt) * torch.ones(self.num_envs, dtype=torch.long, device=self.device)
 
         self.contact_schedule = torch.zeros(self.num_envs, device=self.device)
         self.phase_sin = torch.zeros(self.num_envs, device=self.device)

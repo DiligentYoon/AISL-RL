@@ -24,8 +24,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     observation_space = {"arm": 66, "leg": 51}                
     state_space = {"arm": 103, "leg": 103}
     num_agents = 2
-    action_scale_factor = {"arm": [1.0, ()], 
-                           "leg": [1.0, ()]}
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
@@ -37,14 +37,14 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 2.0
     w_track_heading: float = 1.0
-    w_track_height : float = 1.0
     w_feet_gait:     float = 2.0
+    w_track_height : float = 1.0
     w_flat:          float = 1.0
 
     w_feet_slide:         float = 1.0
     w_support_xy:         float = 0.1
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.1
+    w_ang_vel_xy:         float = 0.02
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
@@ -53,12 +53,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.2
+    w_deviation_arm:     float = 0.5
     w_action_rate:       float = 0.02
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.3
+    termination_gravity: float = 0.8
     termination_ang_vel: float = 15.0
 
     # ===== Gait guidance ===== #
