@@ -13,9 +13,7 @@ from isaaclab.markers import VisualizationMarkers
 
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
 
-from isaaclab.sensors import ContactSensor
-
-from lib.domain_randomizer.commander import UniformVelocityCommand
+from lib.domain_randomizer.commander import UniformNonHolonomicCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 
@@ -48,7 +46,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
 
         # Commands for reference generator
-        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
+        self.commands = UniformNonHolonomicCommand(self.cfg.commands, self._robot, self.device)
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
@@ -75,7 +73,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.joint_vel          = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.command_inputs_b   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
-        self.command_heading    = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.air_time           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.contact_time       = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.in_contact         = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
@@ -317,13 +314,11 @@ class G1RecoveryEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking rewards
-        lin_vel_error = torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2])
-        lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_b[:, :2], dim=-1)).unsqueeze(-1)
-        lin_vel_error = torch.sum(lin_vel_error, dim=-1)
-        heading_error = torch.abs(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
+        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.root_lin_vel_b[:, :2]), dim=-1)
+        ang_vel_error = torch.square(self.command_inputs_b[:, 2] - self.root_ang_vel_b[:, 2])
         height_error  = torch.square(self.root_pos_w[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
-        heading_rewards = torch.exp(-heading_error / 0.5**2)
+        ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
         height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards 
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
@@ -365,7 +360,7 @@ class G1RecoveryEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_heading   * heading_rewards                 + \
+        common_rewards = self.cfg.w_track_ang_vel   * ang_vel_rewards                 + \
                          self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
@@ -410,7 +405,7 @@ class G1RecoveryEnv(G1BaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Heading"         : self.cfg.w_track_heading * heading_rewards,
+            "Task Reward / Common_Ang_Velocity"    : self.cfg.w_track_ang_vel * ang_vel_rewards,
             "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
             "Task Reward / Leg_Gait"               : self.cfg.w_feet_gait     * gait_reward,
             "Task Reward / Leg_Height"             : self.cfg.w_track_height  * height_rewards,
@@ -511,7 +506,6 @@ class G1RecoveryEnv(G1BaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
-        self.command_heading[i] = self.commands.heading[i]
         # Information related to Contact
         self.air_time[i] = self.contact_sensors.data.current_air_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.contact_time[i] = self.contact_sensors.data.current_contact_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
