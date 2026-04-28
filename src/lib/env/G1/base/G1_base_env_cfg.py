@@ -23,6 +23,7 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 from lib.env.env_cfg import EnvCfg
 from lib.domain_randomizer import randomizer
 from lib.assets.robots.G1.G1_hand.G1_hand import G1CFG
+from lib.assets.robots.G1.G1_hand.G1_hand_box_foot import G1_BOX_FOOT_CFG
 
 @configclass
 class EventCfg:
@@ -128,7 +129,7 @@ class G1BaseEnvCfg(EnvCfg):
     )
 
     # event
-    events = EventCfg()
+    events: EventCfg = EventCfg()
 
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
@@ -140,7 +141,8 @@ class G1BaseEnvCfg(EnvCfg):
                                 track_air_time=True)
 
     # robot
-    robot: ArticulationCfg = G1CFG.replace(prim_path="/World/envs/env_.*/Robot")
+    robot: ArticulationCfg = G1_BOX_FOOT_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+
 
     # visualization
     torso_rotation_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(

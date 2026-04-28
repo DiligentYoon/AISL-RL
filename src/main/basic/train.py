@@ -16,7 +16,7 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand", help="Name of the task.")
+parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -28,7 +28,7 @@ parser.add_argument("--algorithm",
 parser.add_argument("--model",
                     type=str,
                     default="MLP",
-                    choices=["MLP", "Shared", "Superconnected", "Communet"],
+                    choices=["MLP", "Shared", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -195,25 +195,6 @@ def main():
                                                    state_size=state_size,
                                                    action_size=act_size,
                                                    possible_agents=possible_agents)
-    elif model_manager.model_class == "gnn":
-        node_cfg = None
-        mapping_cfg = None
-        if model_manager.model_type == "nervenet":
-            node_cfg = {'node_info': env._unwrapped.cfg.node_info,
-                        'num_nodes': env._unwrapped.cfg.num_nodes,
-                        'num_actuated_nodes': env._unwrapped.cfg.num_actuated_nodes}
-            
-        elif model_manager.model_type == "bodytransformer":
-            mapping_cfg = env._unwrapped.cfg.map_info
-
-        else:
-            raise RuntimeError("Not supported type")
-        
-        models = model_manager.generate_gnn_models(observation_space=observation_space,
-                                                   state_space=state_space,
-                                                   action_space=action_space,
-                                                   node_cfg=node_cfg,
-                                                   mapping_cfg=mapping_cfg)
     else:
         raise RuntimeError("Not supported class")
 
@@ -243,7 +224,7 @@ def main():
                                     device=env.device,
                                     cfg=cfg["agent"])
         
-        elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
+        elif model_manager.model_type == "shared":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
                                     state_space=env.state_space,
