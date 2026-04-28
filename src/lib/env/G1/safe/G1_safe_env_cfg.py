@@ -20,8 +20,8 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 51}                
-    state_space = {"arm": 103, "leg": 103}
+    observation_space = {"arm": 60, "leg": 45}                
+    state_space = {"arm": 97, "leg": 97}
     ra_state_space = 11
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
@@ -54,9 +54,10 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_deviation_arm:        float = 1.0
     w_action_rate:          float = 0.05
     w_prefer_collision:     float = 0.001
+    w_yank:                 float = 0.01
     w_not_prefer_collision: float = 0.01
 
-    w_termination: float = 200
+    w_termination: float = 300
 
     def __post_init__(self):
         super().__post_init__()

@@ -98,7 +98,8 @@ class G1SafeEnv(G1BaseEnv):
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
-        # Prev action
+        # Prev value
+        self.prev_contact_force = torch.zeros((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.float, device=self.device)
         if self.cfg.num_agents > 1:
             # Multi Agent
             self.prev_actions = {
@@ -262,6 +263,16 @@ class G1SafeEnv(G1BaseEnv):
         prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1)
         not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1)
 
+        # Yank
+        arm_yank = self.contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids] - \
+                   self.prev_contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids]
+        
+        leg_yank = self.contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids] - \
+                   self.prev_contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids]
+        
+        yank_penalty_arm = -torch.sum(torch.abs(arm_yank), dim=-1)
+        yank_penalty_leg = -torch.sum(torch.abs(leg_yank), dim=-1)
+
         # Termination
         terminate_penalty = -self.reset_terminated.float()
 
@@ -288,6 +299,9 @@ class G1SafeEnv(G1BaseEnv):
         common_rewards = self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                     + \
+                      self.cfg.w_yank                 * yank_penalty_arm                 + \
+                      self.cfg.w_prefer_collision     * prefer_collision_penalty_arm     + \
+                      self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm + \
                       self.cfg.w_limits               * joint_limit_penalty_arm          + \
                       self.cfg.w_joint_torque_limit   * joint_torque_limit_penalty_arm   + \
                       self.cfg.w_joint_torque         * joint_torque_penalty_arm         + \
@@ -295,6 +309,7 @@ class G1SafeEnv(G1BaseEnv):
                       self.cfg.w_action_rate          * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                     + \
+                      self.cfg.w_yank                 * yank_penalty_leg                 + \
                       self.cfg.w_prefer_collision     * prefer_collision_penalty_leg     + \
                       self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_leg + \
                       self.cfg.w_limits               * joint_limit_penalty_leg          + \
@@ -303,6 +318,7 @@ class G1SafeEnv(G1BaseEnv):
                       self.cfg.w_joint_vel            * joint_vel_penalty_leg            + \
                       self.cfg.w_action_rate          * action_rate_penalty_leg 
 
+        # ============== Update prev value =============== #
         if self.cfg.num_agents > 1:
             # Multi Agent
             # Dictionary key order (alphabetical order in dictionary)
@@ -312,6 +328,8 @@ class G1SafeEnv(G1BaseEnv):
             # Single Agent
             rewards = common_rewards + (arm_rewards - common_rewards) + (leg_rewards - common_rewards)
             self.prev_actions = self.actions.clone()
+        
+        self.prev_contact_force = self.contact_force.clone()
 
         # Reward Info for logging
         self.extras["reward"] = {
@@ -322,6 +340,7 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
+            "Task Penalty / Arm_Yank"                 : self.cfg.w_yank                 * yank_penalty_arm,
             "Task Penalty / Arm_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_arm,
             "Task Penalty / Arm_Not_Prefer_Collision" : self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"          : self.cfg.w_limits               * joint_limit_penalty_arm,
@@ -330,6 +349,7 @@ class G1SafeEnv(G1BaseEnv):
             "Task Penalty / Arm_Vel"                  : self.cfg.w_joint_vel            * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"          : self.cfg.w_action_rate          * action_rate_penalty_arm,
 
+            "Task Penalty / Leg_Yank"                 : self.cfg.w_yank                 * yank_penalty_leg,
             "Task Penalty / Leg_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_leg,
             "Task Penalty / Leg_Not_Prefer_Collision" : self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_leg,
             "Task Penalty / Leg_Joint_Limit"          : self.cfg.w_limits               * joint_limit_penalty_leg,
@@ -369,6 +389,8 @@ class G1SafeEnv(G1BaseEnv):
         else:
             # Single Agent
             self.prev_actions[env_ids] = 0.0
+
+        self.prev_contact_force[env_ids] = 0.0
 
         self._compute_intermediate_values(env_ids)
 
