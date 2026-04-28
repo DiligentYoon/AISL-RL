@@ -48,7 +48,6 @@ class G1SafeEnv(G1BaseEnv):
 
         # Joint id
         self.torso_joint_ids, _ = self._robot.find_joints([r"waist_yaw_joint",])
-        self.hip_xyz_joint_ids, _ = self._robot.find_joints(r".*_hip_(pitch|roll|yaw)_joint")
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
@@ -78,6 +77,14 @@ class G1SafeEnv(G1BaseEnv):
         self.robot_mass = self._robot.data.default_mass.to(self.device)
         self.total_mass = self._robot.data.default_mass.sum(dim=-1).to(self.device)
 
+        self.upper_leg_mass = self._robot.data.default_mass[:, self.upper_leg_link_ids].to(self.device)
+        self.lower_leg_mass = self._robot.data.default_mass[:, self.lower_leg_link_ids].to(self.device)
+
+        self.upper_arm_mass = self._robot.data.default_mass[:, self.upper_arm_link_ids].to(self.device)
+        self.lower_arm_mass = self._robot.data.default_mass[:, self.lower_arm_link_ids].to(self.device)
+        
+        self.foot_mass = self._robot.data.default_mass[:, self.foot_link_ids].to(self.device)
+
         # Foot states
         self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
 
@@ -90,6 +97,16 @@ class G1SafeEnv(G1BaseEnv):
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
+
+        # Prev action
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            self.prev_actions = {
+                    "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
+                    "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)}
+        else:
+            # Single Agent
+            self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
 
         # Visualization
         debug_vis = self.num_envs <= 32
@@ -105,7 +122,6 @@ class G1SafeEnv(G1BaseEnv):
             if hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer.set_visibility(False)
 
-    
 
     def _debug_vis_callback(self, event):
         if not self._robot.is_initialized:
@@ -170,23 +186,23 @@ class G1SafeEnv(G1BaseEnv):
             observations = {
                 "arm": torch.cat(
                     [
-                        self.root_pos_w[:, 2:3],                            # [E, 1]
                         self.root_lin_vel_b,                                # [E, 3]
                         self.root_ang_vel_b,                                # [E, 3]
                         self.projected_gravity,                             # [E, 3]
                         self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
-                        self.joint_vel[:, self.total_arm_joint_ids]         # [E, 17]
+                        self.joint_vel[:, self.total_arm_joint_ids],        # [E, 17]
+                        self.prev_actions["arm"],                           # [E, 17]
                     ],
                     dim=-1
                 ),
                 "leg": torch.cat(
                     [
-                        self.root_pos_w[:, 2:3],                            # [E, 1]
                         self.root_lin_vel_b,                                # [E, 3]
                         self.root_ang_vel_b,                                # [E, 3]
                         self.projected_gravity,                             # [E, 3]
                         self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.joint_vel[:, self.total_leg_joint_ids]         # [E, 12]
+                        self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
+                        self.prev_actions["leg"],                           # [E, 12]
                     ],
                     dim=-1
                 )
@@ -196,12 +212,12 @@ class G1SafeEnv(G1BaseEnv):
             total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             observations = torch.cat(
                 [
-                    self.root_pos_w[:, 2:3],                            # [E, 1]
                     self.root_lin_vel_b,                                # [E, 3]
                     self.root_ang_vel_b,                                # [E, 3]
                     self.projected_gravity,                             # [E, 3]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
+                    self.prev_actions,                                  # [E, 29]
                 ], dim=-1) 
 
         return observations
@@ -219,6 +235,8 @@ class G1SafeEnv(G1BaseEnv):
                     self.projected_gravity,                             # [E, 3]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
+                    self.prev_actions["arm"],                           # [E, 17]
+                    self.prev_actions["leg"],                           # [E, 12]
                 ], dim=-1) 
             
             states = {
@@ -234,13 +252,12 @@ class G1SafeEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Collision
-        upper_leg_collision = self.contact_force[:, self.collision_upper_leg_link_ids]
-        lower_leg_collision = self.contact_force[:, self.collision_lower_leg_link_ids]
-        upper_arm_collision = self.contact_force[:, self.collision_upper_arm_link_ids]
-        lower_arm_collision = self.contact_force[:, self.collision_lower_arm_link_ids]
-        foot_collision      = self.contact_force[:, self.collision_foot_link_ids]
+        upper_leg_collision = (self.contact_force[:, self.collision_upper_leg_link_ids] - self.upper_leg_mass * 9.81).clip(min=0.0)
+        lower_leg_collision = (self.contact_force[:, self.collision_lower_leg_link_ids] - self.lower_leg_mass * 9.81).clip(min=0.0)
+        upper_arm_collision = (self.contact_force[:, self.collision_upper_arm_link_ids] - self.upper_arm_mass * 9.81).clip(min=0.0)
+        lower_arm_collision = (self.contact_force[:, self.collision_lower_arm_link_ids] - self.lower_arm_mass * 9.81).clip(min=0.0)
 
-        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1) - torch.sum(foot_collision, dim=-1)
+        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1)
         not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1)
         prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1)
         not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1)
@@ -345,24 +362,13 @@ class G1SafeEnv(G1BaseEnv):
         self._robot.reset(env_ids)
         super()._reset_idx(env_ids)
 
-        if hasattr(self, "prev_actions"):
-            if self.cfg.num_agents > 1:
-                # Multi Agent
-                self.prev_actions["leg"][env_ids] = 0.0
-                self.prev_actions["arm"][env_ids] = 0.0
-            else:
-                # Single Agent
-                self.prev_actions[env_ids] = 0.0
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            self.prev_actions["leg"][env_ids] = 0.0
+            self.prev_actions["arm"][env_ids] = 0.0
         else:
-            if self.cfg.num_agents > 1:
-                # Multi Agent
-                self.prev_actions = {
-                        "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
-                        "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
-                }
-            else:
-                # Single Agent
-                self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
+            # Single Agent
+            self.prev_actions[env_ids] = 0.0
 
         self._compute_intermediate_values(env_ids)
 
