@@ -22,8 +22,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 66, "leg": 51}                
-    state_space = {"arm": 103, "leg": 103}
+    observation_space = {"arm": 50, "leg": 40}                
+    state_space = {"arm": 74, "leg": 74}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -36,30 +36,32 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 3.0
-    w_track_ang_vel: float = 2.0
-    w_feet_gait:     float = 3.0
+    w_track_lin_vel: float = 4.0
+    w_track_heading: float = 2.0
     w_track_height : float = 1.0
-    w_flat:          float = 1.0
 
-    w_feet_slide:         float = 1.0
-    w_support_xy:         float = 0.1
+    w_feet_gait:      float = 6.0
+    w_feet_slide:     float = 2.0
+    w_support_xy:     float = 0.2
+    w_self_collision: float = 0.01
+    w_flat:           float = 2.0
+
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.02
-    w_joint_torque:       float = 2.0e-6
-    w_joint_torque_limit: float = 2.0e-5
-    w_joint_acc:          float = 2.0e-7
-    w_joint_vel:          float = 2.0e-4
+    w_ang_vel_xy:         float = 0.1
+    w_joint_torque:       float = 1.0e-5
+    w_joint_torque_limit: float = 1.0e-4
+    w_joint_acc:          float = 1.0e-6
+    w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
-    w_deviation_hip:     float = 1.0
-    w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.1
-    w_action_rate:       float = 0.01
+    w_deviation_hip:     float = 2.0
+    w_deviation_torso:   float = 2.0
+    w_deviation_arm:     float = 0.2
+    w_action_rate:       float = 0.05
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.8
+    termination_gravity: float = 0.5
     termination_ang_vel: float = 15.0
 
     # ===== Gait guidance ===== #
@@ -78,13 +80,13 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 4.0),
-        prob_standing_envs=0.05,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=0.02,
+        prob_heading_envs=1.0,
+        heading_command=True,
+        heading_control_stiffness=0.5,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0), heading=(0.0, 0.0)
+            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
@@ -100,6 +102,10 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.push_robot = None
 
 
 @configclass

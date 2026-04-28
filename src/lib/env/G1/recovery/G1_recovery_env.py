@@ -13,7 +13,7 @@ from isaaclab.markers import VisualizationMarkers
 
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
 
-from lib.domain_randomizer.commander import UniformNonHolonomicCommand
+from lib.domain_randomizer.commander import UniformNonHolonomicCommand, UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 
@@ -46,7 +46,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
 
         # Commands for reference generator
-        self.commands = UniformNonHolonomicCommand(self.cfg.commands, self._robot, self.device)
+        self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
 
         # Action Mapping
         self.mapping_sort_ids = torch.argsort(torch.tensor(self.total_arm_joint_ids + self.total_leg_joint_ids, device=self.device))
@@ -231,6 +231,7 @@ class G1RecoveryEnv(G1BaseEnv):
             observations = {
                 "arm": torch.cat(
                     [
+                        self.root_pos_w[:, 2:3],                            # [E, 1]
                         self.root_heading,                                  # [E, 1]
                         self.root_lin_vel_b,                                # [E, 3]
                         self.root_ang_vel_b,                                # [E, 3]
@@ -239,13 +240,13 @@ class G1RecoveryEnv(G1BaseEnv):
                         self.phase_sin.unsqueeze(-1),                       # [E, 1]
                         self.phase_cos.unsqueeze(-1),                       # [E, 1]
                         self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
-                        self.joint_vel[:, self.total_arm_joint_ids],        # [E, 17]
-                        self.prev_actions["arm"],                           # [E, 17]   
+                        self.joint_vel[:, self.total_arm_joint_ids]         # [E, 17]
                     ],
                     dim=-1
                 ),
                 "leg": torch.cat(
                     [
+                        self.root_pos_w[:, 2:3],                            # [E, 1]
                         self.root_heading,                                  # [E, 1]
                         self.root_lin_vel_b,                                # [E, 3]
                         self.root_ang_vel_b,                                # [E, 3]
@@ -254,8 +255,7 @@ class G1RecoveryEnv(G1BaseEnv):
                         self.phase_sin.unsqueeze(-1),                       # [E, 1]
                         self.phase_cos.unsqueeze(-1),                       # [E, 1]
                         self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.prev_actions["leg"],                           # [E, 12]  
+                        self.joint_vel[:, self.total_leg_joint_ids]         # [E, 12]
                     ],
                     dim=-1
                 )
@@ -275,7 +275,6 @@ class G1RecoveryEnv(G1BaseEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
-                    self.prev_actions,                                  # [E, 29]
                 ], dim=-1) 
 
         return observations
@@ -297,8 +296,6 @@ class G1RecoveryEnv(G1BaseEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
-                    self.prev_actions["arm"],                           # [E, 17]   
-                    self.prev_actions["leg"]                            # [E, 12]  
                 ], dim=-1) 
             
             states = {
@@ -314,11 +311,13 @@ class G1RecoveryEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking rewards
-        lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.root_lin_vel_b[:, :2]), dim=-1)
-        ang_vel_error = torch.square(self.command_inputs_b[:, 2] - self.root_ang_vel_b[:, 2])
+        lin_vel_error = torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2])
+        lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_b[:, :2], dim=-1)).unsqueeze(-1)
+        lin_vel_error = torch.sum(lin_vel_error, dim=-1)
+        heading_error = torch.abs(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
         height_error  = torch.square(self.root_pos_w[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
-        ang_vel_rewards = torch.exp(-ang_vel_error / 0.5**2)
+        heading_rewards = torch.exp(-heading_error / 0.5**2)
         height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards 
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
@@ -360,7 +359,7 @@ class G1RecoveryEnv(G1BaseEnv):
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
-        common_rewards = self.cfg.w_track_ang_vel   * ang_vel_rewards                 + \
+        common_rewards = self.cfg.w_track_heading   * heading_rewards                 + \
                          self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
@@ -399,13 +398,12 @@ class G1RecoveryEnv(G1BaseEnv):
             rewards = common_rewards + (arm_rewards - common_rewards) + (leg_rewards - common_rewards)
             self.prev_actions = self.actions.clone()
 
-
         # Reward Info for logging
         self.extras["reward"] = {
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Common_Ang_Velocity"    : self.cfg.w_track_ang_vel * ang_vel_rewards,
+            "Task Reward / Common_Heading"         : self.cfg.w_track_heading * heading_rewards,
             "Task Reward / Common_Flat"            : self.cfg.w_flat          * flat_rewards,
             "Task Reward / Leg_Gait"               : self.cfg.w_feet_gait     * gait_reward,
             "Task Reward / Leg_Height"             : self.cfg.w_track_height  * height_rewards,

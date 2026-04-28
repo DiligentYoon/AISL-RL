@@ -29,38 +29,6 @@ from lib.assets.robots.G1.G1_hand.G1_hand_box_foot import G1_BOX_FOOT_CFG
 class EventCfg:
     """Configuration for events."""
 
-    # startup
-    # physics_material = EventTerm(
-    #     func=randomizer.randomize_rigid_body_material,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-    #         "static_friction_range": (0.8, 0.8),
-    #         "dynamic_friction_range": (0.6, 0.6),
-    #         "restitution_range": (0.0, 0.0),
-    #         "num_buckets": 64,
-    #     },
-    # )
-
-    # add_base_mass = EventTerm(
-    #     func=randomizer.randomize_rigid_body_mass,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "mass_distribution_params": (-5.0, 5.0),
-    #         "operation": "add",
-    #     },
-    # )
-
-    # base_com = EventTerm(
-    #     func=randomizer.randomize_rigid_body_com,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
-    #     },
-    # )
-
     # reset
     reset_base = EventTerm(
         func=randomizer.reset_root_state_uniform,
@@ -91,7 +59,7 @@ class EventCfg:
     push_robot = EventTerm(
         func=randomizer.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(2.0, 3.0),
+        interval_range_s=(3.0, 4.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
             "velocity_range": {"x": (-2.0, 2.0), "y": (-2.0, 2.0), "roll": (-1.5, 1.5), "pitch": (-1.5, 1.5)}},
