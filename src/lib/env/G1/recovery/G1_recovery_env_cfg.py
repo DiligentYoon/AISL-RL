@@ -5,6 +5,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
@@ -35,16 +36,16 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 2.0
-    w_track_heading: float = 1.0
-    w_feet_gait:     float = 2.0
+    w_track_lin_vel: float = 3.0
+    w_track_ang_vel: float = 2.0
+    w_feet_gait:     float = 3.0
     w_track_height : float = 1.0
     w_flat:          float = 1.0
 
     w_feet_slide:         float = 1.0
     w_support_xy:         float = 0.1
     w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.02
+    w_ang_vel_xy:         float = 0.01
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_acc:          float = 1.0e-6
@@ -53,7 +54,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 1.0
     w_deviation_torso:   float = 1.0
-    w_deviation_arm:     float = 0.5
+    w_deviation_arm:     float = 0.1
     w_action_rate:       float = 0.02
 
     w_termination: float = 200
@@ -77,13 +78,13 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Commander
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.01,
+        resampling_time_range=(3.0, 4.0),
+        prob_standing_envs=0.05,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.1, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.1, 1.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0), heading=(0.0, 0.0)
         ),
     )
 
@@ -99,3 +100,22 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+
+@configclass
+class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+    
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
+
+        self.scene.num_envs = 1
+
+        self.events.push_robot = None
