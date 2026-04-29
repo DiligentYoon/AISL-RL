@@ -12,7 +12,6 @@ from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers
 
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
-
 from isaaclab.sensors import ContactSensor
 
 from lib.domain_randomizer.commander import UniformVelocityCommand
@@ -48,6 +47,7 @@ class G1PusherEnv(G1BaseEnv):
             r".*_elbow_link",
             r".*_wrist_.*_link",
         ])
+        self.total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
 
         self.denied_collision_link_leg_ids = [bid for bid in self.leg_collision_link_ids if bid not in self.allowed_collision_link_ids]
         self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
@@ -133,6 +133,11 @@ class G1PusherEnv(G1BaseEnv):
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
+        # Adversarial agent's sparse action
+        self.adv_agent_action_num = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device) 
+
+        self.died = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
+        
         # Visualization
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
@@ -209,16 +214,6 @@ class G1PusherEnv(G1BaseEnv):
         leg_actions = self.actions["leg"]
         adv_actions = self.actions["adv"]                                   # Adversarial agent's action
 
-        # Adversarial agent(Pusher) action decoding
-        # 4(Binary encoding) + force(x, y) + torque(roll, pitch, yaw)
-        bodies_binary = torch.tensor(adv_actions[:, :4], device=self.device)
-        weights = torch.tensor([[8, 4, 2, 1]], device=self.device)
-        bodies_decimal = torch.sum(bodies_binary * weights, dim=1, keepdim=True)
-        bodies_ids = self.adv_binary_decode_map[bodies_decimal]
-
-        push_force = adv_actions[:, 4:6]
-        push_torque = adv_actions[:, 6:]
-
         # Arm agent
         self._robot.set_joint_position_target(
             target=torch.clamp(self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
@@ -234,16 +229,49 @@ class G1PusherEnv(G1BaseEnv):
                                 max=self.leg_joint_limits[:, :, 1]),
             joint_ids=self.total_leg_joint_ids)
         
-        # Pusher agent
-        self._robot.set_external_force_and_torque(
-            forces=push_force,
-            torques=push_torque,
-            body_ids=bodies_ids
-        )
+        # Adversarial agent(Pusher)
+        # boolean(push timing) + 4(Binary encoding) + force(x, y) + torque(roll, pitch, yaw)
+        push_now = adv_actions[:, 0] > 0.0                      # Boolean for when to push the robot 
+        
+        # Pushed env indices extraction
+        push_env_mask = push_now & (self.adv_agent_action_num < self.cfg.adv_agent_action_max)
+        push_env_ids = push_env_mask.nonzero(as_tuple=False).squeeze(-1)
+        
+        # When adv agent push the robot
+        if len(push_env_ids) > 0:
+            # Action decoding
+            # Binary decoding
+            pushed_body_binary = (adv_actions[:, 1:5] > 0.0).to(torch.int)
+            weights = torch.tensor([[8, 4, 2, 1]], device=self.device)
+            pushed_body_decimal = torch.sum(pushed_body_binary * weights, dim=1)
+            pushed_body_ids = self.adv_binary_decode_map[pushed_body_decimal]
+
+            # Linear force
+            push_force_xy = adv_actions[:, 5:7]
+            push_force_z = torch.zeros_like(push_force_xy[:, 0:1])
+            push_force = torch.cat([push_force_xy, push_force_z], dim=-1)
+
+            # Torque
+            push_torque = adv_actions[:, 7:]
+
+            # Extract push env's action
+            filtered_force = push_force[push_env_ids]
+            filtered_torque = push_torque[push_env_ids]
+            filtered_body_ids = pushed_body_ids[push_env_ids]
+
+            # Action execution
+            self._robot.set_external_force_and_torque(
+                forces=filtered_force,
+                torques=filtered_torque,
+                body_ids=filtered_body_ids,
+                env_ids=push_env_ids
+            )
+
+            # Action count up
+            self.adv_agent_action_num[push_env_ids] += 1
         
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        # Multi Agent
         observations = {
             "arm": torch.cat(
                 [
@@ -275,7 +303,20 @@ class G1PusherEnv(G1BaseEnv):
                 ],
                 dim=-1
             ),
-            "adv": torch.cat()
+            "adv": torch.cat(
+                [
+                    self.root_pos_w[:, 2:3],                            # [E, 1]
+                    self.root_heading,                                  # [E, 1]
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                    self.joint_pos[:, self.total_joint_ids],            # [E, 29]
+                    self.joint_vel[:, self.total_joint_ids]             # [E, 29]
+                ]
+            )
         }
 
         return observations
@@ -284,7 +325,6 @@ class G1PusherEnv(G1BaseEnv):
     def _get_states(self) -> dict[str, torch.Tensor]:
         if self.cfg.num_agents > 1:
             # Multi Agent
-            total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             shared_states = torch.cat(
                 [
                     self.root_pos_w[:, 2:3],                            # [E, 1]
@@ -295,8 +335,8 @@ class G1PusherEnv(G1BaseEnv):
                     self.command_inputs_b,                              # [E, 3]
                     self.phase_sin.unsqueeze(-1),                       # [E, 1]
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos[:, total_joint_ids],                 # [E, 29]
-                    self.joint_vel[:, total_joint_ids],                 # [E, 29]
+                    self.joint_pos[:, self.total_joint_ids],            # [E, 29]
+                    self.joint_vel[:, self.total_joint_ids],            # [E, 29]
                 ], dim=-1) 
             
             states = {
@@ -328,59 +368,62 @@ class G1PusherEnv(G1BaseEnv):
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
         gait_reward = diff * self.contact_schedule
         # Termination
-        terminate_penalty = -self.reset_terminated.float()
+        terminate_penalty = self.reset_terminated.float()
         # Sliding
-        slide_penalty = -torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
+        slide_penalty = torch.sum(self._robot.data.body_link_lin_vel_w[:, self.ankle_x_link_ids, :2].norm(dim=-1) * self.is_contacts, dim=1)
         # Support foot penalty
         support_x, support_y, _ = euler_xyz_from_quat(self.support_foot_rot)
         support_xy = torch.stack([support_x, support_y], dim=-1)
         support_xy = abs(wrap_to_pi(support_xy))
-        support_xy_penalty = -torch.sum(support_xy, dim=-1)
+        support_xy_penalty = torch.sum(support_xy, dim=-1)
         # Self-collision
         # self_collision_penalty = -torch.sum(torch.norm(self.illegal_force, dim=-1), dim=-1)
         collision_norm_leg = (torch.norm(self.illegal_leg_force, dim=-1) - 1.0).clamp(min=0.0)
         collision_norm_arm = (torch.norm(self.illegal_arm_force, dim=-1) - 1.0).clamp(min=0.0)
-        self_collision_penalty_leg = -torch.sum(collision_norm_leg, dim=-1)
-        self_collision_penalty_arm = -torch.sum(collision_norm_arm, dim=-1)
+        self_collision_penalty_leg = torch.sum(collision_norm_leg, dim=-1)
+        self_collision_penalty_arm = torch.sum(collision_norm_arm, dim=-1)
         # Regularization
-        joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
-        joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
-        ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
-        lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
+        joint_deviation_penalty_hip_xz  = torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
+        joint_deviation_penalty_arms    = torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
+        joint_deviation_penalty_torso   = torch.sum(torch.abs(self.deviation_torso), dim=1)
+        ang_vel_xy_penalty              = torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
+        lin_vel_z_penalty               = torch.square(self.root_lin_vel_w[:, 2])
 
-        joint_limit_penalty_leg         = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
-        joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
-        joint_torque_penalty_leg        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
-        joint_vel_penalty_leg           = -torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
+        joint_limit_penalty_leg         = torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
+        joint_torque_limit_penalty_leg  = torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
+        joint_torque_penalty_leg        = torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_leg_joint_ids]), dim=1)
+        joint_vel_penalty_leg           = torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
         if self.cfg.num_agents > 1:
-            action_rate_penalty_leg     = -torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
+            action_rate_penalty_leg     = torch.sum(torch.square(self.actions["leg"] - self.prev_actions["leg"]), dim=1)
         else:
-            action_rate_penalty_leg     = -torch.sum(torch.square(self.actions[:, self.total_leg_joint_ids] - self.prev_actions[:, self.total_leg_joint_ids]), dim=1)
+            action_rate_penalty_leg     = torch.sum(torch.square(self.actions[:, self.total_leg_joint_ids] - self.prev_actions[:, self.total_leg_joint_ids]), dim=1)
 
-        joint_limit_penalty_arm         = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
-        joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
-        joint_torque_penalty_arm        = -torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
-        joint_vel_penalty_arm           = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
+        joint_limit_penalty_arm         = torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
+        joint_torque_limit_penalty_arm  = torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
+        joint_torque_penalty_arm        = torch.sum(torch.square(self._robot.data.applied_torque[:, self.total_arm_joint_ids]), dim=1)
+        joint_vel_penalty_arm           = torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
         if self.cfg.num_agents > 1:
-            action_rate_penalty_arm     = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
+            action_rate_penalty_arm     = torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
         else:
-            action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
-        # Multi Agent
-        common_rewards = self.cfg.w_track_heading   * heading_rewards                 + \
-                         self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
-                         self.cfg.w_flat            * flat_rewards                    + \
-                         self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
-                         self.cfg.w_termination     * terminate_penalty
+            action_rate_penalty_arm     = torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
+        # Adversarial reward
+        falling_rewards = self.died.float()
         
-        arm_rewards = common_rewards                                                  + \
-                      self.cfg.w_self_collision     * self_collision_penalty_arm      + \
-                      self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
-                      self.cfg.w_limits             * joint_limit_penalty_arm         + \
-                      self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
-                      self.cfg.w_joint_torque       * joint_torque_penalty_arm        + \
-                      self.cfg.w_joint_vel          * joint_vel_penalty_arm           + \
-                      self.cfg.w_action_rate        * action_rate_penalty_arm
+        # Multi Agent
+        common_rewards = self.cfg.w_track_heading    * heading_rewards                 + \
+                         self.cfg.w_deviation_torso  * joint_deviation_penalty_torso   + \
+                         self.cfg.w_flat             * flat_rewards                    + \
+                         self.cfg.w_ang_vel_xy       * ang_vel_xy_penalty              + \
+                         self.cfg.w_termination      * terminate_penalty
+        
+        arm_rewards = common_rewards                                                   + \
+                      self.cfg.w_self_collision      * self_collision_penalty_arm      + \
+                      self.cfg.w_deviation_arm       * joint_deviation_penalty_arms    + \
+                      self.cfg.w_limits              * joint_limit_penalty_arm         + \
+                      self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_arm  + \
+                      self.cfg.w_joint_torque        * joint_torque_penalty_arm        + \
+                      self.cfg.w_joint_vel           * joint_vel_penalty_arm           + \
+                      self.cfg.w_action_rate         * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                   + \
                       self.cfg.w_track_height        * height_rewards                  + \
@@ -395,7 +438,11 @@ class G1PusherEnv(G1BaseEnv):
                       self.cfg.w_joint_torque_limit  * joint_torque_limit_penalty_leg  + \
                       self.cfg.w_joint_torque        * joint_torque_penalty_leg        + \
                       self.cfg.w_joint_vel           * joint_vel_penalty_leg           + \
-                      self.cfg.w_action_rate         * action_rate_penalty_leg 
+                      self.cfg.w_action_rate         * action_rate_penalty_leg
+        
+        adv_rewards = self.cfg.w_falling_adv         * falling_rewards
+                      self.cfg.w_orientation_adv     * 
+                      self.cfg.w_angular_vel_adv     * 
 
         if self.cfg.num_agents > 1:
             # Multi Agent
@@ -463,8 +510,8 @@ class G1PusherEnv(G1BaseEnv):
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         
         # died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
-        died = died_fall | died_fall_2 | died_ang
-        return died, time_out
+        self.died = died_fall | died_fall_2 | died_ang
+        return self.died, time_out
 
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
@@ -542,10 +589,11 @@ class G1PusherEnv(G1BaseEnv):
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-        # Ilegal force (self-collision)
-        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
-        self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
-        self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
+        if 
+            # Ilegal force (self-collision)
+            self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
+            self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
+            self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]

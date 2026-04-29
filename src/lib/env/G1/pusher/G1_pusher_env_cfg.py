@@ -104,14 +104,23 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
 
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg", "adv"]                 # Adversarial agent
-    action_space = {"arm": 17, "leg": 12, "adv": 9}                         
+    action_space = {"arm": 17, "leg": 12, "adv": 10}                         
     observation_space = {"arm": 50, "leg": 40, "adv": 1}    # TODO: 나중에 수정            
     state_space = {"arm": 74, "leg": 74}
     num_agents = 3
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()],
-                           "adv": [0.5, ()]}                # TODO: 나중에 수정
-    adv_binary_decode_map = []      # TODO: link ids 뽑아야됨
+                           "adv": [0.5, ()]}
+    adv_binary_decode_map = [0,                             # pelvis                             
+                             1, 2,                          # hip_pitch
+                             4, 5,                          # hip_roll
+                             9,                             # torso
+                             10, 11,                        # knee
+                             18, 19,                        # ankle_roll
+                             20, 21,                        # shoulder_yaw
+                             22, 23,                        # elbow
+                             28, 29]                        # wrist_yaw (include hand)
+    adv_agent_action_max = 1                                # Adversarial agent's max num of actions 
 
     ## ========== Single Agent Setting ========== ##  
     # action_space = 37                     
@@ -126,31 +135,37 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
     w_track_height : float = 1.0
 
     w_feet_gait:      float = 6.0
-    w_feet_slide:     float = 2.0
-    w_support_xy:     float = 0.2
-    w_self_collision: float = 0.01
+    w_feet_slide:     float = -2.0
+    w_support_xy:     float = -0.2
+    w_self_collision: float = -0.01
     w_flat:           float = 2.0
 
-    w_lin_vel_z:          float = 0.5
-    w_ang_vel_xy:         float = 0.1
-    w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 1.0e-4
+    w_lin_vel_z:          float = -0.5
+    w_ang_vel_xy:         float = -0.1
+    w_joint_torque:       float = -1.0e-5
+    w_joint_torque_limit: float = -1.0e-4
     w_joint_acc:          float = 1.0e-6
-    w_joint_vel:          float = 5.0e-4
+    w_joint_vel:          float = -5.0e-4
 
-    w_limits:            float = 10.0
-    w_deviation_hip:     float = 2.0
-    w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 0.2
-    w_action_rate:       float = 0.05
+    w_limits:            float = -10.0
+    w_deviation_hip:     float = -2.0
+    w_deviation_torso:   float = -2.0
+    w_deviation_arm:     float = -0.2
+    w_action_rate:       float = -0.05
 
-    w_termination: float = 200
+    w_termination: float = -200
     termination_height: float = 0.3
     termination_gravity: float = 0.5
     termination_ang_vel: float = 15.0
     termination_target_foot: float = 1.0
 
     soft_torque_limit: float = 0.8
+
+    # Adversarial agent
+    w_falling_adv:          float = 1.0
+    w_orientation_adv:      float = 0.5
+    w_angular_vel_adv:      float = 0.1
+    w_action_budget_adv:    float = 0.1
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2
