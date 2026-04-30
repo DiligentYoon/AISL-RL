@@ -39,20 +39,19 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
 
-    w_feet_gait:      float = 6.0
+    w_feet_gait:      float = 4.0
     w_support_xy:     float = 0.2
     w_flat:           float = 2.0
 
-    w_lin_vel_z:          float = 0.5
+    w_lin_vel_z:          float = 2.0
     w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
-    w_joint_acc:          float = 1.0e-6
     w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
     w_deviation_hip:     float = 2.0
-    w_deviation_torso:   float = 2.0
+    w_deviation_torso:   float = 3.0
     w_deviation_arm:     float = 2.0
     w_action_rate:       float = 0.005
 

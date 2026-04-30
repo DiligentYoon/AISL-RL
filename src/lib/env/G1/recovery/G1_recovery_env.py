@@ -131,7 +131,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.out_of_limits_joint    = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.deviation_hip_xz       = torch.zeros((self.num_envs, len(self.hip_xz_joint_ids)), dtype=torch.float, device=self.device)
-        self.deviation_arms         = torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), dtype=torch.float, device=self.device)
+        self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Visualization
@@ -349,7 +349,7 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
+        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
@@ -377,6 +377,7 @@ class G1RecoveryEnv(G1BaseEnv):
                          self.cfg.w_track_heading   * heading_rewards          
         
         arm_rewards = common_rewards                                                  + \
+                      self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
                       self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
@@ -387,9 +388,9 @@ class G1RecoveryEnv(G1BaseEnv):
 
         
         leg_rewards = common_rewards                                                   + \
-                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
+                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
                       self.cfg.w_support_xy          * support_xy_penalty              + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
@@ -431,7 +432,6 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"               : self.cfg.w_joint_vel          * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"       : self.cfg.w_action_rate        * action_rate_penalty_arm,
-            "Task Penalty / Leg_Lin_Vel_Z"         : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Leg_Support_XY"        : self.cfg.w_support_xy         * support_xy_penalty, 
             "Task Penalty / Leg_Hip_XZ_Deviation"  : self.cfg.w_deviation_hip      * joint_deviation_penalty_hip_xz,
             "Task Penalty / Leg_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_leg,
@@ -581,7 +581,7 @@ class G1RecoveryEnv(G1BaseEnv):
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
         self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
-        self.deviation_arms[i]       = self.joint_pos[i][:, self.total_arm_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_arm_joint_ids]
+        self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
 
 @torch.jit.script
