@@ -15,9 +15,9 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=5, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="", help="Path to model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -274,8 +274,6 @@ def main():
     else:
         resume_path_ra = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
-
-
 
     # ======================= Training ============================
 

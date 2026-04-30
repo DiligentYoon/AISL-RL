@@ -112,7 +112,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        self.events.push_robot = None
+        self.events.push_robot.interval_range_s = (2.0, 3.0)
 
 
 @configclass
