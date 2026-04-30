@@ -22,8 +22,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ========== Multi Agent Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 50, "leg": 40}                
-    state_space = {"arm": 74, "leg": 74}
+    observation_space = {"arm": 65, "leg": 50}                
+    state_space = {"arm": 102, "leg": 102}
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
@@ -38,12 +38,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
-    w_track_height : float = 1.0
 
     w_feet_gait:      float = 6.0
-    w_feet_slide:     float = 2.0
     w_support_xy:     float = 0.2
-    w_self_collision: float = 0.01
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = 0.5
@@ -56,12 +53,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_limits:            float = 10.0
     w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 0.2
-    w_action_rate:       float = 0.05
+    w_deviation_arm:     float = 2.0
+    w_action_rate:       float = 0.005
 
     w_termination: float = 200
     termination_height: float = 0.3
-    termination_gravity: float = 0.5
+    termination_gravity: float = 0.8
     termination_ang_vel: float = 15.0
 
     # ===== Gait guidance ===== #
@@ -81,12 +78,12 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.02,
-        prob_heading_envs=1.0,
-        heading_command=True,
-        heading_control_stiffness=0.5,
+        prob_standing_envs=0.05,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(1.0, 1.5), lin_vel_y=(-1.0, 1.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
@@ -99,9 +96,19 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         prim_path="/Visuals/Command/velocity_current"
     )
 
+    goal_ang_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/angular_velocity_goal"
+    )
+
+    current_ang_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/angular_velocity_current"
+    )
+
     # Set the scale of the visualization markers
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    goal_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    current_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
     def __post_init__(self):
         super().__post_init__()

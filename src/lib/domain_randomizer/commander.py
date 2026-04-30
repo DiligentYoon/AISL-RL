@@ -274,6 +274,20 @@ class UniformVelocityCommand():
 
         return arrow_scale, arrow_quat
 
+    def _resolve_yaw_velocity_to_arrow(self, scale, yaw_velocity: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Converts the Z base angular velocity command to arrow direction rotation."""
+        # obtain default scale of the marker
+        default_scale = scale
+        # arrow-scale
+        arrow_scale = torch.tensor(default_scale, device=self.device).repeat(yaw_velocity.shape[0], 1)
+        arrow_scale[:, 0] *= yaw_velocity.squeeze(-1) * 3.0
+        # arrow-direction (constant pitch)
+        pitch_angle = torch.pi/2 * torch.ones(yaw_velocity.shape[0], device=self.device)
+        zeros = torch.zeros_like(pitch_angle)
+        arrow_quat = math_utils.quat_from_euler_xyz(zeros, pitch_angle, zeros) # world frame
+
+        return arrow_scale, arrow_quat
+
 
 # ===================================================================
 # Uniform Velocity Command for Non-Holonomic Dynamics Model

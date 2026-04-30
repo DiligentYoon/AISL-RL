@@ -63,9 +63,9 @@ G1CFG: ArticulationCfg = ArticulationCfg(
             ".*_ankle_pitch_joint": -0.4,
             
             ".*_elbow_joint": 0.87,
-            "left_shoulder_roll_joint": 0.16,
+            "left_shoulder_roll_joint": 0.2775,
             "left_shoulder_pitch_joint": 0.35,
-            "right_shoulder_roll_joint": -0.16,
+            "right_shoulder_roll_joint": -0.2775,
             "right_shoulder_pitch_joint": 0.35,
         },
         joint_vel={".*": 0.0},
