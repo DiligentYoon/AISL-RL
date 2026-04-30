@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from isaaclab.utils import configclass
 from isaaclab.managers import EventTermCfg as EventTerm
-from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
-from lib.utils.plot_utils import PNGSavePlotter
 from isaaclab.managers import SceneEntityCfg
+
+from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
+from lib.domain_randomizer import randomizer
+from lib.utils.plot_utils import PNGSavePlotter
 
 @configclass
 class G1FallEnvCfg(G1RecoveryEnvCfg):
@@ -35,7 +37,6 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.events.push_robot.params["interval_range_s"] = (2.0, 3.0)
         self.events.push_robot.params["velocity_range"] = {
             "x": (-2.0, 2.0),
             "y": (-2.0, 2.0),
