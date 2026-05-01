@@ -457,7 +457,7 @@ class G1RecoveryEnv(G1BaseEnv):
         died_fall   = z_c <= self.cfg.termination_height
         died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
-        # died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
+        # died_ang = torch.norm(self.root_ang_vel_b[:, :2], dim=-1) >= self.cfg.termination_ang_vel
 
         self.arm_terminated = died_fall
         

@@ -50,9 +50,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
-    w_deviation_hip:     float = 2.0
-    w_deviation_torso:   float = 3.0
-    w_deviation_arm:     float = 2.0
+    w_deviation_hip:     float = 4.0
+    w_deviation_torso:   float = 2.0
+    w_deviation_arm:     float = 1.0
     w_action_rate:       float = 0.005
 
     w_termination: float = 200
@@ -130,4 +130,4 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
 
         self.scene.num_envs = 1
 
-        self.events.push_robot = None
+        # self.events.push_robot = None

@@ -103,9 +103,6 @@ def main():
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-    # Predicted RA value
-    if env_cfg.viz_data is not None:
-        env_cfg.viz_data["RA_value"] = 0.0
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -288,10 +285,9 @@ def main():
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
-        t1_loop = time.time()
         with torch.no_grad():
             # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
             RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
@@ -302,13 +298,9 @@ def main():
         if plot is not None:
             done = terminated[0] | truncated[0]
             RA_value = RA_value.squeeze(-1)
-            l_value  = infos["l_values"].squeeze(-1)
-            g_value  = infos["g_values"] .squeeze(-1)
-            target = (1-0.99) * torch.max(l_value, g_value) + 0.99 * torch.max(g_value, torch.min(l_value, RA_value))
             infos["viz_data"]["RA_value"] = RA_value
             infos["viz_data"]["m_step_hist"] = RA_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
-
 
         # Video update
         if args_cli.video and timestep == args_cli.video_length:

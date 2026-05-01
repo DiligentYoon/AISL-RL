@@ -106,19 +106,19 @@ class G1FallEnv(G1RecoveryEnv):
 
         return xi_t_x, xi_t_y, radius
         
-    # def _update_viz_data(self):
-    #     extras = copy.deepcopy(self.extras)
+    def _update_viz_data(self):
+        extras = copy.deepcopy(self.extras)
 
-    #     # dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
+        dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
 
-        # extras["viz_data"]["com_pos"]               = self.CoM[0]
-        # extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
-        # extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
-        # extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
-        # extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
-        # extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
-        # extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
-        # extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
-        # extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
+        extras["viz_data"]["com_pos"]               = self.CoM[0]
+        extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
+        extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
+        extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
+        extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
+        extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
+        extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
+        extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
+        extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
 
-    #     return extras
+        return extras
