@@ -137,7 +137,7 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
     w_feet_gait:      float = 6.0
     w_feet_slide:     float = -2.0
     w_support_xy:     float = -0.2
-    w_self_collision: float = -0.01
+    w_self_collision: float = -0.00                     # Temporarly turn off
     w_flat:           float = 2.0
 
     w_lin_vel_z:          float = -0.5
@@ -165,7 +165,7 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
     w_falling_adv:          float = 1.0
     w_orientation_adv:      float = 0.5
     w_angular_vel_adv:      float = 0.1
-    w_action_budget_adv:    float = 0.1
+    w_action_budget_adv:    float = 0.1                 # Not using
 
     # ===== Gait guidance ===== #
     self_collision_threshold = 0.2

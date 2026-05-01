@@ -408,6 +408,9 @@ class G1PusherEnv(G1BaseEnv):
             action_rate_penalty_arm     = torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Adversarial reward
         falling_rewards = self.died.float()
+        root_euler_ang = euler_xyz_from_quat(self.root_rot_w[:, :4])
+        ang_xy_reward = torch.sum(torch.square(root_euler_ang[:, :2]), dim=1)
+
         
         # Multi Agent
         common_rewards = self.cfg.w_track_heading    * heading_rewards                 + \
@@ -440,14 +443,14 @@ class G1PusherEnv(G1BaseEnv):
                       self.cfg.w_joint_vel           * joint_vel_penalty_leg           + \
                       self.cfg.w_action_rate         * action_rate_penalty_leg
         
-        adv_rewards = self.cfg.w_falling_adv         * falling_rewards
-                      self.cfg.w_orientation_adv     * 
-                      self.cfg.w_angular_vel_adv     * 
+        adv_rewards = self.cfg.w_falling_adv         * falling_rewards                 + \
+                      self.cfg.w_orientation_adv     * ang_xy_reward                   + \
+                      self.cfg.w_angular_vel_adv     * ang_vel_xy_penalty
 
         if self.cfg.num_agents > 1:
             # Multi Agent
             # Dictionary key order (alphabetical order in dictionary)
-            rewards = torch.stack([arm_rewards, leg_rewards], dim=-1) # [E, 2]
+            rewards = torch.stack([arm_rewards, leg_rewards, adv_rewards], dim=-1) # [E, 3]
             # Update Prev Actions
             self.prev_actions = {k: v.clone() for k, v in self.actions.items()}
         else:
@@ -538,6 +541,7 @@ class G1PusherEnv(G1BaseEnv):
                 # Multi Agent
                 self.prev_actions["leg"][env_ids] = 0.0
                 self.prev_actions["arm"][env_ids] = 0.0
+                self.prev_actions["adv"][env_ids] = 0.0
             else:
                 # Single Agent
                 self.prev_actions[env_ids] = 0.0
@@ -546,7 +550,8 @@ class G1PusherEnv(G1BaseEnv):
                 # Multi Agent
                 self.prev_actions = {
                         "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
-                        "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device)
+                        "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device),
+                        "adv": torch.zeros((self.num_envs, len(self.action_space["adv"])), device=self.device)
                 }
             else:
                 # Single Agent
@@ -589,11 +594,11 @@ class G1PusherEnv(G1BaseEnv):
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-        if 
-            # Ilegal force (self-collision)
-            self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
-            self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
-            self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
+        
+        # Ilegal force (self-collision)
+        self.illegal_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_ids]
+        self.illegal_leg_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_leg_ids]
+        self.illegal_arm_force[i] = self.contact_sensors.data.net_forces_w[i][:, self.denied_collision_link_arm_ids]
 
         # Gait guidance (Phase scheduler)
         self.foot_pos_w[i] = self._robot.data.body_link_pos_w[i][:, self.ankle_x_link_ids] # [Left, Right]
