@@ -23,6 +23,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        self.events.push_robot.interval_range_s = (1.0, 2.0)
         self.events.push_robot.params["velocity_range"] = {
             "x": (-2.0, 2.0),
             "y": (-2.0, 2.0),
