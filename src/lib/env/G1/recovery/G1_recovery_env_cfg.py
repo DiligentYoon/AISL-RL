@@ -36,23 +36,23 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_track_lin_vel: float = 2.0
+    w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
 
-    w_feet_gait:      float = 4.0
+    w_feet_gait:      float = 6.0
     w_support_xy:     float = 0.2
     w_flat:           float = 2.0
 
-    w_lin_vel_z:          float = 2.0
+    w_lin_vel_z:          float = 1.0
     w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 1.0e-4
     w_joint_vel:          float = 5.0e-3
 
     w_limits:            float = 10.0
-    w_deviation_hip:     float = 4.0
+    w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
-    w_deviation_arm:     float = 2.0
+    w_deviation_arm:     float = 0.5
     w_action_rate:       float = 0.005
 
     w_termination: float = 200
@@ -61,7 +61,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     termination_ang_vel: float = 15.0
 
     # ===== Gait guidance ===== #
-    time_period = 0.34
+    time_period = 0.35
     z_c = 0.75
 
 
@@ -111,7 +111,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        self.events.push_robot.interval_range_s = (2.0, 3.0)
+        self.events.push_robot.interval_range_s = (4.0, 5.0)
         self.events.push_robot.params["velocity_range"] = {
             "x": (-2.0, 2.0), 
             "y": (-2.0, 2.0), 

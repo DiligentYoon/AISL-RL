@@ -137,7 +137,6 @@ class G1RecoveryEnv(G1BaseEnv):
         # Regularization
         self.out_of_limits_joint    = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
-        self.deviation_swing        = torch.zeros((self.num_envs, len(self.swing_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_hip_xz       = torch.zeros((self.num_envs, len(self.hip_xz_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
@@ -155,15 +154,9 @@ class G1RecoveryEnv(G1BaseEnv):
                 self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
             if not hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
-            if not hasattr(self, "goal_ang_vel_visualizer"):
-                self.goal_ang_vel_visualizer = VisualizationMarkers(self.cfg.goal_ang_vel_visualizer_cfg)
-            if not hasattr(self, "current_ang_vel_visualizer"):
-                self.current_ang_vel_visualizer = VisualizationMarkers(self.cfg.current_ang_vel_visualizer_cfg)
             self.goal_vel_visualizer.set_visibility(True)
             self.current_vel_visualizer.set_visibility(True)
             self.torso_rotation_visalizer.set_visibility(True)
-            self.goal_ang_vel_visualizer.set_visibility(True)
-            self.current_ang_vel_visualizer.set_visibility(True)
         else:
             if hasattr(self, "goal_vel_visualizer"):
                 self.goal_vel_visualizer.set_visibility(False)
@@ -171,10 +164,6 @@ class G1RecoveryEnv(G1BaseEnv):
                 self.current_vel_visualizer.set_visibility(False)
             if hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer.set_visibility(False)
-            if hasattr(self, "goal_ang_vel_visualizer"):
-                self.goal_ang_vel_visualizer.set_visibility(False)
-            if hasattr(self, "current_ang_vel_visualizer"):
-                self.current_ang_vel_visualizer.set_visibility(False)
 
 
     def _debug_vis_callback(self, event):
@@ -190,12 +179,6 @@ class G1RecoveryEnv(G1BaseEnv):
         
         vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
-        
-        # ang_vel_des_arrow_scale, ang_vel_des_arrow_quat = self.commands._resolve_yaw_velocity_to_arrow(scale=self.goal_ang_vel_visualizer.cfg.markers["arrow"].scale,
-        #                                                                                                yaw_velocity=self.commands.command_b[:, 2])
-        
-        # ang_vel_arrow_scale, ang_vel_arrow_quat = self.commands._resolve_yaw_velocity_to_arrow(scale=self.current_ang_vel_visualizer.cfg.markers["arrow"].scale,
-        #                                                                                        yaw_velocity=self._robot.data.root_ang_vel_b[:, 2])
 
         # =============== Torso ================
         torso_pos = self._robot.data.body_link_pos_w[:, self.torso_link_ids].reshape(-1, 3)
@@ -204,8 +187,6 @@ class G1RecoveryEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        # self.goal_ang_vel_visualizer.visualize(base_pos_w, ang_vel_des_arrow_quat, ang_vel_des_arrow_scale)
-        # self.current_ang_vel_visualizer.visualize(base_pos_w, ang_vel_arrow_quat, ang_vel_arrow_scale)
         self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
 
     def _setup_scene(self):
@@ -357,7 +338,7 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arms       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
+        joint_deviation_penalty_arm       = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
@@ -382,11 +363,12 @@ class G1RecoveryEnv(G1BaseEnv):
         # Multi Agent
         common_rewards = self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
+                         self.cfg.w_lin_vel_z       * lin_vel_z_penalty               + \
+                         self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
                          self.cfg.w_track_heading   * heading_rewards          
         
         arm_rewards = common_rewards                                                  + \
-                      self.cfg.w_deviation_torso    * joint_deviation_penalty_torso   + \
-                      self.cfg.w_deviation_arm      * joint_deviation_penalty_arms    + \
+                      self.cfg.w_deviation_arm      * joint_deviation_penalty_arm     + \
                       self.cfg.w_limits             * joint_limit_penalty_arm         + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm  + \
                       self.cfg.w_joint_torque       * joint_torque_penalty_arm        + \
@@ -398,7 +380,6 @@ class G1RecoveryEnv(G1BaseEnv):
         leg_rewards = common_rewards                                                   + \
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
-                      self.cfg.w_lin_vel_z           * lin_vel_z_penalty               + \
                       self.cfg.w_support_xy          * support_xy_penalty              + \
                       self.cfg.w_deviation_hip       * joint_deviation_penalty_hip_xz  + \
                       self.cfg.w_limits              * joint_limit_penalty_leg         + \
@@ -434,7 +415,7 @@ class G1RecoveryEnv(G1BaseEnv):
             "Task Penalty / Common_Ang_Vel_XY"     : self.cfg.w_ang_vel_xy         * ang_vel_xy_penalty,
             "Task Penalty / Common_Lin_Vel_Z"      : self.cfg.w_lin_vel_z          * lin_vel_z_penalty,
             "Task Penalty / Common_Torso_Deviation": self.cfg.w_deviation_torso    * joint_deviation_penalty_torso,
-            "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arms,
+            "Task Penalty / Arm_Deviation"         : self.cfg.w_deviation_arm      * joint_deviation_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"       : self.cfg.w_limits             * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"      : self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"            : self.cfg.w_joint_torque       * joint_torque_penalty_arm,
@@ -588,7 +569,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
-        self.deviation_swing[i]      = self.joint_pos[i][:, self.swing_joint_ids] - self._robot.data.default_joint_pos[i][:, self.swing_joint_ids]
         self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
