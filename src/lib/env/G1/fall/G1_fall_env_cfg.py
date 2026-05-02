@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from isaaclab.utils import configclass
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 
@@ -32,9 +33,18 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         }
 
 @configclass
-class G1FallPlayEnvcfg(G1FallEnvCfg):
+class G1FallPlayEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
 
         # ==== Viz data ==== #
         self.viz_data = {
@@ -49,5 +59,8 @@ class G1FallPlayEnvcfg(G1FallEnvCfg):
             "m_step_hist": 0,              # scalar
             "icp_ankle_dist_hist": 0,      # scalar
         }
+
+        self.scene.num_envs = 1
+
         self.plotter: CapturabilityPlotter = CapturabilityPlotter
 

@@ -287,7 +287,7 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
