@@ -39,6 +39,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_track_lin_vel: float = 4.0
     w_track_heading: float = 2.0
 
+    w_arm_gait:       float = 2.0
     w_feet_gait:      float = 6.0
     w_support_xy:     float = 0.2
     w_flat:           float = 2.0
@@ -53,6 +54,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
     w_deviation_arm:     float = 0.5
+    w_deviation_swing:   float = 0.1
     w_action_rate:       float = 0.005
 
     w_termination: float = 200
@@ -61,6 +63,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     termination_ang_vel: float = 15.0
 
     # ===== Gait guidance ===== #
+    shoulder_swing_max = 0.52
     time_period = 0.35
     z_c = 0.75
 
