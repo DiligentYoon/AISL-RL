@@ -294,8 +294,8 @@ def main():
         # ================== Interaction Phase =====================
         t1_loop = time.time()
         with torch.no_grad():
-            # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            # agent stepping (freeze and deterministic Nominal Policy)
+            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number

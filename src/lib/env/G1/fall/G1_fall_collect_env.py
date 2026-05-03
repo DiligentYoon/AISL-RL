@@ -1,0 +1,40 @@
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
+import torch
+import copy
+
+from lib.env.G1.fall.G1_fall_env_cfg import G1FallEnvCfg
+from lib.env.G1.fall.G1_fall_env import G1FallEnv
+
+class G1FallCollectEnv(G1FallEnv):
+    cfg: G1FallEnvCfg
+
+    def __init__(self, cfg:G1FallEnvCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+
+        # State collection
+        self.extras["collection"] = {}
+        self.extras["collection"]["root_pos_offset_w"]      = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.extras["collection"]["root_quat_w"]            = torch.zeros((self.num_envs, 4), dtype=torch.float32, device=self.device)
+        self.extras["collection"]["root_lin_vel_w"]         = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.extras["collection"]["root_ang_vel_w"]         = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        self.extras["collection"]["joint_pos"]              = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.extras["collection"]["joint_vel"]              = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+
+
+    def _get_states(self):
+        states = super()._get_states()
+
+        # Update collection
+        self.extras["collection"]["root_pos_offset_w"]     = self.root_pos_w - self.scene.env_origins
+        self.extras["collection"]["root_quat_w"]           = self.root_rot_w
+        self.extras["collection"]["root_lin_vel_w"]        = self.root_lin_vel_w
+        self.extras["collection"]["root_ang_vel_w"]        = self.root_ang_vel_w
+        self.extras["collection"]["joint_pos"]             = self.joint_pos
+        self.extras["collection"]["joint_vel"]             = self.joint_vel
+
+        return states
