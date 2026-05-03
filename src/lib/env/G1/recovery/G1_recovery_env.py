@@ -46,11 +46,9 @@ class G1RecoveryEnv(G1BaseEnv):
         self.denied_collision_link_arm_ids = [bid for bid in self.arm_collision_link_ids if bid not in self.allowed_collision_link_ids]
 
         # Joint ids
-        self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(roll|yaw)_joint",
-                                                             r".*_elbow_joint",
-                                                             r".*_wrist_(roll|pitch|yaw)_joint",])
-        
-        self.swing_joint_ids, _ = self._robot.find_joints([r".*_shoulder_pitch_joint"])
+        # self.arm_all_joint_ids, _ = self._robot.find_joints([r".*_shoulder_(roll|yaw)_joint",
+        #                                                      r".*_elbow_joint",
+        #                                                      r".*_wrist_(roll|pitch|yaw)_joint",])
 
         # Commands for reference generator
         self.commands = UniformVelocityCommand(self.cfg.commands, self._robot, self.device)
@@ -83,7 +81,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.command_heading    = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.air_time           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.contact_time       = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
-        self.in_forward_swing   = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
         self.in_contact         = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
         self.foot_pos_w         = torch.zeros((self.num_envs, 2, 3), dtype=torch.float, device=self.device)
         self.foot_rot_w         = torch.zeros((self.num_envs, 2, 4), dtype=torch.float, device=self.device)
@@ -140,7 +137,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.deviation_hip_xz       = torch.zeros((self.num_envs, len(self.hip_xz_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
-        self.deviation_swing        = torch.zeros((self.num_envs, len(self.swing_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Visualization
@@ -338,8 +334,6 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy = torch.stack([support_x, support_y], dim=-1)
         support_xy = abs(wrap_to_pi(support_xy))
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
-        # Swing
-        joint_deviation_swing_penalty_arm  = -torch.sum(torch.abs(self.deviation_swing), dim=-1) * torch.exp(-torch.norm(self.root_ang_vel_w[:, 2], dim=-1) / 0.5**2)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
         joint_deviation_penalty_arm        = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
@@ -372,7 +366,6 @@ class G1RecoveryEnv(G1BaseEnv):
                          self.cfg.w_track_heading   * heading_rewards          
         
         arm_rewards = common_rewards                                                    + \
-                      self.cfg.w_deviation_swing    * joint_deviation_swing_penalty_arm + \
                       self.cfg.w_deviation_arm      * joint_deviation_penalty_arm       + \
                       self.cfg.w_limits             * joint_limit_penalty_arm           + \
                       self.cfg.w_joint_torque_limit * joint_torque_limit_penalty_arm    + \
@@ -519,8 +512,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.air_time[i] = self.contact_sensors.data.current_air_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.contact_time[i] = self.contact_sensors.data.current_contact_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
         self.in_contact[i] = self.contact_time[i] > 0.0 # [E, 2 (Left, Right)]
-        # Information related to arm swing
-        self.in_forward_swing[i] = self.joint_vel[i][:, self.swing_joint_ids] < 0.0 # [E, 2 (Left, Right)]
         # Feet Slide
         self.is_contacts[i] = self.contact_sensors.data.net_forces_w_history[i][:, :, self.ankle_contact_roll_link_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
         # Ilegal force (self-collision)
@@ -577,7 +568,6 @@ class G1RecoveryEnv(G1BaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
-        self.deviation_swing[i]      = self.joint_pos[i][:, self.swing_joint_ids] - self._robot.data.default_joint_pos[i][:, self.swing_joint_ids]
         self.deviation_hip_xz[i]     = self.joint_pos[i][:, self.hip_xz_joint_ids] - self._robot.data.default_joint_pos[i][:, self.hip_xz_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
