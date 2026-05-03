@@ -37,11 +37,6 @@ from isaaclab.utils.version import compare_versions, get_isaac_sim_version
 
 from lib.env.env import Env
 
-
-
-# import logger
-logger = logging.getLogger(__name__)
-
 def sample_rfi_torque(num_envs, num_joints, rfi_limit, device):
     """Sample per-step random joint torques (RFI).
     Called every physics step inside _apply_action().
