@@ -318,8 +318,10 @@ class G1RecoveryEnv(G1BaseEnv):
         lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_b[:, :2], dim=-1)).unsqueeze(-1)
         lin_vel_error = torch.sum(lin_vel_error, dim=-1)
         heading_error = torch.square(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
+        height_error  = torch.square(self.root_pos_w[:, 2] - self.z_c)
         lin_vel_rewards = torch.exp(-lin_vel_error / 0.5**2)
         heading_rewards = torch.exp(-heading_error / 0.5**2)
+        height_rewards  = torch.exp(-height_error / 0.5**2)
         # Attitute rewards 
         tilting = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         flat_rewards = torch.exp(-tilting / 0.2**2)
@@ -360,6 +362,7 @@ class G1RecoveryEnv(G1BaseEnv):
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
         # Multi Agent
         common_rewards = self.cfg.w_flat            * flat_rewards                    + \
+                         self.cfg.w_track_height    * height_rewards                  + \
                          self.cfg.w_ang_vel_xy      * ang_vel_xy_penalty              + \
                          self.cfg.w_lin_vel_z       * lin_vel_z_penalty               + \
                          self.cfg.w_deviation_torso * joint_deviation_penalty_torso   + \
@@ -445,11 +448,11 @@ class G1RecoveryEnv(G1BaseEnv):
         died_fall   = z_c <= self.cfg.termination_height
         died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
-        # died_ang = torch.norm(self.root_ang_vel_b[:, :2], dim=-1) >= self.cfg.termination_ang_vel
+        died_ang = torch.norm(self.root_ang_vel_b[:, :2], dim=-1) >= self.cfg.termination_ang_vel
 
         self.arm_terminated = died_fall
         
-        died = died_fall | died_fall_2
+        died = died_fall | died_fall_2 | died_ang
         return died, time_out
 
 
