@@ -124,6 +124,7 @@ class UniformVelocityCommand():
         # buffers
         self.vel_command_w = torch.zeros(self.num_envs, 3, device=self.device)
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
+        self.vel_command_yaw = torch.zeros(self.num_envs, 3, device=self.device)
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.is_standing_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
@@ -153,6 +154,15 @@ class UniformVelocityCommand():
         """(num_envs, 3): [vx, vy, yaw_rate] in world frame."""
         return self.vel_command_w
     
+    @property
+    def command_yaw(self) -> torch.Tensor:
+        """(num_envs, 3): [vx, vy, yaw_rate] in robot yaw-frame."""
+        vel_w_3d = torch.cat([self.vel_command_w[:, :2], torch.zeros((self.num_envs, 1), device=self.device)], dim=-1)
+        yaw_q = yaw_quat(self.robot.data.root_quat_w)
+        self.vel_command_yaw[:, :2] = quat_apply_inverse(yaw_q, vel_w_3d)[:, :2]
+        self.vel_command_yaw[:, 2] = self.vel_command_w[:, 2].clone()
+        return self.vel_command_yaw
+
     @property
     def heading(self) -> torch.Tensor:
         """(num_envs, 1): yaw angle"""

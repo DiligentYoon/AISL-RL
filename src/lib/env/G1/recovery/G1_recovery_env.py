@@ -78,6 +78,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.joint_vel          = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.command_inputs_b   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.command_inputs_yaw = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
         self.command_heading    = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.air_time           = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
         self.contact_time       = torch.zeros((self.num_envs, 2), dtype=torch.float, device=self.device)
@@ -314,8 +315,8 @@ class G1RecoveryEnv(G1BaseEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         # Tracking rewards
-        lin_vel_error = torch.square(self.command_inputs_b[:, :2] - self.vel_yaw[:, :2])
-        lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_b[:, :2], dim=-1)).unsqueeze(-1)
+        lin_vel_error = torch.square(self.command_inputs_yaw[:, :2] - self.vel_yaw[:, :2])
+        lin_vel_error *= 1 / torch.square(1 + torch.norm(self.command_inputs_yaw[:, :2], dim=-1)).unsqueeze(-1)
         lin_vel_error = torch.sum(lin_vel_error, dim=-1)
         heading_error = torch.square(wrap_to_pi(self.command_heading - self.root_heading)).squeeze(-1)
         height_error  = torch.square(self.root_pos_w[:, 2] - self.z_c)
@@ -338,7 +339,7 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arm        = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1))
+        joint_deviation_penalty_arm        = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :3], dim=-1) / 0.5**2)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
@@ -497,7 +498,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self.root_ang_vel_w[i] = self._robot.data.root_ang_vel_w[i]
         self.root_lin_vel_b[i] = self._robot.data.root_lin_vel_b[i]
         self.root_ang_vel_b[i] = self._robot.data.root_ang_vel_b[i]
-        self.vel_yaw[i] = quat_apply_inverse(yaw_quat(self.root_rot_w[i]), self.root_lin_vel_w[i, :3])
+        self.vel_yaw[i] = quat_apply_inverse(yaw_quat(self.root_rot_w[i]), self.root_lin_vel_w[i, :3]) # robot yaw-frame
         # Center of Mass (CoM)
         self.CoM[i] = (self._robot.data.body_link_pos_w[i] * self.robot_mass[i].unsqueeze(-1)).sum(dim=1) / self.total_mass[i].unsqueeze(-1)
         # Heading
@@ -510,6 +511,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
+        self.command_inputs_yaw[i] = self.commands.command_yaw[i]
         self.command_heading[i] = self.commands.heading[i]
         # Information related to Contact
         self.air_time[i] = self.contact_sensors.data.current_air_time[i][:, self.ankle_contact_roll_link_ids] # [Left, Right]
