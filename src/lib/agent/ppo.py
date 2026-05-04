@@ -330,5 +330,5 @@ class PPO(Agent):
         mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches)
 
 
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, None
             

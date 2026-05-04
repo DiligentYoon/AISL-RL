@@ -598,4 +598,4 @@ class CooperativeMAPPO(MAPPO):
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
         mean_kl_divergence = (sum(kl_divergences["arm"]) + sum(kl_divergences["leg"])).item() / (self.learning_epochs * self.mini_batches * self.num_agents)
                 
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, None

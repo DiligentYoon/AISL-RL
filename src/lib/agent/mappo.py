@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from lib.agent.multi_agent import MultiAgent
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
+from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 
 from lib.utils.wrapper_utils import unflatten_tensorized_space
 
@@ -62,6 +63,9 @@ class MAPPO(MultiAgent):
         self.mini_batches = self.cfg["mini_batches"]
 
         self.learning_rate = self.cfg["learning_rate"]
+        self.learning_rate_scheduler = self.cfg["learning_rate_scheduler"]
+        self.kl_threshold = self.cfg["kl_threshold"]
+
         self.discount_factor = self.cfg["discount_factor"]
         self.gae_lambda = self.cfg["lambda"]
 
@@ -90,6 +94,13 @@ class MAPPO(MultiAgent):
             if actor is not None and critic is not None:
                 self.optimizers[uid] = torch.optim.Adam(itertools.chain(actor.parameters(), critic.parameters()), lr=self.learning_rate)
                 self.checkpoint_modules[uid]["optimizer"] = self.optimizers[uid]
+
+        # Set up learning rate scheduler
+        if self.learning_rate_scheduler is not None:
+            self.learning_rate_scheduler = {}
+            for uid in self.possible_agents:
+                self.learning_rate_scheduler[uid] = KLAdaptiveLR(self.optimizers[uid], self.kl_threshold, min_lr=self.learning_rate)
+
 
         # Default Mode : Evaluation for disconnecting gradient flow
         self.set_running_mode("eval")
@@ -242,6 +253,13 @@ class MAPPO(MultiAgent):
         """
         Algorithm's main update step
         """
+        # Loss initialization
+        cumulative_policy_loss = 0
+        cumulative_entropy_loss = 0
+        cumulative_value_loss = 0
+        cumulative_approx_kl = 0
+        learning_rate = {uid: 0.0 for uid in self.possible_agents}
+
         for uid in self.possible_agents:
             with torch.no_grad():
                 critic_input = self.buffer[uid].get_tensor_by_name("next_states")[-1] if self.is_async_actor_critic else self.buffer[uid].get_tensor_by_name("next_observations")[-1]
@@ -257,11 +275,6 @@ class MAPPO(MultiAgent):
             self.buffer[uid].set_tensor_by_name("value_preds", value_preds.reshape(self.buffer[uid].buffer_size, -1, 1))
             self.buffer[uid].set_tensor_by_name("returns", returns.reshape(self.buffer[uid].buffer_size, -1, 1))
             
-            # Loss initialization
-            cumulative_policy_loss = 0
-            cumulative_entropy_loss = 0
-            cumulative_value_loss = 0
-
             # Parameter Update
             kl_divergences = []
             self.set_running_mode(mode="train", uid=uid)
@@ -345,16 +358,25 @@ class MAPPO(MultiAgent):
                     # Update cumulative losses
                     cumulative_policy_loss += policy_loss.item()
                     cumulative_value_loss += value_loss.item()
+                    cumulative_approx_kl += kl_divergence.item()
                     if self.entropy_loss_scale:
                         cumulative_entropy_loss += entropy_loss.item()
+                
+            # Learning rate scheduler update
+            if self.learning_rate_scheduler is not None:
+                kl = torch.tensor(kl_divergences, device=self.device).mean()
+                self.learning_rate_scheduler[uid].step(kl.item())
+                learning_rate[uid] = self.learning_rate_scheduler[uid].get_last_lr()[0]
+            else:
+                learning_rate[uid] = self.optimizers[uid].param_groups[0]["lr"]
                     
 
         self.set_running_mode("eval")
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
         mean_value_loss = cumulative_value_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)
-        mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches * self.num_agents)
+        mean_kl_divergence = cumulative_approx_kl / (self.learning_epochs * self.mini_batches * self.num_agents)
 
 
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, learning_rate
             

@@ -312,7 +312,7 @@ def main():
                 t2_rollout = time.time()
 
                 t1_update = time.time()
-                policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+                policy_loss, value_loss, entropy_loss, approx_kl, learning_rate = agent.update()
                 t2_update = time.time()
 
                 rollout += 1
