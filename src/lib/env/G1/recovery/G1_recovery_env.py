@@ -339,7 +339,7 @@ class G1RecoveryEnv(G1BaseEnv):
         support_xy_penalty = -torch.sum(support_xy, dim=-1)
         # Regularization
         joint_deviation_penalty_hip_xz     = -torch.sum(torch.abs(self.deviation_hip_xz), dim=-1)
-        joint_deviation_penalty_arm        = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :3], dim=-1) / 0.5**2)
+        joint_deviation_penalty_arm        = -torch.sum(torch.abs(self.deviation_arms), dim=1) * torch.exp(-torch.norm(self.root_ang_vel_b[:, :2], dim=-1) / 0.5**2)
         joint_deviation_penalty_torso      = -torch.sum(torch.abs(self.deviation_torso), dim=1)
         ang_vel_xy_penalty                 = -torch.sum(torch.square(self.root_ang_vel_b[:, :2]), dim=1)
         lin_vel_z_penalty                  = -torch.square(self.root_lin_vel_w[:, 2])
