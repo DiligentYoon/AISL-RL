@@ -286,13 +286,12 @@ def main():
     # Reset environment
     obs, states, infos = env.reset()
     timestep = 0
-    elapsed_time = 0
+    start_time = time.time()
     
     # Simulate environment
     while simulation_app.is_running() and timestep <= ra_cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
-        t1_loop = time.time()
         with torch.no_grad():
             # agent stepping (freeze and deterministic Nominal Policy)
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
@@ -314,8 +313,6 @@ def main():
             value_loss = ra_agent.update()
             CLI_value_loss.append(value_loss)
             tracking_data["Loss / RA Value Loss"].append(value_loss)
-        
-        t2_loop = time.time()
 
         # =============== Logging Phase ================
         # Tensorboard logging
@@ -335,12 +332,14 @@ def main():
             per_update_value_loss = float(np.mean(CLI_value_loss)) if len(CLI_value_loss) else float("nan")
             per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.3f}"
 
-            elapsed_time += (t2_loop - t1_loop)
+            elapsed_time = time.time() - start_time
+            elapsed_time_per_step = elapsed_time / timestep if timestep > 0 else 0
+            complete_time = elapsed_time_per_step * (int(ra_cfg["train"]["timesteps"]) - timestep)
+
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
-            total_timesteps = int(ra_cfg["train"]["timesteps"])
-            complete_time = (t2_loop - t1_loop) * (total_timesteps - timestep)
+
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)
             c_s = int(complete_time % 60)

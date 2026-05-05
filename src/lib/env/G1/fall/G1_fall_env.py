@@ -54,8 +54,8 @@ class G1FallEnv(G1RecoveryEnv):
         critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.critical_contact_link_ids]
         
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
-        self.arm_terminated = died_collision
         died = died_collision
+
         return died, time_out
 
     # Overriding to add history buffer reset
@@ -68,9 +68,8 @@ class G1FallEnv(G1RecoveryEnv):
     # Overriding to compute capturability information and update history buffer
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
         super()._compute_intermediate_values(env_ids)
-
         i = env_ids if env_ids is not None else self._robot._ALL_INDICES
-
+        
         # Capturable
         icp_x, icp_y, radius = self.compute_2_step_capturability(env_ids=i)
         self.ICP_pos_w[i] = torch.stack([icp_x, icp_y], dim=-1)

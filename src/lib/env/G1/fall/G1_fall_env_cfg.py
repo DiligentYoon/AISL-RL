@@ -19,7 +19,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA Setting === #
     l_max = 1.0
-    target_set_threshold = 0.2
+    target_set_threshold = 0.1
 
     def __post_init__(self):
         super().__post_init__()
@@ -28,8 +28,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.events.push_robot.params["velocity_range"] = {
             "x": (-2.0, 2.0),
             "y": (-2.0, 2.0),
-            "roll": (-3.0, 3.0),
-            "pitch": (-3.0, 3.0),
+            "roll": (-5.0, 5.0),
+            "pitch": (-5.0, 5.0),
         }
 
 @configclass
