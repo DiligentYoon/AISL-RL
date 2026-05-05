@@ -43,17 +43,17 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_support_xy:     float = 0.2
     w_flat:           float = 2.0
 
-    w_lin_vel_z:          float = 1.0
-    w_ang_vel_xy:         float = 0.05
+    w_lin_vel_z:          float = 2.0
+    w_ang_vel_xy:         float = 0.1
     w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 1.0e-4
-    w_joint_vel:          float = 5.0e-3
+    w_joint_torque_limit: float = 0.0
+    w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
     w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
     w_deviation_arm:     float = 2.0
-    w_action_rate:       float = 0.05
+    w_action_rate:       float = 0.01
 
     w_termination: float = 200
     termination_height: float = 0.3
@@ -115,8 +115,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
         self.events.push_robot.params["velocity_range"] = {
             "x": (-0.5, 0.5), 
             "y": (-0.5, 0.5), 
-            "roll": (-2.0, 2.0), 
-            "pitch": (-2.0, 2.0)
+            "roll": (-2.5, 2.5), 
+            "pitch": (-2.5, 2.5)
         }
 
 
@@ -136,4 +136,4 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
 
         self.scene.num_envs = 1
 
-        self.events.push_robot = None
+        # self.events.push_robot = None

@@ -330,7 +330,7 @@ class G1RecoveryEnv(G1BaseEnv):
         diff = self.in_contact[:, 1].float() - self.in_contact[:, 0].float()  # right support (+), left support (-), double support (0)
         gait_reward = diff * self.contact_schedule
         # Termination
-        terminate_penalty_arm = -self.arm_terminated.float()
+        terminate_penalty_arm = -self.reset_terminated.float()
         terminate_penalty_leg = -self.reset_terminated.float()
         # Support foot penalty
         support_x, support_y, _ = euler_xyz_from_quat(self.support_foot_rot)
@@ -361,6 +361,7 @@ class G1RecoveryEnv(G1BaseEnv):
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions["arm"] - self.prev_actions["arm"]), dim=1)
         else:
             action_rate_penalty_arm     = -torch.sum(torch.square(self.actions[:, self.total_arm_joint_ids] - self.prev_actions[:, self.total_arm_joint_ids]), dim=1)
+
         # Multi Agent
         common_rewards = self.cfg.w_flat            * flat_rewards                    + \
                          self.cfg.w_track_height    * height_rewards                  + \
@@ -378,7 +379,6 @@ class G1RecoveryEnv(G1BaseEnv):
                       self.cfg.w_action_rate        * action_rate_penalty_arm           + \
                       self.cfg.w_termination        * terminate_penalty_arm   
 
-        
         leg_rewards = common_rewards                                                   + \
                       self.cfg.w_track_lin_vel       * lin_vel_rewards                 + \
                       self.cfg.w_feet_gait           * gait_reward                     + \
