@@ -8,7 +8,8 @@ gym.register(
         # Environment-Specific Entry Point for Env Cfg Class
         "env_cfg_entry_point": f"{__name__}.G1_pusher_env_cfg:G1PusherEnvCfg",
         "rl_ppo_nominal_cfg_entry_point": f"{__name__}.cfg:ppo_nominal_cfg.yaml",
-        "rl_ppo_pusher_cfg_entry_point": f"{__name__}.cfg:ppo_pusher_cfg.yaml",
+        "rl_ppo_adv_cfg_entry_point": f"{__name__}.cfg:ppo_adv_cfg.yaml",
         "rl_mappo_nominal_cfg_entry_point": f"{__name__}.cfg:mappo_nominal_cfg.yaml",
+        "rl_mappo_adv_cfg_entry_point": f"{__name__}.cfg:mappo_adv_cfg.yaml",
     }
 )

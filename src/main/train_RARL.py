@@ -28,8 +28,8 @@ parser.add_argument("--algorithm_nominal",
 
 parser.add_argument("--algorithm_adversarial",
                     type=str,
-                    default="PPO",
-                    choices=["PPO", "SAC", "TD3"], 
+                    default="MAPPO",
+                    choices=["PPO", "SAC", "TD3", "MAPPO"], 
                     help="The RL algorithm used for training the adversarial agent.")
 
 parser.add_argument("--model_nominal",
@@ -97,7 +97,7 @@ def main():
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric)
     try:
         cfg_nominal = load_cfg_from_registry(args_cli.task, f"rl_{algorithm_nominal}_nominal_cfg_entry_point")                      # NOTE: Nominal cfg is main
-        cfg_adversarial = load_cfg_from_registry(args_cli.task, f"rl_{algorithm_adversarial}_pusher_cfg_entry_point")
+        cfg_adversarial = load_cfg_from_registry(args_cli.task, f"rl_{algorithm_adversarial}_adv_cfg_entry_point")
     except ValueError as e:
         print(e)
         return
@@ -294,6 +294,7 @@ def main():
 
 ### ========================================= Adversarial Agent ========================================= ###
     
+    adv_agents_key = cfg_adversarial["agent"]["agents_name"]
     # Specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", cfg_adversarial["agent"]["experiment"]["directory"])
     log_root_path = os.path.abspath(log_root_path)
@@ -304,9 +305,9 @@ def main():
     log_dir_adversarial = os.path.join(log_root_path, log_dir_adversarial)
 
     if cfg_adversarial["agent"]["experiment"]["write_interval"] == "auto":
-        write_interval_pusher = int(cfg_adversarial["train"]["timesteps"] / 100)
+        write_interval_adv = int(cfg_adversarial["train"]["timesteps"] / 100)
     if cfg_adversarial["agent"]["experiment"]["checkpoint_interval"] == "auto":
-        checkpoint_interval_pusher = int(cfg_adversarial["train"]["timesteps"] / 10)
+        checkpoint_interval_adv = int(cfg_adversarial["train"]["timesteps"] / 10)
     
     # ====================== Model Spawn  ==========================
     # Overwrite cfg by cli argument
@@ -410,14 +411,22 @@ def main():
 
     # Tensorboard Wrtier
     writer = SummaryWriter(log_dir=log_dir)
-    cumulative_rewards = None
+    nominal_cumulative_rewards = None
+    adv_cumulative_rewards = None
     cumulative_timesteps = None
     tracking_data = collections.defaultdict(list)
-    track_rewards = collections.deque(maxlen=env.num_envs)
+
+    nominal_track_rewards = collections.deque(maxlen=env.num_envs)
+    nominal_CLI_track_rewards = collections.deque(maxlen=env.num_envs)
+    nominal_CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
+
+    adv_track_rewards = collections.deque(maxlen=env.num_envs)
+    adv_CLI_track_rewards = collections.deque(maxlen=env.num_envs)
+    adv_CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
+
     track_timesteps = collections.deque(maxlen=env.num_envs)
-    CLI_track_rewards = collections.deque(maxlen=env.num_envs)
     CLI_track_timesteps = collections.deque(maxlen=env.num_envs)
-    CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
+    
     t1_rollout = time.time()
     t2_rollout = 0
     t1_update = 0
@@ -429,16 +438,37 @@ def main():
     rollout = 0
     elapsed_time = 0
     
+    nominal_obs = {k: v for k, v in obs.items() if k not in adv_agents_key}
+    adv_obs = {k: v for k, v in obs.items() if k in adv_agents_key}
+
+    nominal_states = {k: v for k, v in states.items() if k not in adv_agents_key}
+    adv_states = {k: v for k, v in states.items() if k in adv_agents_key}
+
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg_nominal["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
         with torch.no_grad():
-            # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            # agent stepping0120012
+            nominal_actions, nominal_nonscaled_actions, nominal_action_log_probs, _ = nominal_agent.act(nominal_obs, infos, timestep=timestep, deterministic=False)
+            adv_actions, adv_nonscaled_actions, adv_action_log_probs, _ = adversarial_agent.act(adv_obs, infos, timestep=timestep, deterministic=False)
+            
+            # Action combination
+            actions = {**nominal_actions, **adv_actions}
             # env stepping
             # NOTE: action을 dictionary로 묶어서 RA agent도 같이 dict로 env에 넘겨줘야한다
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
+            
+            # Data slicing
+            nominal_next_obs = {k: v for k, v in next_obs.items() if k not in adv_agents_key}
+            adv_next_obs = {k: v for k, v in next_obs.items() if k in adv_agents_key}
+            
+            nominal_next_states = {k: v for k, v in next_states.items() if k not in adv_agents_key}
+            adv_next_states = {k: v for k, v in next_states.items() if k in adv_agents_key}
+            
+            nominal_rewards = {k: v for k, v in rewards.items() if k not in adv_agents_key}
+            adv_rewards = {k: v for k, v in rewards.items() if k in adv_agents_key}
+            
             # update rollout number
             timestep += 1
 
@@ -447,16 +477,27 @@ def main():
             # NOTE: reward[:2]는 arm, leg reward[2:]는 adv
             
             # Insert data to the buffer
-            agent.insert_data(observations=obs,
-                              states=states,
-                              actions=nonscaled_actions,
-                              action_log_probs=action_log_probs.reshape(-1, 1),
-                              rewards=rewards,
-                              next_observations=next_obs,
-                              next_states=next_states,
-                              truncated=truncated,
-                              terminated=terminated,
-                              infos=infos)
+            nominal_agent.insert_data(observations=nominal_obs,
+                                      states=nominal_states,
+                                      actions=nominal_nonscaled_actions,
+                                      action_log_probs=nominal_action_log_probs.reshape(-1, 1),
+                                      rewards=nominal_rewards,
+                                      next_observations=nominal_next_obs,
+                                      next_states=nominal_next_states,
+                                      truncated=truncated,
+                                      terminated=terminated,
+                                      infos=infos)
+            
+            adversarial_agent.insert_data(observations=adv_obs,
+                                          states=adv_states,
+                                          actions=adv_nonscaled_actions,
+                                          action_log_probs=adv_action_log_probs.reshape(-1, 1),
+                                          rewards=adv_rewards,
+                                          next_observations=adv_next_obs,
+                                          next_states=adv_next_states,
+                                          truncated=truncated,
+                                          terminated=terminated,
+                                          infos=infos)
         
         # Parameter update
         if timestep % buffer.buffer_size == 0:
@@ -464,7 +505,8 @@ def main():
                 t2_rollout = time.time()
 
                 t1_update = time.time()
-                policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+                nominal_policy_loss, nominal_value_loss, nominal_entropy_loss, nominal_approx_kl = nominal_agent.update()
+                adv_policy_loss, adv_value_loss, adv_entropy_loss, adv_approx_kl = adversarial_agent.update()
                 t2_update = time.time()
 
                 rollout += 1
@@ -474,72 +516,125 @@ def main():
         # =============== Logging Phase ================
 
         # Data setting for logging
-        if multi_agent:
-            logged_reward = rewards.view(-1, num_agent)
-            logged_reward = torch.mean(logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
-        else:
-            logged_reward = rewards
-
-        if cumulative_rewards is None:
-            cumulative_rewards = torch.zeros_like(logged_reward, dtype=torch.float32)
-            cumulative_timesteps = torch.zeros_like(logged_reward, dtype=torch.int32)
+        nominal_logged_reward = nominal_rewards.view(-1, num_agent)
+        nominal_logged_reward = torch.mean(nominal_logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        
+        adv_logged_reward = adv_rewards.view(-1, num_agent)
+        adv_logged_reward = torch.mean(adv_logged_reward, dim=-1).unsqueeze(-1) # Mean value of agent axis
+        
+        if nominal_cumulative_rewards is None:
+            nominal_cumulative_rewards = torch.zeros_like(nominal_logged_reward, dtype=torch.float32)
+            adv_cumulative_rewards = torch.zeros_like(adv_logged_reward, dtype=torch.float32)
+            cumulative_timesteps = torch.zeros_like(nominal_logged_reward, dtype=torch.int32)
         
         # Accumulates per-step rewards
-        cumulative_rewards.add_(logged_reward)
+        nominal_cumulative_rewards.add_(nominal_logged_reward)
+        adv_cumulative_rewards.add_(adv_logged_reward)
         cumulative_timesteps.add_(1)
-        # Mean of per-step rewards (Mean value of env axis)
-        CLI_step_reward_means.append(torch.mean(logged_reward, dim=0).item())
+
+        # CLI용 평균치 저장
+        nominal_CLI_step_reward_means.append(torch.mean(nominal_logged_reward, dim=0).item())
+        adv_CLI_step_reward_means.append(torch.mean(adv_logged_reward, dim=0).item())
 
         done = (terminated | truncated).squeeze(-1)
         finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
+
         if finished_episodes.numel():
-            # Storage cumulative rewards and timesteps
-            track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+            # Nominal 에피소드 보상 저장
+            nominal_track_rewards.extend(nominal_cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+            nominal_CLI_track_rewards.extend(nominal_cumulative_rewards[finished_episodes][:, 0].detach().cpu().tolist())
+            nominal_cumulative_rewards[finished_episodes] = 0
+
+            # Adversarial 에피소드 보상 저장
+            adv_track_rewards.extend(adv_cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+            adv_CLI_track_rewards.extend(adv_cumulative_rewards[finished_episodes][:, 0].detach().cpu().tolist())
+            adv_cumulative_rewards[finished_episodes] = 0
+
+            # 공통 에피소드 길이 저장
             track_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].reshape(-1).tolist())
-            CLI_track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].detach().cpu().tolist())
             CLI_track_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].detach().cpu().tolist())
-            # reset the cumulative rewards and timesteps
-            cumulative_rewards[finished_episodes] = 0
             cumulative_timesteps[finished_episodes] = 0
 
-        # record data
-        tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(logged_reward).item())
-        tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(logged_reward).item())
-        tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(logged_reward).item())
+        # 기록을 위한 데이터 세팅 (접두사로 구분)
+        tracking_data["Nominal/Instantaneous_reward_mean"].append(torch.mean(nominal_logged_reward).item())
+        tracking_data["Adversarial/Instantaneous_reward_mean"].append(torch.mean(adv_logged_reward).item())
 
-        task_reward = next_infos.get("reward", None)
-        if task_reward is not None:
-            for k, v in task_reward.items():
-                # Mean value of env axis
-                tracking_data[k].append(torch.mean(v).item())
+        if len(nominal_track_rewards):
+            tracking_data["Nominal/Episode_reward_mean"].append(np.mean(nominal_track_rewards))
+            tracking_data["Adversarial/Episode_reward_mean"].append(np.mean(adv_track_rewards))
+            tracking_data["Episode/Total_timesteps_mean"].append(np.mean(track_timesteps))
 
-        if len(track_rewards):
-            track_reward_np = np.array(track_rewards)
-            track_timestep_np = np.array(track_timesteps)
-
-            tracking_data["Reward / Total reward (max)"].append(np.max(track_reward_np))
-            tracking_data["Reward / Total reward (min)"].append(np.min(track_reward_np))
-            tracking_data["Reward / Total reward (mean)"].append(np.mean(track_reward_np))
-
-            tracking_data["Episode / Total timesteps (max)"].append(np.max(track_timestep_np))
-            tracking_data["Episode / Total timesteps (min)"].append(np.min(track_timestep_np))
-            tracking_data["Episode / Total timesteps (mean)"].append(np.mean(track_timestep_np))
-
-            # reset data containers for next iteration
-            track_rewards.clear()
+            nominal_track_rewards.clear()
+            adv_track_rewards.clear()
             track_timesteps.clear()
         
-        # Tensorboard logging
-        if timestep % write_interval == 0: 
+        # Tensorboard Logging
+        if timestep % write_interval_nominal == 0: 
             for k, v in tracking_data.items():
-                if k.endswith("(min)"):
-                    writer.add_scalar(k, np.min(v), timestep)
-                elif k.endswith("(max)"):
-                    writer.add_scalar(k, np.max(v), timestep)
-                else:
-                    writer.add_scalar(k, np.mean(v), timestep)
-            # reset data containers for next iteration
+                writer.add_scalar(k, np.mean(v), timestep)
             tracking_data.clear()
+
+
+
+
+
+
+        # # Accumulates per-step rewards
+        # cumulative_rewards.add_(logged_reward)
+        # cumulative_timesteps.add_(1)
+        # # Mean of per-step rewards (Mean value of env axis)
+        # CLI_step_reward_means.append(torch.mean(logged_reward, dim=0).item())
+
+        # done = (terminated | truncated).squeeze(-1)
+        # finished_episodes = done.nonzero(as_tuple=False).squeeze(-1)
+        # if finished_episodes.numel():
+        #     # Storage cumulative rewards and timesteps
+        #     track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].reshape(-1).tolist())
+        #     track_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].reshape(-1).tolist())
+        #     CLI_track_rewards.extend(cumulative_rewards[finished_episodes][:, 0].detach().cpu().tolist())
+        #     CLI_track_timesteps.extend(cumulative_timesteps[finished_episodes][:, 0].detach().cpu().tolist())
+        #     # reset the cumulative rewards and timesteps
+        #     cumulative_rewards[finished_episodes] = 0
+        #     cumulative_timesteps[finished_episodes] = 0
+
+        # # record data
+        # tracking_data["Reward / Instantaneous reward (max)"].append(torch.max(logged_reward).item())
+        # tracking_data["Reward / Instantaneous reward (min)"].append(torch.min(logged_reward).item())
+        # tracking_data["Reward / Instantaneous reward (mean)"].append(torch.mean(logged_reward).item())
+
+        # task_reward = next_infos.get("reward", None)
+        # if task_reward is not None:
+        #     for k, v in task_reward.items():
+        #         # Mean value of env axis
+        #         tracking_data[k].append(torch.mean(v).item())
+
+        # if len(track_rewards):
+        #     track_reward_np = np.array(track_rewards)
+        #     track_timestep_np = np.array(track_timesteps)
+
+        #     tracking_data["Reward / Total reward (max)"].append(np.max(track_reward_np))
+        #     tracking_data["Reward / Total reward (min)"].append(np.min(track_reward_np))
+        #     tracking_data["Reward / Total reward (mean)"].append(np.mean(track_reward_np))
+
+        #     tracking_data["Episode / Total timesteps (max)"].append(np.max(track_timestep_np))
+        #     tracking_data["Episode / Total timesteps (min)"].append(np.min(track_timestep_np))
+        #     tracking_data["Episode / Total timesteps (mean)"].append(np.mean(track_timestep_np))
+
+        #     # reset data containers for next iteration
+        #     track_rewards.clear()
+        #     track_timesteps.clear()
+        
+        # # Tensorboard logging
+        # if timestep % write_interval == 0: 
+        #     for k, v in tracking_data.items():
+        #         if k.endswith("(min)"):
+        #             writer.add_scalar(k, np.min(v), timestep)
+        #         elif k.endswith("(max)"):
+        #             writer.add_scalar(k, np.max(v), timestep)
+        #         else:
+        #             writer.add_scalar(k, np.mean(v), timestep)
+        #     # reset data containers for next iteration
+        #     tracking_data.clear()
 
         # CLI Logging about the training process at each parameter update
         if timestep % buffer.buffer_size == 0 and buffer.memory_index == 0:
@@ -619,8 +714,10 @@ def main():
 
 
         # update
-        obs = next_obs
-        states = next_states
+        nominal_obs = nominal_next_obs
+        adv_obs = adv_next_obs
+        nominal_states = nominal_next_states
+        adv_states = adv_next_states
         infos = next_infos
 
     # close the simulator
