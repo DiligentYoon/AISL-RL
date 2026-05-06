@@ -164,6 +164,7 @@ def main():
     
     possible_agents = None
     state_space = None
+    nominal_update_turn = True                                                  # Update flag
     obs_size = {}
     state_size = {}
     act_size = {}
@@ -444,6 +445,8 @@ def main():
     nominal_states = {k: v for k, v in states.items() if k not in adv_agents_key}
     adv_states = {k: v for k, v in states.items() if k in adv_agents_key}
 
+    nominal_update_turn = False                                                             # NOTE: for test
+
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg_nominal["train"]["timesteps"]:
 
@@ -477,27 +480,28 @@ def main():
             # NOTE: reward[:2]는 arm, leg reward[2:]는 adv
             
             # Insert data to the buffer
-            nominal_agent.insert_data(observations=nominal_obs,
-                                      states=nominal_states,
-                                      actions=nominal_nonscaled_actions,
-                                      action_log_probs=nominal_action_log_probs.reshape(-1, 1),
-                                      rewards=nominal_rewards,
-                                      next_observations=nominal_next_obs,
-                                      next_states=nominal_next_states,
-                                      truncated=truncated,
-                                      terminated=terminated,
-                                      infos=infos)
-            
-            adversarial_agent.insert_data(observations=adv_obs,
-                                          states=adv_states,
-                                          actions=adv_nonscaled_actions,
-                                          action_log_probs=adv_action_log_probs.reshape(-1, 1),
-                                          rewards=adv_rewards,
-                                          next_observations=adv_next_obs,
-                                          next_states=adv_next_states,
-                                          truncated=truncated,
-                                          terminated=terminated,
-                                          infos=infos)
+            if nominal_update_turn:
+                nominal_agent.insert_data(observations=nominal_obs,
+                                        states=nominal_states,
+                                        actions=nominal_nonscaled_actions,
+                                        action_log_probs=nominal_action_log_probs.reshape(-1, 1),
+                                        rewards=nominal_rewards,
+                                        next_observations=nominal_next_obs,
+                                        next_states=nominal_next_states,
+                                        truncated=truncated,
+                                        terminated=terminated,
+                                        infos=infos)
+            else:
+                adversarial_agent.insert_data(observations=adv_obs,
+                                            states=adv_states,
+                                            actions=adv_nonscaled_actions,
+                                            action_log_probs=adv_action_log_probs.reshape(-1, 1),
+                                            rewards=adv_rewards,
+                                            next_observations=adv_next_obs,
+                                            next_states=adv_next_states,
+                                            truncated=truncated,
+                                            terminated=terminated,
+                                            infos=infos)
         
         # Parameter update
         if timestep % buffer.buffer_size == 0:
@@ -505,8 +509,10 @@ def main():
                 t2_rollout = time.time()
 
                 t1_update = time.time()
-                nominal_policy_loss, nominal_value_loss, nominal_entropy_loss, nominal_approx_kl = nominal_agent.update()
-                adv_policy_loss, adv_value_loss, adv_entropy_loss, adv_approx_kl = adversarial_agent.update()
+                if nominal_update_turn: 
+                    nominal_policy_loss, nominal_value_loss, nominal_entropy_loss, nominal_approx_kl = nominal_agent.update()
+                else: 
+                    adv_policy_loss, adv_value_loss, adv_entropy_loss, adv_approx_kl = adversarial_agent.update()
                 t2_update = time.time()
 
                 rollout += 1
@@ -574,11 +580,6 @@ def main():
                 writer.add_scalar(k, np.mean(v), timestep)
             tracking_data.clear()
 
-
-
-
-
-
         # # Accumulates per-step rewards
         # cumulative_rewards.add_(logged_reward)
         # cumulative_timesteps.add_(1)
@@ -638,37 +639,66 @@ def main():
 
         # CLI Logging about the training process at each parameter update
         if timestep % buffer.buffer_size == 0 and buffer.memory_index == 0:
-            per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
-            avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
-            avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
+            # per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
+            # avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
 
-            ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
-            per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
-            ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
+
+            avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
+            
+            nominal_per_reward = float(np.mean(nominal_CLI_step_reward_means)) if len(nominal_CLI_step_reward_means) else float("nan")
+            nominal_ep_reward = float(np.mean(nominal_CLI_track_rewards)) if len(nominal_CLI_track_rewards) else float("nan")
+            
+            adv_per_reward = float(np.mean(adv_CLI_step_reward_means)) if len(adv_CLI_step_reward_means) else float("nan")
+            adv_ep_reward = float(np.mean(adv_CLI_track_rewards)) if len(adv_CLI_track_rewards) else float("nan")
+
+            # ep_step = "-" if np.isnan(avg_ep_step) else f"{avg_ep_step:6.3f} steps"
+            # per_r = "-" if np.isnan(per_step_reward) else f"{per_step_reward:6.3f}"
+            # ep_r = "-" if np.isnan(avg_ep_reward) else f"{avg_ep_reward:6.3f}"
 
             elapsed_time += (t2_rollout + t2_update - t1_rollout - t1_update)
+
+
+            print(f"| Step Progress {timestep} / {cfg_nominal['train']['timesteps']}")
+            print(f"| Time Progress {e_h:02d}:{e_m:02d}:{e_s:02d} / {c_h:02d}:{c_m:02d}:{c_s:02d}")
+            print(f"| Avg Episode Step: {avg_ep_step:.1f}")
+            print(f" -" * 40)
+            print(f"| [Nominal Agent (Robot)]")
+            print(f"| Value Loss : {nominal_value_loss:6.3f} | Policy Loss: {nominal_policy_loss:6.3f}")
+            print(f"| Per-Step R : {nominal_per_reward:6.3f} | Episode R  : {nominal_ep_reward:6.3f}")
+            print(f" -" * 40)
+            print(f"| [Adversarial Agent (Pusher)]")
+            print(f"| Value Loss : {adv_value_loss:6.3f} | Policy Loss: {adv_policy_loss:6.3f}")
+            print(f"| Per-Step R : {adv_per_reward:6.3f} | Episode R  : {adv_ep_reward:6.3f}")
+
+
+
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
-            total_rollout = int(cfg["train"]["timesteps"] // buffer.buffer_size)
+            total_rollout = int(cfg_nominal["train"]["timesteps"] // buffer.buffer_size)
             complete_time = (t2_rollout + t2_update - t1_rollout - t1_update) * (total_rollout - rollout)
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)
             c_s = int(complete_time % 60)
 
             content_width = 64
-            line_header = f"Step Progress {timestep} / {cfg['train']['timesteps']}"
+            line_header = f"Step Progress {timestep} / {cfg_nominal['train']['timesteps']}"
             line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
             line_rollout_time = f"Rollout Time      : {t2_rollout - t1_rollout:6.3f} sec"
             line_train_time = f"Training Time     : {t2_update - t1_update:6.3f} sec"
-            line_value_loss = f"Value Loss        : {value_loss:6.3f}"
-            line_policy_loss = f"Policy Loss       : {policy_loss:6.3f}"
-            line_entropy_loss = f"Entropy Loss      : {entropy_loss:6.3f}"
-            line_approx_kl = f"Approximate KL    : {approx_kl:6.3f}"
-            line_episode_step = f"Avg Episode Step  : {ep_step}"
-            line_per_step_reward = f"Per-Step Rewards  : {per_r}"
-            line_episode_reward = f"Epiode Rewards    : {ep_r}"
+            nominal_loss = f"| Value Loss : {nominal_value_loss:6.3f} | Policy Loss: {nominal_policy_loss:6.3f}"
+            nominal_reward = f"| Per-Step R : {nominal_per_reward:6.3f} | Episode R  : {nominal_ep_reward:6.3f}"
+            adv_loss = f"| Value Loss : {adv_value_loss:6.3f} | Policy Loss: {adv_policy_loss:6.3f}"
+            adv_reward = f"| Per-Step R : {adv_per_reward:6.3f} | Episode R  : {adv_ep_reward:6.3f}"
 
+            # line_episode_step = f"Avg Episode Step  : {ep_step}"
+            # line_per_step_reward = f"Per-Step Rewards  : {per_r}"
+            # line_episode_reward = f"Epiode Rewards    : {ep_r}"
+
+            if nominal_update_turn:
+                print(f"===================== Nominal Agent Update =====================")
+            else:
+                print(f"=================== Adversarial Agent Update ===================")
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
             print(f"|{line_header.center(content_width)}|")
@@ -677,40 +707,50 @@ def main():
             print(f"|                                                                |")
             print(f"| {line_rollout_time:<{content_width-1}}|")
             print(f"| {line_train_time:<{content_width-1}}|")
-            print(f"| {line_value_loss:<{content_width-1}}|")
-            print(f"| {line_policy_loss:<{content_width-1}}|")
-            print(f"| {line_entropy_loss:<{content_width-1}}|")
-            print(f"| {line_approx_kl:<{content_width-1}}|")
-            print(f"| {line_episode_step:<{content_width-1}}|")
-            print(f"| {line_per_step_reward:<{content_width-1}}|")
-            print(f"| {line_episode_reward:<{content_width-1}}|")
+            print(f"------------------------------------------------------------------")
+            print(f"| [Nominal Agent (Robot)]")
+            print(f"| {nominal_loss:<{content_width-1}}|")
+            print(f"| {nominal_reward:<{content_width-1}}|")
+            print(f"------------------------------------------------------------------")
+            print(f"| [Adversarial Agent (Pusher)]")
+            print(f"| {adv_loss:<{content_width-1}}|")
+            print(f"| {adv_reward:<{content_width-1}}|")
+            # print(f"------------------------------------------------------------------")
+            # print(f"| {line_episode_step:<{content_width-1}}|")
+            # print(f"| {line_per_step_reward:<{content_width-1}}|")
+            # print(f"| {line_episode_reward:<{content_width-1}}|")
             print(f"|________________________________________________________________|")
 
             # update rollout time
             t1_rollout = time.time()
 
         # Checkpoint save
-        if timestep % checkpoint_interval == 0:
-            checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
-            agent.save(checkpoint_path, checkpoint_path_jit)
+        if timestep % checkpoint_interval_nominal == 0:
+            nominal_checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
+            nominal_checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
+            nominal_agent.save(nominal_checkpoint_path, nominal_checkpoint_path_jit)
+        
+        if timestep % checkpoint_interval_adv == 0:
+            adv_checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
+            adv_checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
+            adversarial_agent.save(adv_checkpoint_path, adv_checkpoint_path_jit)
 
-            if verify_save_logic:
-                test_agent.load(checkpoint_path)
-                test_agent.set_running_mode("eval")
-                with torch.no_grad():
-                    agent.set_running_mode("eval")
-                    actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-                    test_actions, test_nonscaled_actions, test_action_log_probs, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
-                    agent.set_running_mode("train")
+            # if verify_save_logic:
+            #     test_agent.load(checkpoint_path)
+            #     test_agent.set_running_mode("eval")
+            #     with torch.no_grad():
+            #         agent.set_running_mode("eval")
+            #         actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            #         test_actions, test_nonscaled_actions, test_action_log_probs, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
+            #         agent.set_running_mode("train")
                 
-                if not torch.allclose(actions, test_actions):
-                    max_err = (actions - test_actions).abs().max().item()
-                    raise RuntimeError(f"Model mismatch. Please check the save logic. [Max Error : {max_err}]")
+            #     if not torch.allclose(actions, test_actions):
+            #         max_err = (actions - test_actions).abs().max().item()
+            #         raise RuntimeError(f"Model mismatch. Please check the save logic. [Max Error : {max_err}]")
                 
-                if not torch.allclose(nonscaled_actions, test_nonscaled_actions):
-                    max_err = (nonscaled_actions - test_nonscaled_actions).abs().max().item()
-                    raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
+            #     if not torch.allclose(nonscaled_actions, test_nonscaled_actions):
+            #         max_err = (nonscaled_actions - test_nonscaled_actions).abs().max().item()
+            #         raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
 
 
         # update
