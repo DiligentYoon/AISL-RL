@@ -50,6 +50,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_joint_vel:          float = 5.0e-4
 
     w_limits:            float = 10.0
+    w_deviation_swing:   float = 0.5
     w_deviation_hip:     float = 2.0
     w_deviation_torso:   float = 2.0
     w_deviation_arm:     float = 2.0
@@ -77,7 +78,7 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.05,
+        prob_standing_envs=0.0,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
