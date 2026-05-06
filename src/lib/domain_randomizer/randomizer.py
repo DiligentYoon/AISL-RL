@@ -37,11 +37,23 @@ from isaaclab.utils.version import compare_versions, get_isaac_sim_version
 
 from lib.env.env import Env
 
+def sample_rfi_torque(num_envs, num_joints, rfi_limit, device):
+    """Sample per-step random joint torques (RFI).
+    Called every physics step inside _apply_action().
+    """
+    if not isinstance(rfi_limit, torch.Tensor):
+        rfi_limit = torch.tensor(rfi_limit, device=device)
 
+    return (2.0 * torch.rand(num_envs, num_joints, device=device) - 1.0) * rfi_limit
 
-# import logger
-logger = logging.getLogger(__name__)
-
+def sample_rao_torque(env_ids, num_joints, rao_limit, device):
+    """Sample per-episode constant offset torques (RAO).
+    Called once per episode reset in _reset_idx().
+    """
+    n_envs = len(env_ids)
+    if not isinstance(rao_limit, torch.Tensor):
+        rao_limit = torch.tensor(rao_limit, device=device)
+    return (2.0 * torch.rand(n_envs, num_joints, device=device) - 1.0) * rao_limit
 
 def randomize_rigid_body_scale(
     env: Env,
@@ -297,6 +309,92 @@ class randomize_rigid_body_material(ManagerTermBase):
         self.asset.root_physx_view.set_material_properties(materials, env_ids)
 
 
+class randomize_rigid_body_material_shared(randomize_rigid_body_material):
+    """Randomize wheel physics material with the same values for left and right wheels.
+
+    Unlike the default randomize_rigid_body_material term, which samples material
+    bucket IDs independently per shape, this term samples exactly one material
+    bucket per environment and applies it to all selected wheel bodies.
+
+    As a result:
+        - left wheel and right wheel always share the same material values
+        - all collision shapes belonging to each selected wheel body also share
+          the same material values
+    """
+
+    def __call__(
+        self,
+        env: Env,
+        env_ids: torch.Tensor | None,
+        static_friction_range: tuple[float, float],
+        dynamic_friction_range: tuple[float, float],
+        restitution_range: tuple[float, float],
+        num_buckets: int,
+        asset_cfg: SceneEntityCfg,
+        make_consistent: bool = False,
+    ):
+        # Resolve environment IDs on CPU
+        if env_ids is None:
+            env_ids = torch.arange(env.scene.num_envs, device="cpu")
+        else:
+            env_ids = env_ids.cpu()
+
+        # Re-sample material buckets only if the curriculum changes the ranges
+        if (self.static_friction_range != static_friction_range) or (
+            self.dynamic_friction_range != dynamic_friction_range
+        ):
+            self.static_friction_range = static_friction_range
+            self.dynamic_friction_range = dynamic_friction_range
+
+            range_list = [self.static_friction_range, self.dynamic_friction_range, restitution_range]
+            ranges = torch.tensor(range_list, device="cpu")
+
+            self.material_buckets = math_utils.sample_uniform(
+                ranges[:, 0],
+                ranges[:, 1],
+                (num_buckets, 3),
+                device="cpu",
+            )
+
+            if make_consistent:
+                self.material_buckets[:, 1] = torch.min(
+                    self.material_buckets[:, 0],
+                    self.material_buckets[:, 1],
+                )
+
+        # Get current material buffer from PhysX
+        materials = self.asset.root_physx_view.get_material_properties()
+
+        # Sample one shared bucket per environment
+        shared_bucket_ids = torch.randint(
+            0, num_buckets, (len(env_ids),), device="cpu"
+        )
+        shared_samples = self.material_buckets[shared_bucket_ids]  # shape: (num_envs, 3)
+
+        # Apply the same sampled material to all selected wheel bodies
+        if self.num_shapes_per_body is not None:
+            for body_id in self.asset_cfg.body_ids:
+                # Find the shape index range for this body
+                start_idx = sum(self.num_shapes_per_body[:body_id])
+                end_idx = start_idx + self.num_shapes_per_body[body_id]
+
+                # Broadcast the same material to every shape of this body
+                num_shapes_in_body = end_idx - start_idx
+                materials[env_ids, start_idx:end_idx] = shared_samples.unsqueeze(1).repeat(
+                    1, num_shapes_in_body, 1
+                )
+        else:
+            # Fallback path: if shape-per-body indexing is unavailable,
+            # assign the same material to all shapes covered by the asset view.
+            total_num_shapes = self.asset.root_physx_view.max_shapes
+            materials[env_ids] = shared_samples.unsqueeze(1).repeat(
+                1, total_num_shapes, 1
+            )
+
+        # Push updated materials back to PhysX
+        self.asset.root_physx_view.set_material_properties(materials, env_ids)
+
+
 class randomize_rigid_body_mass(ManagerTermBase):
     """Randomize the mass of the bodies by adding, scaling, or setting random values.
 
@@ -409,6 +507,90 @@ class randomize_rigid_body_mass(ManagerTermBase):
                 inertias[env_ids] = self.asset.data.default_inertia[env_ids] * ratios
             # set the inertia tensors into the physics simulation
             self.asset.root_physx_view.set_inertias(inertias, env_ids)
+
+def randomize_rigid_body_mass_inertia(
+    env: Env,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    mass_inertia_distribution_params: tuple[float, float],
+    operation: Literal["add", "scale", "abs"],
+    distribution: Literal["uniform", "log_uniform", "gaussian"] = "uniform",
+):
+    """Randomize the inertia of the bodies by adding, scaling, or setting random values.
+
+    This function allows randomizing the mass of the bodies of the asset. The function samples random values from the
+    given distribution parameters and adds, scales, or sets the values into the physics simulation based on the operation.
+
+    .. tip::
+        This function uses CPU tensors to assign the body masses. It is recommended to use this function
+        only during the initialization of the environment.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+
+    # resolve environment ids
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    # resolve body indices
+    if asset_cfg.body_ids == slice(None):
+        body_ids = torch.arange(asset.num_bodies, dtype=torch.int, device="cpu")
+    else:
+        body_ids = torch.tensor(asset_cfg.body_ids, dtype=torch.int, device="cpu")
+
+    # get the current inertias of the bodies (num_assets, num_bodies)
+    inertias = asset.root_physx_view.get_inertias().clone()
+    masses = asset.root_physx_view.get_masses().clone()
+
+    masses = _randomize_prop_by_op(
+        masses, mass_inertia_distribution_params, env_ids, body_ids, operation=operation, distribution=distribution
+    )
+    scale = masses / asset.root_physx_view.get_masses()
+    inertias *= scale.unsqueeze(-1)
+
+    asset.root_physx_view.set_masses(masses, env_ids)
+    asset.root_physx_view.set_inertias(inertias, env_ids)
+
+
+def randomize_rigid_body_coms(
+    env: Env,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    com_distribution_params: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+    operation: Literal["add", "scale", "abs"],
+    distribution: Literal["uniform", "log_uniform", "gaussian"] = "uniform",
+):
+    """
+    Randomize the center of mass (COM) of the bodies by adding, scaling, or setting random values for each dimension.
+    """
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    if asset_cfg.body_ids == slice(None):
+        body_ids = torch.arange(asset.num_bodies, dtype=torch.int, device="cpu")
+    else:
+        body_ids = torch.tensor(asset_cfg.body_ids, dtype=torch.int, device="cpu")
+
+    coms = asset.root_physx_view.get_coms().clone()
+
+    # Apply randomization to each dimension separately
+    for dim in range(3):  # 0=x, 1=y, 2=z
+        coms[..., dim] = _randomize_prop_by_op(
+            coms[..., dim],
+            com_distribution_params[dim],
+            env_ids,
+            body_ids,
+            operation=operation,
+            distribution=distribution,
+        )
+
+    asset.root_physx_view.set_coms(coms, env_ids)
 
 
 def randomize_rigid_body_com(
@@ -1130,6 +1312,170 @@ def reset_root_state_uniform(
     asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
 
 
+def reset_root_state_orientation_biased_uniform(
+    env: Env,
+    env_ids: torch.Tensor,
+    pose_range: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    bias: float = 3.14/4,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the asset root state to a random position and velocity biased uniformly within the given ranges.
+
+    This function randomizes the root position and velocity of the asset with biased randomization of orientation.
+
+    * It samples the root position from the given ranges and adds them to the default root position, before setting
+      them into the physics simulation.
+    * It samples the root orientation from the given ranges and bias offset and sets them into the physics simulation.
+    * It samples the root velocity from the given ranges and bias offset and sets them into the physics simulation.
+
+    The function takes a dictionary of pose and velocity ranges for each axis and rotation. The keys of the
+    dictionary are ``x``, ``y``, ``z``, ``roll``, ``pitch``, and ``yaw``. The values are tuples of the form
+    ``(min, max)``. If the dictionary does not contain a key, the position or velocity is set to zero for that axis.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+    # get default root state
+    root_states = asset.data.default_root_state[env_ids].clone()
+
+    # poses
+    range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+
+    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples[:, 0:3]
+    # apply bias in roll and pitch direction
+    rand_samples[:, 3] = torch.where(torch.abs(rand_samples[:, 3]) < bias, 
+                                     rand_samples[:, 3] + torch.sign(rand_samples[:, 3]) * bias,
+                                     rand_samples[:, 3])
+    rand_samples[:, 4] = torch.where(torch.abs(rand_samples[:, 4]) < bias,
+                                     rand_samples[:, 4] + torch.sign(rand_samples[:, 4]) * bias,
+                                     rand_samples[:, 4])
+    orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], rand_samples[:, 5])
+    orientations = math_utils.quat_mul(root_states[:, 3:7], orientations_delta)
+
+    # velocities
+    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+
+    velocities = root_states[:, 7:13] + rand_samples
+
+    # set into the physics simulation
+    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
+    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
+
+
+def reset_robot_and_object_root_state_uniform(
+    env,
+    env_ids: torch.Tensor,
+    pose_range: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    object_cfg: SceneEntityCfg = SceneEntityCfg("jig"),
+    object_relative_pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    object_relative_yaw: float = 0.0,
+):
+    robot: Articulation = env.scene[robot_cfg.name]
+    obj: RigidObject = env.scene[object_cfg.name]
+
+    # default states
+    robot_root_states = robot.data.default_root_state[env_ids].clone()
+    obj_root_states = obj.data.default_root_state[env_ids].clone()
+
+    # shared pose random sample
+    pose_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+    pose_ranges = torch.tensor(
+        [pose_range.get(key, (0.0, 0.0)) for key in pose_keys],
+        device=robot.device,
+        dtype=torch.float32,
+    )
+    pose_samples = math_utils.sample_uniform(
+        pose_ranges[:, 0], pose_ranges[:, 1], (len(env_ids), 6), device=robot.device
+    )
+
+    pos_delta = pose_samples[:, 0:3]      # shared sampled xyz
+    rpy_delta = pose_samples[:, 3:6]      # shared sampled rpy
+
+    # robot pose
+    robot_positions = (
+        robot_root_states[:, 0:3]
+        + env.scene.env_origins[env_ids]
+        + pos_delta
+    )
+
+    robot_orient_delta = math_utils.quat_from_euler_xyz(
+        rpy_delta[:, 0], rpy_delta[:, 1], rpy_delta[:, 2]
+    )
+    robot_orientations = math_utils.quat_mul(
+        robot_root_states[:, 3:7], robot_orient_delta
+    )
+
+    # robot velocity
+    vel_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+    vel_ranges = torch.tensor(
+        [velocity_range.get(key, (0.0, 0.0)) for key in vel_keys],
+        device=robot.device,
+        dtype=torch.float32,
+    )
+    vel_samples = math_utils.sample_uniform(
+        vel_ranges[:, 0], vel_ranges[:, 1], (len(env_ids), 6), device=robot.device
+    )
+    robot_velocities = robot_root_states[:, 7:13] + vel_samples
+
+    robot.write_root_pose_to_sim(
+        torch.cat([robot_positions, robot_orientations], dim=-1),
+        env_ids=env_ids,
+    )
+    robot.write_root_velocity_to_sim(robot_velocities, env_ids=env_ids)
+
+    # object pose: follow only shared x, y, yaw
+    rel_pos = torch.tensor(object_relative_pos, device=robot.device, dtype=torch.float32)
+    rel_pos = rel_pos.unsqueeze(0).repeat(len(env_ids), 1)
+
+    shared_yaw = rpy_delta[:, 2] + object_relative_yaw
+    yaw_quat = math_utils.quat_from_euler_xyz(
+        torch.zeros_like(shared_yaw),
+        torch.zeros_like(shared_yaw),
+        shared_yaw,
+    )
+
+    # rotate only the xy part of the relative offset
+    rel_xy = rel_pos[:, :2]
+    rel_xy_3d = torch.cat(
+        [rel_xy, torch.zeros((len(env_ids), 1), device=robot.device)], dim=-1
+    )
+    rel_xy_world = math_utils.quat_apply(yaw_quat, rel_xy_3d)[:, :2]
+
+    # start from object's own default root position
+    obj_positions = obj_root_states[:, 0:3].clone() + env.scene.env_origins[env_ids]
+
+    # shared translation only in x,y
+    obj_positions[:, 0] += pos_delta[:, 0]
+    obj_positions[:, 1] += pos_delta[:, 1]
+
+    # then add rotated relative xy offset
+    obj_positions[:, 0] += rel_xy_world[:, 0]
+    obj_positions[:, 1] += rel_xy_world[:, 1]
+
+    # z should NOT follow robot z
+    # keep object's default z and only add its own relative z
+    obj_positions[:, 2] += rel_pos[:, 2]
+
+    # object orientation: default orientation followed only by shared yaw
+    obj_default_orientation = obj_root_states[:, 3:7]
+    obj_orientations = math_utils.quat_mul(obj_default_orientation, yaw_quat)
+
+    obj.write_root_pose_to_sim(
+        torch.cat([obj_positions, obj_orientations], dim=-1),
+        env_ids=env_ids,
+    )
+
+    # object is kinematic/static support object
+    obj_velocities = torch.zeros((len(env_ids), 6), device=robot.device)
+    obj.write_root_velocity_to_sim(obj_velocities, env_ids=env_ids)
+
+
 def reset_root_state_with_random_orientation(
     env: Env,
     env_ids: torch.Tensor,
@@ -1328,6 +1674,50 @@ def reset_joints_by_offset(
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
 
+def reset_joints_by_offset_and_bias(
+    env: Env,
+    env_ids: torch.Tensor,
+    bias: tuple[float, float, float],
+    position_range: tuple[float, float],
+    velocity_range: tuple[float, float],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the robot joints with offsets around the default position and velocity by the given ranges.
+
+    This function samples random values from the given ranges and biases the default joint positions and velocities
+    by these values. The biased values are then set into the physics simulation.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    eps = 1e-10
+
+    # cast env_ids to allow broadcasting
+    if asset_cfg.joint_ids != slice(None):
+        iter_env_ids = env_ids[:, None]
+    else:
+        iter_env_ids = env_ids
+
+    # get default joint state
+    joint_pos = asset.data.default_joint_pos[iter_env_ids, asset_cfg.joint_ids].clone()
+    joint_vel = asset.data.default_joint_vel[iter_env_ids, asset_cfg.joint_ids].clone()
+    
+    # add constant bias
+    # signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
+    joint_pos += torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
+
+    # bias these values randomly
+    joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)
+    joint_vel += math_utils.sample_uniform(*velocity_range, joint_vel.shape, joint_vel.device)
+
+    # clamp joint pos to limits
+    joint_pos_limits = asset.data.soft_joint_pos_limits[iter_env_ids, asset_cfg.joint_ids]
+    joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
+    # clamp joint vel to limits
+    joint_vel_limits = asset.data.soft_joint_vel_limits[iter_env_ids, asset_cfg.joint_ids]
+    joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
+
+    # set into the physics simulation
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
 
 def reset_nodal_state_uniform(
     env: Env,

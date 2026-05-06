@@ -1,0 +1,14 @@
+seed: 42
+
+collection:
+  capacity_per_bucket: 200000
+  thresholds:
+    low_high: -0.3
+    mid_high: 0.3
+  max_timestep: 20000
+  warmup_skip_steps: 4
+  subsample_stride: 4
+  save_subdir: "collected"
+
+env:
+  num_envs_default: 1024

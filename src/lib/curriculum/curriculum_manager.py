@@ -93,10 +93,6 @@ class CurriculumManager:
         self._difficulty = effective_t
         self._apply(effective_t)
 
-        # # extras["Curriculum"]에 기록 → TensorBoard 모니터링용
-        # self.env.extras.setdefault("Curriculum", {})
-        # self.env.extras["Curriculum"]["difficulty"] = self._difficulty
-
     def _apply(self, t: float):
         """apply curriculum by scheduling function"""
         for getter, setter, param_cfg in self._resolvers:

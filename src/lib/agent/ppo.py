@@ -178,6 +178,7 @@ class PPO(Agent):
             infos: Additional information about the environment
         """
         critic_inputs = states if states is not None else observations
+        buffer_rewards = rewards.clone()
 
         with torch.no_grad():
             value_preds, _, _ = self.critic(critic_inputs)
@@ -185,13 +186,13 @@ class PPO(Agent):
             
         # time-limit (truncation) bootstrapping
         if self.time_limit_bootstrap:
-            rewards += self.discount_factor * value_preds * truncated
+            buffer_rewards += self.discount_factor * value_preds * truncated
 
         if self.is_async_actor_critic:
             self.buffer.add_samples(observations=observations,
                                     states=states,
                                     actions=actions,
-                                    rewards=rewards,
+                                    rewards=buffer_rewards,
                                     next_observations=next_observations,
                                     next_states=next_states,
                                     truncated=truncated,
@@ -329,5 +330,5 @@ class PPO(Agent):
         mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches)
 
 
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, None
             

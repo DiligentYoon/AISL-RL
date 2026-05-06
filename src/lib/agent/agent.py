@@ -1,4 +1,5 @@
 import os
+import copy
 import torch
 import datetime
 
@@ -86,8 +87,13 @@ class Agent:
 
         if path_jit is not None:
             # Jit file save only policy network
-            actor = self.model["actor"].eval()
-            actor_jit = ActorInference(actor, squash=actor.squash, action_scale_factor=self.mapped_action_scale_factor).eval()
+            actor = self.model["actor"]
+
+            # export용 복사본
+            actor_export = copy.deepcopy(actor).to("cpu").eval()
+            action_scale_factor = self.mapped_action_scale_factor.detach().to("cpu")
+            
+            actor_jit = ActorInference(actor_export, squash=actor.squash, action_scale_factor=action_scale_factor).eval()
             scripted = torch.jit.script(actor_jit)
             torch.jit.save(scripted, path_jit)
     
@@ -99,7 +105,7 @@ class Agent:
         Args:
             path: Path to load the model from
         """
-        modules = torch.load(path, map_location=self.device)
+        modules = torch.load(path, map_location=self.device, weights_only=False)
         if type(modules) is dict:
             for name, data in modules.items():
                 module = self.checkpoint_modules.get(name, None)

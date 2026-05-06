@@ -6,31 +6,6 @@
 
 이 프로젝트는 **NVIDIA Isaac Lab 2.3.0** / **Isaac Sim 5.1.0** 기반의 2족 로봇 보행 제어를 위한 강화학습 프레임워크입니다.
 
-## 실행 명령어
-
-**정책 학습:**
-```bash
-python src/main/train.py \
-  --task G1-recovery \
-  --algorithm PPO \
-  --model MLP \
-  --num_envs 4096
-```
-
-**체크포인트 평가:**
-```bash
-python src/main/play.py \
-  --task G1-recovery \
-  --algorithm PPO \
-  --model MLP \
-  --checkpoint logs/G1-recovery/<run>/agent_<step>.pt
-```
-
-**Reach-Avoid 학습 (위험 예측기):**
-```bash
-python src/main/train_reach_avoid.py
-```
-
 ## 아키텍처
 
 ### 디렉토리 구조
@@ -81,14 +56,6 @@ src/wrapper/        Isaac Lab 환경 래퍼
 2. `RolloutBuffer` 초기화, `ModelFactory`로 모델 생성, 에이전트 인스턴스화
 3. 루프: `agent.act()` → `env.step()` → 버퍼에 삽입 → N 스텝마다 `agent.update()` (GAE + policy/value 최적화)
 4. TensorBoard에 로깅; `.pt` 및 JIT 체크포인트 저장
-
-### 출력물
-
-`logs/<task>/YYYY-MM-DD_HH-MM-SS_<algo>/`
-- TensorBoard 이벤트 파일
-- `agent_<step>.pt` — 전체 체크포인트
-- `agent_jit_<step>.pt` — 배포용 JIT 컴파일 actor
-- `videos/train/` — 롤아웃 영상 (`--video` 옵션 사용 시)
 
 ## 중요사항
 
