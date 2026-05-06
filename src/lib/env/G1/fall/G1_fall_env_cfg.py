@@ -75,6 +75,9 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        # robot
+        self.robot.spawn.articulation_props.enabled_self_collisions = False
+
         # curriculum
         self.curriculum = None
         self.events.push_robot.params["velocity_range"] = {
