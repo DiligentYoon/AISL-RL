@@ -39,7 +39,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
-args_cli.headless = True                    # Headless mode
+args_cli.headless = False                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
