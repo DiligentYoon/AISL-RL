@@ -67,7 +67,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         # self.events.push_robot.params["velocity_range"] = {
         #     "x": (-2.0, 2.0),
         #     "y": (-2.0, 2.0),
-        #     "roll": (-5.0, 5.0),
+        #     "roll": (-5.0, 5.0)
         #     "pitch": (-5.0, 5.0),
         # }
 
@@ -111,4 +111,19 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         self.scene.num_envs = 1
 
         self.plotter: CapturabilityPlotter = CapturabilityPlotter
+
+
+@configclass
+class G1FallCollectEnvCfg(G1FallEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # curriculum
+        self.curriculum = None
+        self.events.push_robot.params["velocity_range"] = {
+            "x": self.push_x_end,
+            "y": self.push_y_end,
+            "roll": self.push_roll_end,
+            "pitch": self.push_pitch_end,
+        }
 

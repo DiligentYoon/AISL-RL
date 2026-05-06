@@ -20,11 +20,11 @@ agent:
     checkpoint_interval: auto
 
 collection:
-  capacity_per_bucket: 200000
+  capacity_per_bucket: 50000
   thresholds:
-    low_high: -0.3
-    mid_high: 0.3
-  max_timestep: 20000
+    low_high: -0.2
+    mid_high: 0.2
+  max_timestep: 32000
   warmup_skip_steps: 4
   subsample_stride: 4
   save_subdir: "collected"
