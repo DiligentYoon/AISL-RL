@@ -17,7 +17,7 @@ parser.add_argument("--video_interval", type=int, default=2000, help="Interval b
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-pusher", help="Name of the task.")
-parser.add_argument("--checkpoint_nominal", type=str, default=None, help="Path to nominal agent model checkpoint.")
+parser.add_argument("--checkpoint_nominal", type=str, default="/home/oksusu/Downloads/agent_32000.pt", help="Path to nominal agent model checkpoint.")
 parser.add_argument("--checkpoint_adversarial", type=str, default=None, help="Path to adversarial agent model checkpoint.")
 
 parser.add_argument("--algorithm_nominal",
@@ -186,7 +186,7 @@ def main():
         
         if not uid in adversarial_agents:                                       # Extract nominal agent
             nominal_agents.append(uid)
-
+        
         buffer = RolloutBuffer(cfg_nominal["buffer"]["buffer_size"], env.num_envs, device=env.device)
         buffer.init_buffer(observation_space, state_space, action_space)
         buffers[uid] = buffer
@@ -295,7 +295,7 @@ def main():
 
 ### ========================================= Adversarial Agent ========================================= ###
     
-    adv_agents_key = cfg_adversarial["agent"]["agents_name"]
+    adversarial_agents = cfg_adversarial["agent"]["agents_name"]
     # Specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", cfg_adversarial["agent"]["experiment"]["directory"])
     log_root_path = os.path.abspath(log_root_path)
@@ -439,11 +439,11 @@ def main():
     rollout = 0
     elapsed_time = 0
     
-    nominal_obs = {k: v for k, v in obs.items() if k not in adv_agents_key}
-    adv_obs = {k: v for k, v in obs.items() if k in adv_agents_key}
+    nominal_obs = {k: v for k, v in obs.items() if k not in adversarial_agents}
+    adv_obs = {k: v for k, v in obs.items() if k in adversarial_agents}
 
-    nominal_states = {k: v for k, v in states.items() if k not in adv_agents_key}
-    adv_states = {k: v for k, v in states.items() if k in adv_agents_key}
+    nominal_states = {k: v for k, v in states.items() if k not in adversarial_agents}
+    adv_states = {k: v for k, v in states.items() if k in adversarial_agents}
 
     nominal_update_turn = False                                                             # NOTE: for test
 
@@ -463,14 +463,14 @@ def main():
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             
             # Data slicing
-            nominal_next_obs = {k: v for k, v in next_obs.items() if k not in adv_agents_key}
-            adv_next_obs = {k: v for k, v in next_obs.items() if k in adv_agents_key}
+            nominal_next_obs = {k: v for k, v in next_obs.items() if k not in adversarial_agents}
+            adv_next_obs = {k: v for k, v in next_obs.items() if k in adversarial_agents}
             
-            nominal_next_states = {k: v for k, v in next_states.items() if k not in adv_agents_key}
-            adv_next_states = {k: v for k, v in next_states.items() if k in adv_agents_key}
+            nominal_next_states = {k: v for k, v in next_states.items() if k not in adversarial_agents}
+            adv_next_states = {k: v for k, v in next_states.items() if k in adversarial_agents}
             
-            nominal_rewards = {k: v for k, v in rewards.items() if k not in adv_agents_key}
-            adv_rewards = {k: v for k, v in rewards.items() if k in adv_agents_key}
+            nominal_rewards = {k: v for k, v in rewards.items() if k not in adversarial_agents}
+            adv_rewards = {k: v for k, v in rewards.items() if k in adversarial_agents}
             
             # update rollout number
             timestep += 1
