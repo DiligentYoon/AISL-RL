@@ -48,7 +48,7 @@ class GOATStandTerrainEnv(GOATBaseEnv):
                                               dt=self.cfg.sim_dt)
         # HW limits
         self.joint_input_limits = self.cfg.joint_input_limits.unsqueeze(0).expand(self.num_envs, -1, -1).to(device=self.device)         # Currently not used
-        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       # Isaac sim cannot bring torque limits from urdf
+        self.torque_limits = self.cfg.torque_limits.unsqueeze(0).expand(self.num_envs, -1).to(device=self.device)                       
     
     def _setup_scene(self):
         super()._setup_scene()

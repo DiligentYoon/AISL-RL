@@ -13,6 +13,19 @@ from typing import Literal
 import torch
 
 ##
+# Internal helpers.
+##
+
+def _ensure_tensor(value, data: torch.Tensor) -> torch.Tensor:
+    """Convert scalar/list/tensor to a tensor matching data's dtype and device."""
+    if not isinstance(value, torch.Tensor):
+        return torch.as_tensor(value, dtype=data.dtype, device=data.device)
+    if value.device != data.device:
+        return value.to(device=data.device)
+    return value
+
+
+##
 # Noise as functions.
 ##
 
@@ -21,15 +34,14 @@ def constant_noise(data: torch.Tensor, bias: float, operation: str = "add") -> t
 
     Args:
         data: The unmodified data set to apply noise to.
-        cfg: The configuration parameters for constant noise.
+        bias: Constant bias value. Can be a scalar, list, or tensor.
+              If a list or tensor of length == data.shape[-1], bias is applied per-dimension.
+        operation: One of "add", "scale", or "abs".
 
     Returns:
         The data modified by the noise parameters provided.
     """
-
-    # fix tensor device for bias on first call and update config parameters
-    if isinstance(bias, torch.Tensor):
-        bias = bias.to(device=data.device)
+    bias = _ensure_tensor(bias, data)
 
     if operation == "add":
         return data + bias
@@ -46,18 +58,17 @@ def uniform_noise(data: torch.Tensor, n_min: float, n_max: float, operation: str
 
     Args:
         data: The unmodified data set to apply noise to.
-        cfg: The configuration parameters for uniform noise.
+        n_min: Lower bound of the uniform distribution. Can be a scalar, list, or tensor.
+               If a list or tensor of length == data.shape[-1], applied per-dimension.
+        n_max: Upper bound of the uniform distribution. Can be a scalar, list, or tensor.
+               If a list or tensor of length == data.shape[-1], applied per-dimension.
+        operation: One of "add", "scale", or "abs".
 
     Returns:
         The data modified by the noise parameters provided.
     """
-
-    # fix tensor device for n_max on first call and update config parameters
-    if isinstance(n_max, torch.Tensor):
-        n_max = n_max.to(data.device)
-    # fix tensor device for n_min on first call and update config parameters
-    if isinstance(n_min, torch.Tensor):
-        n_min = n_min.to(data.device)
+    n_min = _ensure_tensor(n_min, data)
+    n_max = _ensure_tensor(n_max, data)
 
     if operation == "add":
         return data + torch.rand_like(data) * (n_max - n_min) + n_min
@@ -74,18 +85,18 @@ def gaussian_noise(data: torch.Tensor, mean: float, std: float, operation: str =
 
     Args:
         data: The unmodified data set to apply noise to.
-        cfg: The configuration parameters for gaussian noise.
+        mean: Mean of the gaussian distribution. Can be a scalar, list, or tensor.
+              If a list or tensor of length == data.shape[-1], applied per-dimension.
+        std: Standard deviation of the gaussian distribution. Can be a scalar, list, or tensor.
+             If a list or tensor of length == data.shape[-1], applied per-dimension.
+             Set individual elements to 0.0 to suppress noise for specific observation axes.
+        operation: One of "add", "scale", or "abs".
 
     Returns:
         The data modified by the noise parameters provided.
     """
-
-    # fix tensor device for mean on first call and update config parameters
-    if isinstance(mean, torch.Tensor):
-        mean = mean.to(data.device)
-    # fix tensor device for std on first call and update config parameters
-    if isinstance(std, torch.Tensor):
-        std = std.to(data.device)
+    mean = _ensure_tensor(mean, data)
+    std = _ensure_tensor(std, data)
 
     if operation == "add":
         return data + mean + std * torch.randn_like(data)
@@ -95,3 +106,38 @@ def gaussian_noise(data: torch.Tensor, mean: float, std: float, operation: str =
         return mean + std * torch.randn_like(data)
     else:
         raise ValueError(f"Unknown operation in noise: {operation}")
+
+
+##
+# Config-time helpers.
+##
+
+def build_noise_std_vector(groups: dict) -> list:
+    """Expand per-group noise std into a flat list matching observation dimension.
+
+    Converts a human-readable group definition into a flat per-dimension std list
+    that can be passed directly to gaussian_noise (or any noise function) as the
+    ``std`` parameter. The order of groups must match the observation tensor's
+    concat order in ``_get_observations()``.
+
+    Args:
+        groups: dict of {"group_name": {"dim": int, "std": float}, ...}.
+                Keys are used only for readability; insertion order is preserved (Python 3.7+).
+                Set "std" to 0.0 for axes that should receive no noise (e.g., internal values).
+
+    Returns:
+        Flat list of std values with length == sum of all "dim" values.
+
+    Example::
+
+        groups = {
+            "base_lin_vel": {"dim": 3, "std": 0.05},
+            "command":      {"dim": 3, "std": 0.0},
+        }
+        build_noise_std_vector(groups)
+        # → [0.05, 0.05, 0.05, 0.0, 0.0, 0.0]
+    """
+    std_vector = []
+    for name, spec in groups.items():
+        std_vector.extend([spec["std"]] * spec["dim"])
+    return std_vector

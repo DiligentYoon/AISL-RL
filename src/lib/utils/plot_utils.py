@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import numpy as np
 import torch
 import os
@@ -603,3 +604,131 @@ class CapturabilityPlotter(GIFSavePlotter):
     def save(self):
         """Save the animation as 'capturability.gif' inside plot_dir."""
         super().save(filename="capturability.gif")
+
+
+# ============================================================
+# Generic static-PNG plotter
+# ============================================================
+class PNGSavePlotter(GIFSavePlotter):
+    """
+    Static PNG plotter. Accumulates per-step trajectory data and saves
+    all signals as a grid of time-series subplots in a single PNG file.
+
+    Each key in plot_cfg becomes one subplot. Data with shape (N,) is
+    averaged across the N dimension to produce a scalar time series.
+    Episode boundaries are marked with vertical dashed lines.
+
+    Compatible with the same play.py interface as GIFSavePlotter:
+      plotter = PNGSavePlotter(env, plot_cfg, plot_dir)
+      plotter.append(viz_data, episode_end=done)
+      plotter.save()
+      plotter.close()
+    """
+
+    def __init__(self, env, plot_cfg: dict, plot_dir=None):
+        super().__init__(env, plot_cfg, plot_dir)
+
+    # ----------------------------------------------------------
+    # No-op animation hooks (PNG does not use FuncAnimation)
+    # ----------------------------------------------------------
+    def _setup_figure(self):
+        """Defer figure creation to save(); nothing to build at init time."""
+        self.fig = None
+
+    def _init_func(self) -> list:
+        return []
+
+    def _update_func(self, i: int) -> list:
+        return []
+
+    # ----------------------------------------------------------
+    # Internal helpers
+    # ----------------------------------------------------------
+    def _to_scalar_series(self, key: str) -> np.ndarray:
+        """Convert the buffered list for key into a 1-D float array.
+
+        Each element in the buffer may be a Python scalar or a numpy
+        array of any shape.  Arrays are reduced to a single float via
+        mean() so that multi-env data (shape (N,)) collapses cleanly.
+        """
+        return np.array(
+            [float(np.asarray(v).mean()) for v in self.buffer[key]],
+            dtype=float,
+        )
+
+    def _build_time_axis(self, n_frames: int) -> np.ndarray:
+        """Return an x-axis array (seconds) of length n_frames.
+
+        Uses 'time_hist' or 'time' buffer if present; otherwise falls
+        back to step_index * dt.
+        """
+        for key in ("time_hist", "time"):
+            if key in self.buffer and len(self.buffer[key]) == n_frames:
+                return self._to_scalar_series(key)
+        return np.arange(n_frames, dtype=float) * self.dt
+
+    # ----------------------------------------------------------
+    # PNG export
+    # ----------------------------------------------------------
+    def save(self, filename: str = "trajectory.png"):
+        """Render and save all buffered signals as a static multi-panel PNG.
+
+        Parameters
+        ----------
+        filename : str
+            Output filename written inside self.plot_dir.
+        """
+        self._finalize_open_episode()
+        n_frames = self.num_frames()
+        if n_frames == 0:
+            raise RuntimeError("No buffered data. Call append() first.")
+
+        keys = list(self.cfg.keys())
+        n = len(keys)
+        ncols = min(4, n)
+        nrows = math.ceil(n / ncols)
+
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(5 * ncols, 3 * nrows),
+            squeeze=False,
+        )
+        self.fig = fig
+
+        t = self._build_time_axis(n_frames)
+
+        # Episode boundary x-positions; skip the last range to avoid
+        # drawing a line at the very end of the x-axis.
+        ep_boundaries = [
+            t[end]
+            for (_, end) in self.episode_ranges[:-1]
+            if end < n_frames
+        ]
+
+        for idx, key in enumerate(keys):
+            row, col = divmod(idx, ncols)
+            ax = axes[row][col]
+            y = self._to_scalar_series(key)
+            ax.plot(t, y, linewidth=1.2)
+            ax.set_title(key, fontsize=8)
+            ax.set_xlabel("time (s)", fontsize=7)
+            ax.grid(True, linestyle="--", linewidth=0.5)
+            for xb in ep_boundaries:
+                ax.axvline(xb, color="r", linestyle="--", linewidth=0.8, alpha=0.6)
+
+        # Hide unused subplot slots in the last row
+        for idx in range(n, nrows * ncols):
+            row, col = divmod(idx, ncols)
+            axes[row][col].set_visible(False)
+
+        fig.tight_layout()
+        os.makedirs(self.plot_dir, exist_ok=True)
+        filepath = os.path.join(self.plot_dir, filename)
+        fig.savefig(filepath, dpi=150, bbox_inches="tight")
+        print(f"--------- Saved PNG to: {filepath}")
+
+    def close(self):
+        """Close the matplotlib figure."""
+        if self.fig is not None:
+            plt.close(self.fig)
+            self.fig = None

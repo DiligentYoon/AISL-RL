@@ -9,18 +9,32 @@ gym.register(
         "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
-        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml"
+        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
     }
 )
 
-# gym.register(
-#     id="G1-fall-ra", 
-#     entry_point=f"{__name__}.G1_fall_ra_env:G1FallRAEnv",
-#     disable_env_checker=True,
-#     kwargs={
-#         # Environment-Specific Entry Point for Env Cfg Class
-#         "env_cfg_entry_point": f"{__name__}.G1_fall_ra_env_cfg:G1FallRAEnvCfg",
-#         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
-#         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
-#     }
-# )
+gym.register(
+    id="G1-fall-play",
+    entry_point=f"{__name__}.G1_fall_env:G1FallEnv",
+    disable_env_checker=True,
+    kwargs={
+        # Environment-Specific Entry Point for Env Cfg Class
+        "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallPlayEnvCfg",
+        "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+        "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
+        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
+    }
+)
+
+gym.register(
+    id="G1-fall-collect",
+    entry_point=f"{__name__}.G1_fall_collect_env:G1FallCollectEnv",
+    disable_env_checker=True,
+    kwargs={
+        # Environment-Specific Entry Point for Env Cfg Class
+        "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallEnvCfg",
+        "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+        "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
+        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
+    }
+)

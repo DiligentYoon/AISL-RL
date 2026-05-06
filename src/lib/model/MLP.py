@@ -373,11 +373,11 @@ class RA_Critic(Model):
         self.critic_standardizer = RunningMeanStd(shape=self.num_states, device=device)
 
         # Backbone
-        self.net = nn.Sequential(nn.Linear(self.num_states, 64),
+        self.net = nn.Sequential(nn.Linear(self.num_states, 128),
                                  nn.ELU(),
-                                 nn.Linear(64, 32),
+                                 nn.Linear(128, 64),
                                  nn.ELU(),
-                                 nn.Linear(32, 1))
+                                 nn.Linear(64, 1))
 
         # Initialize parameters
         self.init_weights()
@@ -428,5 +428,5 @@ class ActorInference(nn.Module):
         if self.squash:
             a = torch.tanh(a)
 
-        a = a * 0.1 * self.action_scale_factor
+        a = a * self.action_scale_factor
         return a
