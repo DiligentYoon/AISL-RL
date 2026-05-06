@@ -30,4 +30,4 @@ collection:
   save_subdir: "collected"
 
 train:
-  timesteps: 19200
+  timesteps: 16000

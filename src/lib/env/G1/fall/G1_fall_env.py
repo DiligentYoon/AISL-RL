@@ -51,7 +51,7 @@ class G1FallEnv(G1RecoveryEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.critical_contact_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
         
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         died = died_collision

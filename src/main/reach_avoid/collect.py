@@ -16,7 +16,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1024, help="Number of environments (overrides cfg default if given).")
-parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-fall-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, required=True, help="Path to nominal policy checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, required=True, help="Path to trained Reach-Avoid value checkpoint.")
 
@@ -163,6 +163,7 @@ def main():
     cfg["agent"]["seed"] = seed
     ra_cfg["agent"]["seed"] = seed
 
+    env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg,
                    render_mode="rgb_array" if args_cli.video else None)
 

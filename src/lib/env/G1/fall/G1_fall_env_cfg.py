@@ -38,7 +38,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
                 CurriculumParamCfg(
                     name="push_range_x",
                     attr_path="cfg/events/push_robot/params/velocity_range/x",
-                    start_value=self.events.push_robot.params["velocity_range"]["x"],
+                    start_value=self.events.push_robot.params["velocity_" \
+                    "range"]["x"],
                     end_value=self.push_x_end
                 ),
                 CurriculumParamCfg(
@@ -74,9 +75,6 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
 class G1FallPlayEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
-
-        # robot
-        self.robot.spawn.articulation_props.enabled_self_collisions = False
 
         # curriculum
         self.curriculum = None

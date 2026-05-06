@@ -128,6 +128,8 @@ def main():
     # Wrap around environment
     env = IsaacLabWrapper(env)  
 
+    # Interval
+    cfg["train"]["timesteps"] = ra_cfg["train"]["timesteps"]
     if cfg["agent"]["experiment"]["write_interval"] == "auto":
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
