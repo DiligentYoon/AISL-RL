@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
-from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
@@ -44,21 +45,22 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_alive:              float = 0.0
 
     w_limits:             float = 10.0
-    w_vel_limits:         float = 5.0
     w_joint_torque:       float = 1.0e-5
     w_joint_torque_limit: float = 0.0
-    w_joint_vel:          float = 5.0e-4
+    w_joint_vel:          float = 5.0e-3
 
     w_deviation_hip:        float = 0.0
     w_deviation_torso:      float = 0.0
-    w_deviation_arm:        float = 0.0
+    w_deviation_arm:        float = 0.001
+    w_deviation_leg:        float = 0.01
     w_action_rate:          float = 0.01
     
+    w_max_collision:        float = 0.3
     w_prefer_collision:     float = 0.001
     w_not_prefer_collision: float = 0.01
     w_yank:                 float = 0.0
 
-    w_termination: float = 300
+    w_termination: float = 200
 
     # ===== Gait guidance ===== #
     time_period = 0.35
@@ -80,7 +82,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ========== Risk-bucket reset ========== ##
     # Sampling weights over {low, mid, high} buckets produced by collect.py.
     # Replace the dict (do not mutate in place) to update at runtime.
-    bucket_weights: dict[str, float] = {"low": 0.33, "mid": 0.34, "high": 0.33}
+    bucket_weights: dict[str, float] = {"low": 0.0, "mid": 0.0, "high": 1.0}
 
     def __post_init__(self):
         super().__post_init__()
@@ -102,3 +104,19 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
                 "asset_cfg": SceneEntityCfg("robot"),
             },
         )
+
+@configclass
+class G1SafePlayEnvCfg(G1SafeEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
+
+        self.scene.num_envs = 1

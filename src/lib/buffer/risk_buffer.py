@@ -20,6 +20,7 @@ class RiskClassifiedBuffer:
         root_ang_vel_w (3)
         joint_pos      (joint_dim)
         joint_vel      (joint_dim)
+        prev_action    (joint dim)
         risk_score     (1)
     """
 
@@ -54,6 +55,7 @@ class RiskClassifiedBuffer:
         self._key_dims: dict[str, int] = dict(self._ROOT_KEYS)
         self._key_dims["joint_pos"] = self.joint_dim
         self._key_dims["joint_vel"] = self.joint_dim
+        self._key_dims["prev_action"] = self.joint_dim
         self._key_dims["risk_score"] = 1
 
         # Per-bucket flat storage tensors
@@ -92,6 +94,7 @@ class RiskClassifiedBuffer:
         self,
         snapshot: dict[str, torch.Tensor],
         risk_scores: torch.Tensor,
+        prev_actions: torch.Tensor,
         valid_mask: Optional[torch.Tensor] = None,
     ) -> dict[str, int]:
         """Insert one multi-env step. Returns per-bucket inserted count.
@@ -101,6 +104,7 @@ class RiskClassifiedBuffer:
                 root_pos_offset_w, root_quat_w, root_lin_vel_w, root_ang_vel_w,
                 joint_pos, joint_vel
                 — each tensor of shape (num_envs, dim).
+            prev_actions: (num_envs, joint_dim)
             risk_scores: (num_envs,) or (num_envs, 1).
             valid_mask: optional (num_envs,) bool. Envs with False are skipped
                 (used for warmup / terminated / subsample filtering).
@@ -142,6 +146,7 @@ class RiskClassifiedBuffer:
             store["root_ang_vel_w"][start:end].copy_(snapshot["root_ang_vel_w"][env_idx])
             store["joint_pos"][start:end].copy_(snapshot["joint_pos"][env_idx])
             store["joint_vel"][start:end].copy_(snapshot["joint_vel"][env_idx])
+            store["prev_action"][start:end].copy_(prev_actions[env_idx])
             store["risk_score"][start:end, 0].copy_(scores[env_idx])
 
             self.write_idx[bname] = end

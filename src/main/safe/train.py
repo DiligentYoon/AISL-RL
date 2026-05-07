@@ -24,13 +24,13 @@ parser.add_argument("--dataset_dir", type=str, required=True, help="Directory co
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -305,33 +305,33 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ======================= Safe Agent ============================
-    safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    if multi_agent:
-        if safe_model_manager.model_type == "mlp":
-            safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
-                               state_space=env._unwrapped.safe_state_space,
-                               action_space=env._unwrapped.safe_action_space,
-                               possible_agents=possible_agents,
-                               model=safe_models,
-                               buffer=safe_buffers,
-                               device=env.device,
-                               cfg=safe_cfg["agent"])
-        elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
-            safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
-                                          state_space=env._unwrapped.safe_state_space,
-                                          action_space=env._unwrapped.safe_action_space,
-                                          possible_agents=possible_agents,
-                                          model=safe_models,
-                                          buffer=safe_buffers,
-                                          device=env.device,
-                                          cfg=safe_cfg["agent"])
-        else:
-            raise RuntimeError("Unvalid model type.")
-    else:
-        agent = PPO(model=safe_models,
-                    buffer=safe_buffer, 
-                    device=env.device,
-                    cfg=safe_cfg["agent"])
+    # safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
+    # if multi_agent:
+    #     if safe_model_manager.model_type == "mlp":
+    #         safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
+    #                            state_space=env._unwrapped.safe_state_space,
+    #                            action_space=env._unwrapped.safe_action_space,
+    #                            possible_agents=possible_agents,
+    #                            model=safe_models,
+    #                            buffer=safe_buffers,
+    #                            device=env.device,
+    #                            cfg=safe_cfg["agent"])
+    #     elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
+    #         safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
+    #                                       state_space=env._unwrapped.safe_state_space,
+    #                                       action_space=env._unwrapped.safe_action_space,
+    #                                       possible_agents=possible_agents,
+    #                                       model=safe_models,
+    #                                       buffer=safe_buffers,
+    #                                       device=env.device,
+    #                                       cfg=safe_cfg["agent"])
+    #     else:
+    #         raise RuntimeError("Unvalid model type.")
+    # else:
+    #     agent = PPO(model=safe_models,
+    #                 buffer=safe_buffer, 
+    #                 device=env.device,
+    #                 cfg=safe_cfg["agent"])
 
 
     # ======================= Checkpoint Load ========================
@@ -341,7 +341,7 @@ def main():
         agent.load(resume_path)
         print(f"[INFO] Get checkpoint of policy from {resume_path}.")
     else:
-        print(f"[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
+        print(f"[INFO] Unfortunately a pre-trained Policy is not found for this task.")
     # Checkpoint (RA value)
     if args_cli.ra_checkpoint is not None:
         resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
@@ -351,13 +351,13 @@ def main():
         resume_path_ra = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
     # Checkpoint (Safe Policy)
-    if args_cli.safe_checkpoint is not None:
-        resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
-        safe_agent.load(resume_path_safe)
-        print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
-    else:
-        resume_path_safe = None
-        print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
+    # if args_cli.safe_checkpoint is not None:
+    #     resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
+    #     safe_agent.load(resume_path_safe)
+    #     print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
+    # else:
+    #     resume_path_safe = None
+    #     print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
     
     # Verify save logic
     verify_save_logic = True
@@ -394,7 +394,7 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
-            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
+            # RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
@@ -418,7 +418,7 @@ def main():
                 t2_rollout = time.time()
 
                 t1_update = time.time()
-                policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+                policy_loss, value_loss, entropy_loss, approx_kl, _ = agent.update()
                 t2_update = time.time()
 
                 rollout += 1

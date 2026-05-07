@@ -32,7 +32,7 @@ class G1SafeEnv(G1BaseEnv):
 
         self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies(r".*_shoulder_.*_link")
         self.collision_lower_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_elbow_link",
-                                                                                 r".*_wrist_.*_link"])
+                                                                                 r".*_wrist_(roll|pitch)_link"])
         
         self.collision_foot_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_.*_link"])
 
@@ -42,7 +42,7 @@ class G1SafeEnv(G1BaseEnv):
 
         self.upper_arm_link_ids, _ = self._robot.find_bodies(r".*_shoulder_.*_link")
         self.lower_arm_link_ids, _ = self._robot.find_bodies([r".*_elbow_link",
-                                                              r".*_wrist_.*_link"])
+                                                              r".*_wrist_(roll|pitch)_link"])
         
         self.foot_link_ids, _ = self._robot.find_bodies([r".*_ankle_.*_link"])
 
@@ -95,7 +95,8 @@ class G1SafeEnv(G1BaseEnv):
         # Regularization
         self.out_of_limits_joint    = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
         self.out_of_limits_torque   = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
-        self.deviation_arms         = torch.zeros((self.num_envs, len(self.arm_all_joint_ids)), dtype=torch.float, device=self.device)
+        self.deviation_arms         = torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), dtype=torch.float, device=self.device)
+        self.deviation_legs         = torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), dtype=torch.float, device=self.device)
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Prev value
@@ -261,10 +262,20 @@ class G1SafeEnv(G1BaseEnv):
         upper_arm_collision = (self.contact_force[:, self.collision_upper_arm_link_ids] - self.upper_arm_mass * 9.81).clip(min=0.0)
         lower_arm_collision = (self.contact_force[:, self.collision_lower_arm_link_ids] - self.lower_arm_mass * 9.81).clip(min=0.0)
 
-        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1)
-        not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1)
-        prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1)
-        not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1)
+        max_upper_leg_collision = torch.max(upper_leg_collision, dim=-1).values
+        max_lower_leg_collision = torch.max(lower_leg_collision, dim=-1).values
+        max_upper_arm_collision = torch.max(upper_arm_collision, dim=-1).values
+        max_lower_arm_collision = torch.max(lower_arm_collision, dim=-1).values
+
+        num_collision_upper_leg = torch.sum((upper_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        num_collision_lower_leg = torch.sum((lower_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        num_collision_upper_arm = torch.sum((upper_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        num_collision_lower_arm = torch.sum((lower_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+
+        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1) / num_collision_upper_leg - self.cfg.w_max_collision * max_upper_leg_collision
+        not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1) / num_collision_lower_leg - self.cfg.w_max_collision * max_lower_leg_collision
+        prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1) / num_collision_lower_arm - self.cfg.w_max_collision * max_lower_arm_collision
+        not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1) / num_collision_upper_arm - self.cfg.w_max_collision * max_upper_arm_collision
 
         # Yank
         # arm_yank = self.contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids] - \
@@ -280,6 +291,7 @@ class G1SafeEnv(G1BaseEnv):
         terminate_penalty = -self.reset_terminated.float()
 
         # Regularization
+        joint_deviation_leg             = -torch.sum(torch.abs(self.deviation_legs), dim=-1)
         joint_limit_penalty_leg         = -torch.sum(self.out_of_limits_joint[:, self.total_leg_joint_ids], dim=1)
         joint_vel_penalty_leg           = -torch.sum(torch.square(self.joint_vel[:, self.total_leg_joint_ids]), dim=1)
         joint_torque_limit_penalty_leg  = -torch.sum(self.out_of_limits_torque[:, self.total_leg_joint_ids], dim=1)
@@ -289,6 +301,7 @@ class G1SafeEnv(G1BaseEnv):
         else:
             action_rate_penalty_leg     = -torch.sum(torch.square(self.actions[:, self.total_leg_joint_ids] - self.prev_actions[:, self.total_leg_joint_ids]), dim=1)
 
+        joint_deviation_arm             = -torch.sum(torch.abs(self.deviation_arms), dim=-1)
         joint_limit_penalty_arm         = -torch.sum(self.out_of_limits_joint[:, self.total_arm_joint_ids], dim=1)
         joint_vel_penalty_arm           = -torch.sum(torch.square(self.joint_vel[:, self.total_arm_joint_ids]), dim=1)
         joint_torque_limit_penalty_arm  = -torch.sum(self.out_of_limits_torque[:, self.total_arm_joint_ids], dim=1)
@@ -302,6 +315,7 @@ class G1SafeEnv(G1BaseEnv):
         common_rewards = self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                     + \
+                      self.cfg.w_deviation_arm        * joint_deviation_arm              + \
                       self.cfg.w_prefer_collision     * prefer_collision_penalty_arm     + \
                       self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm + \
                       self.cfg.w_limits               * joint_limit_penalty_arm          + \
@@ -311,6 +325,7 @@ class G1SafeEnv(G1BaseEnv):
                       self.cfg.w_action_rate          * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                     + \
+                      self.cfg.w_deviation_leg        * joint_deviation_leg              + \
                       self.cfg.w_prefer_collision     * prefer_collision_penalty_leg     + \
                       self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_leg + \
                       self.cfg.w_limits               * joint_limit_penalty_leg          + \
@@ -417,5 +432,6 @@ class G1SafeEnv(G1BaseEnv):
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self._robot.data.joint_effort_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
-        self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
+        self.deviation_arms[i]       = self.joint_pos[i][:, self.total_arm_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_arm_joint_ids]
+        self.deviation_legs[i]       = self.joint_pos[i][:, self.total_leg_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_leg_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]

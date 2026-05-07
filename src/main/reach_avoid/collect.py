@@ -315,7 +315,7 @@ def main():
 
         valid_mask = build_valid_mask(skip_remaining, terminated,
                                       stride_counter, subsample_stride)
-        risk_buffer.add(snapshot, risk_scores, valid_mask=valid_mask)
+        risk_buffer.add(snapshot=snapshot, risk_scores=risk_scores, prev_actions=actions, valid_mask=valid_mask)
 
         update_counters(skip_remaining, stride_counter,
                         done=(terminated | truncated),
