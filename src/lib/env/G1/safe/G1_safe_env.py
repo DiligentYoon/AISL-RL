@@ -152,6 +152,9 @@ class G1SafeEnv(G1BaseEnv):
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
+        # add commands cfg
+        self.cfg.commands.num_envs = self.scene.num_envs
+        self.cfg.commands.step_dt = self.step_dt
 
 
     def _pre_physics_step(self, actions: dict[str, torch.Tensor] | torch.Tensor):
@@ -264,14 +267,14 @@ class G1SafeEnv(G1BaseEnv):
         not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1)
 
         # Yank
-        arm_yank = self.contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids] - \
-                   self.prev_contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids]
+        # arm_yank = self.contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids] - \
+        #            self.prev_contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids]
         
-        leg_yank = self.contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids] - \
-                   self.prev_contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids]
+        # leg_yank = self.contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids] - \
+        #            self.prev_contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids]
         
-        yank_penalty_arm = -torch.sum(torch.abs(arm_yank), dim=-1)
-        yank_penalty_leg = -torch.sum(torch.abs(leg_yank), dim=-1)
+        # yank_penalty_arm = -torch.sum(torch.abs(arm_yank), dim=-1)
+        # yank_penalty_leg = -torch.sum(torch.abs(leg_yank), dim=-1)
 
         # Termination
         terminate_penalty = -self.reset_terminated.float()
@@ -299,7 +302,6 @@ class G1SafeEnv(G1BaseEnv):
         common_rewards = self.cfg.w_termination     * terminate_penalty
         
         arm_rewards = common_rewards                                                     + \
-                      self.cfg.w_yank                 * yank_penalty_arm                 + \
                       self.cfg.w_prefer_collision     * prefer_collision_penalty_arm     + \
                       self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm + \
                       self.cfg.w_limits               * joint_limit_penalty_arm          + \
@@ -309,7 +311,6 @@ class G1SafeEnv(G1BaseEnv):
                       self.cfg.w_action_rate          * action_rate_penalty_arm
         
         leg_rewards = common_rewards                                                     + \
-                      self.cfg.w_yank                 * yank_penalty_leg                 + \
                       self.cfg.w_prefer_collision     * prefer_collision_penalty_leg     + \
                       self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_leg + \
                       self.cfg.w_limits               * joint_limit_penalty_leg          + \
@@ -340,7 +341,6 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Arm_Yank"                 : self.cfg.w_yank                 * yank_penalty_arm,
             "Task Penalty / Arm_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_arm,
             "Task Penalty / Arm_Not_Prefer_Collision" : self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"          : self.cfg.w_limits               * joint_limit_penalty_arm,
@@ -349,7 +349,6 @@ class G1SafeEnv(G1BaseEnv):
             "Task Penalty / Arm_Vel"                  : self.cfg.w_joint_vel            * joint_vel_penalty_arm,
             "Task Penalty / Arm_Action_Rate"          : self.cfg.w_action_rate          * action_rate_penalty_arm,
 
-            "Task Penalty / Leg_Yank"                 : self.cfg.w_yank                 * yank_penalty_leg,
             "Task Penalty / Leg_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_leg,
             "Task Penalty / Leg_Not_Prefer_Collision" : self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_leg,
             "Task Penalty / Leg_Joint_Limit"          : self.cfg.w_limits               * joint_limit_penalty_leg,

@@ -268,10 +268,10 @@ def main():
         raise RuntimeError("Explicit state space is not defined.")
 
     # ReachAvoid requires a buffer arg; collection does not write to it.
-    ra_buffer_dummy = HindSightReplayBuffer(1, env.num_envs, device=env.device)
-    ra_buffer_dummy.init_buffer(env._unwrapped.cfg.ra_state_space)
+    ra_buffer = HindSightReplayBuffer(1, env.num_envs, device=env.device)
+    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
     ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-    ra_agent = ReachAvoid(ra_model, ra_buffer_dummy, device=env.device, cfg=ra_cfg["agent"])
+    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
 
     # Load checkpoints (both required)
     agent.load(os.path.abspath(args_cli.checkpoint))

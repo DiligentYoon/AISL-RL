@@ -7,6 +7,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.domain_randomizer import randomizer
 
 
@@ -17,7 +18,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     sim_dt = 1/200
     decimation = 4          
 
-    ## ========== Multi Agent Setting =========== ##
+    ## ========== Nominal policy Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
     observation_space = {"arm": 60, "leg": 45}                
@@ -45,42 +46,59 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_limits:             float = 10.0
     w_vel_limits:         float = 5.0
     w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 5.0e-5
-    w_joint_acc:          float = 5.0e-6
-    w_joint_vel:          float = 5.0e-3
+    w_joint_torque_limit: float = 0.0
+    w_joint_vel:          float = 5.0e-4
 
-    w_deviation_hip:        float = 0.2
+    w_deviation_hip:        float = 0.0
     w_deviation_torso:      float = 0.0
-    w_deviation_arm:        float = 1.0
-    w_action_rate:          float = 0.05
+    w_deviation_arm:        float = 0.0
+    w_action_rate:          float = 0.01
+    
     w_prefer_collision:     float = 0.001
-    w_yank:                 float = 0.01
     w_not_prefer_collision: float = 0.01
+    w_yank:                 float = 0.0
 
     w_termination: float = 300
+
+    # ===== Gait guidance ===== #
+    time_period = 0.35
+    z_c = 0.75
+
+    # Commander
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=0.0,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+        ),
+    )
+
+    ## ========== Risk-bucket reset ========== ##
+    # Sampling weights over {low, mid, high} buckets produced by collect.py.
+    # Replace the dict (do not mutate in place) to update at runtime.
+    bucket_weights: dict[str, float] = {"low": 0.33, "mid": 0.34, "high": 0.33}
 
     def __post_init__(self):
         super().__post_init__()
         self.sim.render_interval = self.decimation
-        
-        # Event
-        self.events.push_robot = None
-        self.events.reset_base = EventTerm(
-            func=randomizer.reset_root_state_orientation_biased_uniform,
-            mode="reset",
-            params={
-                "pose_range": {"roll": (-3.14/3, 3.14/3), "pitch": (-3.14/3, 3.14/3), "yaw": (-3.14, 3.14)},
-                "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-0.0, 0.0),
-                                   "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0), "yaw": (-1.0, 1.0)},
-                "bias": 3.14/6
-            }
-        )
 
-        self.events.reset_robot_joints = EventTerm(
-            func=randomizer.reset_joints_by_offset,
+        # Disable inherited reset / push events; dataset reset takes over.
+        self.events.push_robot = None
+        self.events.reset_base = None
+        self.events.reset_robot_joints = None
+
+        # Single dataset-driven reset event. dataset_dir is injected by the
+        # train script before the first env.reset().
+        self.events.reset_state_from_dataset = EventTerm(
+            func=randomizer.reset_state_from_dataset,
             mode="reset",
             params={
-                "position_range": {-0.3, 0.3},
-                "velocity_range": {-2.0, 2.0}
-            }
+                "dataset_dir": "",
+                "bucket_weights": self.bucket_weights,
+                "asset_cfg": SceneEntityCfg("robot"),
+            },
         )

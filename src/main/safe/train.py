@@ -16,10 +16,11 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-safe", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
+parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -88,6 +89,17 @@ def main():
     except ValueError as e:
         print(e)
         return
+
+    # ============================ Risk-bucket dataset ============================
+    # Pre-flight: verify all three bucket files exist before launching sim.
+    ds_dir = os.path.abspath(args_cli.dataset_dir)
+    missing = [b for b in ("low", "mid", "high")
+               if not os.path.exists(os.path.join(ds_dir, f"{b}_risk.pt"))]
+    if missing:
+        raise FileNotFoundError(
+            f"--dataset_dir is missing buckets: {missing} (looked in {ds_dir})")
+    env_cfg.events.reset_state_from_dataset.params["dataset_dir"] = ds_dir
+    print(f"[INFO] Risk-bucket dataset: {ds_dir}")
 
     # specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
