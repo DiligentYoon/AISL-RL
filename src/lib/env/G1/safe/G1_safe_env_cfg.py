@@ -49,16 +49,13 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_joint_torque_limit: float = 0.0
     w_joint_vel:          float = 5.0e-3
 
-    w_deviation_hip:        float = 0.0
-    w_deviation_torso:      float = 0.0
-    w_deviation_arm:        float = 0.001
-    w_deviation_leg:        float = 0.01
+    w_deviation_arm:        float = 0.003
+    w_deviation_leg:        float = 0.005
     w_action_rate:          float = 0.01
     
     w_max_collision:        float = 0.3
     w_prefer_collision:     float = 0.001
     w_not_prefer_collision: float = 0.01
-    w_yank:                 float = 0.0
 
     w_termination: float = 200
 

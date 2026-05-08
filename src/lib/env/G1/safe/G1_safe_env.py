@@ -27,7 +27,7 @@ class G1SafeEnv(G1BaseEnv):
                                                                               r"pelvis",
                                                                               r"waist_.*_link"])
         
-        self.collision_upper_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_hip_.*_link")
+        self.collision_upper_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_hip_(roll|yaw)_link")
         self.collision_lower_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_knee_link")
 
         self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies(r".*_shoulder_.*_link")
@@ -37,7 +37,7 @@ class G1SafeEnv(G1BaseEnv):
         self.collision_foot_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_.*_link"])
 
         # Link id
-        self.upper_leg_link_ids, _ = self._robot.find_bodies(r".*_hip_.*_link")
+        self.upper_leg_link_ids, _ = self._robot.find_bodies(r".*_hip_(roll|yaw)_link")
         self.lower_leg_link_ids, _ = self._robot.find_bodies(r".*_knee_link")
 
         self.upper_arm_link_ids, _ = self._robot.find_bodies(r".*_shoulder_.*_link")
@@ -276,16 +276,6 @@ class G1SafeEnv(G1BaseEnv):
         not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1) / num_collision_lower_leg - self.cfg.w_max_collision * max_lower_leg_collision
         prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1) / num_collision_lower_arm - self.cfg.w_max_collision * max_lower_arm_collision
         not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1) / num_collision_upper_arm - self.cfg.w_max_collision * max_upper_arm_collision
-
-        # Yank
-        # arm_yank = self.contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids] - \
-        #            self.prev_contact_force[:, self.collision_upper_arm_link_ids + self.collision_lower_arm_link_ids]
-        
-        # leg_yank = self.contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids] - \
-        #            self.prev_contact_force[:, self.collision_upper_leg_link_ids + self.collision_lower_leg_link_ids]
-        
-        # yank_penalty_arm = -torch.sum(torch.abs(arm_yank), dim=-1)
-        # yank_penalty_leg = -torch.sum(torch.abs(leg_yank), dim=-1)
 
         # Termination
         terminate_penalty = -self.reset_terminated.float()
