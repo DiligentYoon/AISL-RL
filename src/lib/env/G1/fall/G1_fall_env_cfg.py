@@ -113,6 +113,7 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         self.plotter: CapturabilityPlotter = CapturabilityPlotter
 
 
+# Initial Data Collection Environment
 @configclass
 class G1FallCollectEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
@@ -126,4 +127,25 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
             "roll": self.push_roll_end,
             "pitch": self.push_pitch_end,
         }
+
+
+# Unified Policy (Nominal Policy + RA Network + Safety Policy) Test Environment
+@configclass
+class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # visualization
+        self.viz_data = None
+        self.plotter = None
+
+        # Disturbance
+        self.events.push_robot.interval_range_s = (4.0, 5.0)
+
+        # Safe Policy info
+        self.safe_action_space = self.action_space
+        self.safe_observation_space = {"arm": 60, "leg": 45}
+        self.safe_state_space = {"arm": 97, "leg": 97}
+
+        
 

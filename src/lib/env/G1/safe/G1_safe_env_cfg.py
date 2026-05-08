@@ -24,7 +24,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     action_space = {"arm": 17, "leg": 12}                         
     observation_space = {"arm": 60, "leg": 45}                
     state_space = {"arm": 97, "leg": 97}
-    ra_state_space = 11
+    ra_state_space = 40
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}

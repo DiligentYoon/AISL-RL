@@ -1,5 +1,5 @@
 """
-Script to train a Safety Policy.
+Script to evaluate a Unified Policy Framework.
 """
 
 """Launch Isaac Sim Simulator first."""
@@ -16,11 +16,11 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-safe-play", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-fall-unified-play", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
-parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
+# parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -95,26 +95,14 @@ def main():
         log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)))
     else:
         # specify directory for logging experiments
-        log_root_path = os.path.join("logs", safe_cfg["agent"]["experiment"]["directory"])
+        log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
         log_root_path = os.path.abspath(log_root_path)
         log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
         print(f"[INFO] Loading experiment from directory: {log_root_path}")
         print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
-        if safe_cfg["agent"]["experiment"]["experiment_name"]:
-            log_dir += f"_{safe_cfg['agent']['experiment']['experiment_name']}"
+        if cfg["agent"]["experiment"]["experiment_name"]:
+            log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
         log_dir = os.path.join(log_root_path, log_dir)
-
-    # ============================ Risk-bucket dataset ============================
-    # Pre-flight: verify all three bucket files exist before launching sim.
-    ds_dir = os.path.abspath(args_cli.dataset_dir)
-    missing = [b for b in ("low", "mid", "high")
-               if not os.path.exists(os.path.join(ds_dir, f"{b}_risk.pt"))]
-    if missing:
-        raise FileNotFoundError(
-            f"--dataset_dir is missing buckets: {missing} (looked in {ds_dir})")
-    env_cfg.events.reset_state_from_dataset.params["dataset_dir"] = ds_dir
-    print(f"[INFO] Risk-bucket dataset: {ds_dir}")
-
 
     # ============================ Env & Wrapper Spawn ================================
 
@@ -298,33 +286,33 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ======================= Safe Agent ============================
-    # safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    # if multi_agent:
-    #     if safe_model_manager.model_type == "mlp":
-    #         safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
-    #                            state_space=env._unwrapped.safe_state_space,
-    #                            action_space=env._unwrapped.safe_action_space,
-    #                            possible_agents=possible_agents,
-    #                            model=safe_models,
-    #                            buffer=safe_buffers,
-    #                            device=env.device,
-    #                            cfg=safe_cfg["agent"])
-    #     elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
-    #         safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
-    #                                       state_space=env._unwrapped.safe_state_space,
-    #                                       action_space=env._unwrapped.safe_action_space,
-    #                                       possible_agents=possible_agents,
-    #                                       model=safe_models,
-    #                                       buffer=safe_buffers,
-    #                                       device=env.device,
-    #                                       cfg=safe_cfg["agent"])
-    #     else:
-    #         raise RuntimeError("Unvalid model type.")
-    # else:
-    #     agent = PPO(model=safe_models,
-    #                 buffer=safe_buffer, 
-    #                 device=env.device,
-    #                 cfg=safe_cfg["agent"])
+    safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
+    if multi_agent:
+        if safe_model_manager.model_type == "mlp":
+            safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
+                               state_space=env._unwrapped.safe_state_space,
+                               action_space=env._unwrapped.safe_action_space,
+                               possible_agents=possible_agents,
+                               model=safe_models,
+                               buffer=safe_buffers,
+                               device=env.device,
+                               cfg=safe_cfg["agent"])
+        elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
+            safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
+                                          state_space=env._unwrapped.safe_state_space,
+                                          action_space=env._unwrapped.safe_action_space,
+                                          possible_agents=possible_agents,
+                                          model=safe_models,
+                                          buffer=safe_buffers,
+                                          device=env.device,
+                                          cfg=safe_cfg["agent"])
+        else:
+            raise RuntimeError("Unvalid model type.")
+    else:
+        agent = PPO(model=safe_models,
+                    buffer=safe_buffer, 
+                    device=env.device,
+                    cfg=safe_cfg["agent"])
 
 
     # ======================= Checkpoint Load ========================
@@ -344,13 +332,13 @@ def main():
         resume_path_ra = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
     # Checkpoint (Safe Policy)
-    # if args_cli.safe_checkpoint is not None:
-    #     resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
-    #     safe_agent.load(resume_path_safe)
-    #     print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
-    # else:
-    #     resume_path_safe = None
-    #     print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
+    if args_cli.safe_checkpoint is not None:
+        resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
+        safe_agent.load(resume_path_safe)
+        print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
+    else:
+        resume_path_safe = None
+        print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
 
 
     # ======================= Evaluation ============================
@@ -365,8 +353,11 @@ def main():
 
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
-    # safe_obs = infos["safe_observations"]
+    safe_obs = infos["safe_observations"]
     timestep = 0
+
+    prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    switch_threshold = ra_cfg["collection"]["thresholds"]["mid_high"]
     
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
@@ -375,19 +366,24 @@ def main():
         t1_loop = time.time()
         with torch.no_grad():
             # agent stepping
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            # RA_value, _, _ = ra_agent.critic(infos["ra_states"])
-            # safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
+            nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
+            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # action processing by RA Value function
-            # actions = torch.where(RA_value > 0.1, safe_actions, nominal_actions)
+            cur_switch = RA_value.reshape(-1) > switch_threshold
+
+            switch = torch.logical_or(cur_switch, prev_switch)
+            actions = torch.where(switch, safe_actions, nominal_actions)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
+        
+        # Check terminated
+        done = terminated[0] | truncated[0]
 
         # Plot Phase
         if plot is not None:
-            done = terminated[0] | truncated[0]
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
         # Video update
@@ -399,7 +395,11 @@ def main():
         obs = next_obs
         states = next_states
         infos = next_infos
-        # safe_obs = infos["safe_observations"]
+        safe_obs = infos["safe_observations"]
+        if done:
+            prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+        else:
+            prev_switch = switch
 
     # close the simulator
     env.close()
