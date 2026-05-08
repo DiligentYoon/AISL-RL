@@ -76,6 +76,7 @@ def extract_physical_snapshot(info) -> dict[str, torch.Tensor]:
         "root_ang_vel_w":    info["root_ang_vel_w"],
         "joint_pos":         info["joint_pos"],
         "joint_vel":         info["joint_vel"],
+        "prev_action":       info["prev_action"],
     }
 
 
@@ -315,7 +316,7 @@ def main():
 
         valid_mask = build_valid_mask(skip_remaining, terminated,
                                       stride_counter, subsample_stride)
-        risk_buffer.add(snapshot=snapshot, risk_scores=risk_scores, prev_actions=actions, valid_mask=valid_mask)
+        risk_buffer.add(snapshot=snapshot, risk_scores=risk_scores, valid_mask=valid_mask)
 
         update_counters(skip_remaining, stride_counter,
                         done=(terminated | truncated),

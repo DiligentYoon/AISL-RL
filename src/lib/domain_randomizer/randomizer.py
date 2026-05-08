@@ -1743,6 +1743,7 @@ class reset_state_from_dataset(ManagerTermBase):
         "root_pos_offset_w", "root_quat_w",
         "root_lin_vel_w", "root_ang_vel_w",
         "joint_pos", "joint_vel",
+        "prev_action",
     )
 
     def __init__(self, cfg: EventTermCfg, env: Env):
@@ -1761,6 +1762,15 @@ class reset_state_from_dataset(ManagerTermBase):
         self._cached_weights_id: int | None = None
         self._valid_buckets: list[str] = []
         self._bucket_probs: torch.Tensor | None = None
+
+        # Staging tensor for prev_action — shared with env via setattr below.
+        # Filled on each __call__; env reads it in its _reset_idx.
+        num_envs = env.scene.num_envs
+        self.last_prev_action = torch.zeros(
+            (num_envs, self.asset.num_joints),
+            dtype=torch.float32, device=self._device,
+        )
+        setattr(env, "_dataset_reset_prev_action", self.last_prev_action)
 
     def _load_dataset(self, dataset_dir: str) -> None:
         for b in self.BUCKETS:
@@ -1831,6 +1841,7 @@ class reset_state_from_dataset(ManagerTermBase):
         root_ang_vel    = torch.empty((n, 3), device=device)
         joint_pos       = torch.empty((n, J), device=device)
         joint_vel       = torch.empty((n, J), device=device)
+        prev_action     = torch.empty((n, J), device=device)
 
         for k, bname in enumerate(self._valid_buckets):
             mask = (bucket_idx == k)
@@ -1846,6 +1857,7 @@ class reset_state_from_dataset(ManagerTermBase):
             root_ang_vel[mask]    = store["root_ang_vel_w"][row]
             joint_pos[mask]       = store["joint_pos"][row]
             joint_vel[mask]       = store["joint_vel"][row]
+            prev_action[mask]     = store["prev_action"][row]
 
         root_pos = env.scene.env_origins[env_ids] + root_pos_offset
 
@@ -1855,6 +1867,9 @@ class reset_state_from_dataset(ManagerTermBase):
             torch.cat([root_lin_vel, root_ang_vel], dim=-1), env_ids=env_ids)
         self.asset.write_joint_state_to_sim(
             joint_pos, joint_vel, env_ids=env_ids)
+
+        # Stage prev_action for env._reset_idx to consume (env-side state, not sim).
+        self.last_prev_action[env_ids] = prev_action
 
 
 def reset_nodal_state_uniform(
