@@ -145,6 +145,6 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
         self.events.push_robot.params["velocity_range"] = {
             "x": (-1.0, 1.0),
             "y": (-1.0, 1.0),
-            "roll": (-3.0, 3.0),
-            "pitch": (-3.0, 3.0)
+            "roll": (-4.0, 4.0),
+            "pitch": (-4.0, 4.0)
         }

@@ -387,7 +387,7 @@ def main():
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
         # Video update
-        if args_cli.video and timestep == args_cli.video_length:
+        if timestep == args_cli.video_length:
             # exit the play loop after recording one video
             break
 
