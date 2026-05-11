@@ -62,8 +62,6 @@ class G1RecoveryEnv(G1BaseEnv):
         if self.cfg.num_agents > 1:
             self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
             self.cfg.action_scale_factor["leg"][1] = self.total_leg_joint_ids
-        else:
-            self.cfg.action_scale_factor = 1.0
 
         # Intermediate values
         self.root_pos_w         = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
@@ -272,7 +270,6 @@ class G1RecoveryEnv(G1BaseEnv):
             total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             observations = torch.cat(
                 [
-                    self.root_pos_w[:, 2:3],                            # [E, 1]
                     self.root_lin_vel_b,                                # [E, 3]
                     self.root_ang_vel_b,                                # [E, 3]
                     self.projected_gravity,                             # [E, 3]
@@ -281,6 +278,7 @@ class G1RecoveryEnv(G1BaseEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
+                    self.prev_actions,                                  # [E, 29]
                 ], dim=-1) 
 
         return observations
