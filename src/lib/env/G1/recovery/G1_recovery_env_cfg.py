@@ -19,19 +19,19 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     decimation = 4         
 
     ## ========== Multi Agent Setting =========== ##
-    # possible_agents = ["arm", "leg"]
-    # action_space = {"arm": 17, "leg": 12}                         
-    # observation_space = {"arm": 65, "leg": 50}                
-    # state_space = {"arm": 102, "leg": 102}
-    # num_agents = 2
-    # action_scale_factor = {"arm": [0.5, ()], 
-    #                        "leg": [0.5, ()]}
+    possible_agents = ["arm", "leg"]
+    action_space = {"arm": 17, "leg": 12}                         
+    observation_space = {"arm": 65, "leg": 50}                
+    state_space = {"arm": 102, "leg": 102}
+    num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    action_space = 29                     
-    observation_space = 101                 
-    num_agents = 1
-    action_scale_factor = 0.5
+    # action_space = 29                     
+    # observation_space = 101                 
+    # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_track_lin_vel: float = 4.0
@@ -143,8 +143,8 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
             "right_shoulder_joint_pos": 0.0,}
 
         self.events.push_robot.params["velocity_range"] = {
-            "x": (-1.0, 1.0),
-            "y": (-1.0, 1.0),
+            "x": (-0.5, 0.5),
+            "y": (-0.5, 0.5),
             "roll": (-4.0, 4.0),
             "pitch": (-4.0, 4.0)
         }
