@@ -11,7 +11,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers
 
-from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
+from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, matrix_from_quat
 
 from lib.domain_randomizer.commander import UniformNonHolonomicCommand, UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
@@ -579,6 +579,54 @@ class G1RecoveryEnv(G1BaseEnv):
         self.deviation_swing[i]      = self.joint_pos[i][:, self.swing_joint_ids] - self._robot.data.default_joint_pos[i][:, self.swing_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
+    
+
+    def _update_viz_data(self):
+        H_z_b = self.compute_body_angular_momentum()
+        shoulder_joint_pos = self.joint_pos[:, self.swing_joint_ids]
+
+        extras = copy.deepcopy(self.extras)
+        extras["viz_data"]["body_angular_momentum"] = H_z_b
+        extras["viz_data"]["left_shoulder_joint_pos"] = shoulder_joint_pos[:, 0]
+        extras["viz_data"]["right_shoulder_joint_pos"] = shoulder_joint_pos[:, 1]
+
+        return extras
+
+    def compute_body_angular_momentum(self):
+        p_i_w = self._robot.data.body_com_pos_w          # body COM position
+        v_i_w = self._robot.data.body_com_lin_vel_w      # body COM linear velocity
+        w_i_w = self._robot.data.body_com_ang_vel_w      # body angular velocity
+
+        m_i = self._robot.data.default_mass.to(self.device)
+        I_i_local = self._robot.data.default_inertia.reshape(*self._robot.data.default_inertia.shape[:2], 3, 3).to(self.device)
+
+        total_mass = torch.sum(m_i, dim=1, keepdim=True) # (N, 1)
+
+        p_G_w = torch.sum(m_i[..., None] * p_i_w, dim=1) / total_mass  # (N, 3)
+        v_G_w = torch.sum(m_i[..., None] * v_i_w, dim=1) / total_mass  # (N, 3)
+
+        R_i_w = matrix_from_quat(self._robot.data.body_link_quat_w)  # (N, B, 3, 3)
+
+        I_i_w = R_i_w @ I_i_local @ R_i_w.transpose(-1, -2)
+
+        H_spin_w = torch.matmul(I_i_w, w_i_w.unsqueeze(-1)).squeeze(-1)  # (N, B, 3)
+
+        r_i_G_w = p_i_w - p_G_w[:, None, :]       # (N, B, 3)
+        v_i_G_w = v_i_w - v_G_w[:, None, :]       # optional but recommended
+
+        H_orb_w = torch.cross(
+            r_i_G_w,
+            m_i[..., None] * v_i_G_w,
+            dim=-1)  # (N, B, 3)
+        
+        H_G_w = torch.sum(H_spin_w + H_orb_w, dim=1)  # (N, 3)
+        R_base_w = matrix_from_quat(self._robot.data.root_link_quat_w)  # (N, 3, 3)
+        base_z_w = R_base_w[:, :, 2] # (N, 3)
+
+        H_yaw_base = torch.sum(H_G_w * base_z_w, dim=-1) # (N,)
+
+        return H_yaw_base
+
 
 @torch.jit.script
 def wrap_to_pi(angles):

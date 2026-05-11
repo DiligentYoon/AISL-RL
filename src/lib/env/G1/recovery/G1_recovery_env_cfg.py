@@ -4,13 +4,12 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.utils.plot_utils import PNGSavePlotter
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -136,4 +135,16 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
 
         self.scene.num_envs = 1
 
-        # self.events.push_robot = None
+        self.plotter = PNGSavePlotter
+
+        self.viz_data = {
+            "body_angular_momentum": 0.0,
+            "left_shoulder_joint_pos": 0.0,
+            "right_shoulder_joint_pos": 0.0,}
+
+        self.events.push_robot.params["velocity_range"] = {
+            "x": (-1.0, 1.0),
+            "y": (-1.0, 1.0),
+            "roll": (-3.0, 3.0),
+            "pitch": (-3.0, 3.0)
+        }
