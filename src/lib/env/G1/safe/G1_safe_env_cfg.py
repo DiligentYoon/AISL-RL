@@ -35,8 +35,8 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     safe_state_space = {"arm": 68, "leg": 68}
 
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
+    # action_space = 29                     
+    # observation_space = 68                  
     # state_space = 0
     # num_agents = 1
     # action_scale_factor = 0.5

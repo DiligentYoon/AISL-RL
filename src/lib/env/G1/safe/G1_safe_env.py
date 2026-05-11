@@ -32,7 +32,7 @@ class G1SafeEnv(G1BaseEnv):
 
         self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies(r".*_shoulder_.*_link")
         self.collision_lower_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_elbow_link",
-                                                                                 r".*_wrist_(roll|pitch)_link"])
+                                                                                 r".*_wrist_(roll|pitch|yaw)_link"])
         
         self.collision_foot_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_.*_link"])
 
@@ -42,7 +42,7 @@ class G1SafeEnv(G1BaseEnv):
 
         self.upper_arm_link_ids, _ = self._robot.find_bodies(r".*_shoulder_.*_link")
         self.lower_arm_link_ids, _ = self._robot.find_bodies([r".*_elbow_link",
-                                                              r".*_wrist_(roll|pitch)_link"])
+                                                              r".*_wrist_(roll|pitch|yaw)_link"])
         
         self.foot_link_ids, _ = self._robot.find_bodies([r".*_ankle_.*_link"])
 
