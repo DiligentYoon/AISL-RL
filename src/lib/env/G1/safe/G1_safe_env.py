@@ -428,3 +428,15 @@ class G1SafeEnv(G1BaseEnv):
         self.deviation_arms[i]       = self.joint_pos[i][:, self.total_arm_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_arm_joint_ids]
         self.deviation_legs[i]       = self.joint_pos[i][:, self.total_leg_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_leg_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
+    
+    def _update_viz_data(self):
+        mean_joint_deviation = torch.mean(torch.cat([self.deviation_arms, self.deviation_legs], dim=-1), dim=-1) # [E,]
+        max_torque = torch.max(torch.abs(self._robot.data.applied_torque), dim=-1) # [E,]
+        max_contact_force = torch.max(self.contact_force, dim=-1) # [E,]
+        
+        extras = self.extras.copy()
+        extras["max_torque"] = max_torque
+        extras["max_contact_force"] = max_contact_force
+        extras["mean_joint_deviation"] = mean_joint_deviation
+
+        return extras

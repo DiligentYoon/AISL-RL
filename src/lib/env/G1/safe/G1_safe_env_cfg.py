@@ -10,6 +10,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.domain_randomizer import randomizer
+from lib.utils.plot_utils import PNGSavePlotter
 
 
 @configclass
@@ -117,3 +118,12 @@ class G1SafePlayEnvCfg(G1SafeEnvCfg):
         )
 
         self.scene.num_envs = 1
+
+        # plotter
+        self.plotter = PNGSavePlotter
+
+        self.viz_data = {
+            "max_torque": 0.0,
+            "max_contact_force": 0.0,
+            "mean_joint_deviation": 0.0,
+        }
