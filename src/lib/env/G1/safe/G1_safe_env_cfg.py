@@ -30,17 +30,18 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
     
+    ## ========== Single Agent Setting ========== ##  
+    # action_space = 29                     
+    # observation_space = 96   
+    # ra_state_space = 40               
+    # num_agents = 1
+    # action_scale_factor = 0.5
+
     ## ========== Safety policy setting ========== ##
     safe_action_space = action_space
     safe_observation_space = {"arm": 44, "leg": 34}
     safe_state_space = {"arm": 68, "leg": 68}
 
-    ## ========== Single Agent Setting ========== ##  
-    # action_space = 29                     
-    # observation_space = 68                  
-    # state_space = 0
-    # num_agents = 1
-    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_limits:             float = 10.0

@@ -25,13 +25,13 @@ class G1SafeEnv(G1BaseEnv):
         # Collision link id
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
-                                                                              r"waist_.*_link"])
+                                                                              r"waist_.*_link",
+                                                                              r".*_wrist_yaw_link"])
         
         self.collision_upper_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_hip_(roll|pitch|yaw)_link")
         self.collision_lower_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_knee_link")
 
-        self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_shoulder_.*_link",
-                                                                                 r".*_wrist_yaw_link"])
+        self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_shoulder_.*_link"])
         self.collision_lower_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_elbow_link",
                                                                                  r".*_wrist_(roll|pitch)_link"])
         
@@ -40,13 +40,13 @@ class G1SafeEnv(G1BaseEnv):
         # Link id
         self.denied_link_ids, _ = self._robot.find_bodies([r"torso_link",
                                                            r"pelvis",
-                                                           r"waist_.*_link"])
+                                                           r"waist_.*_link",
+                                                           r".*_wrist_yaw_link"])
 
         self.upper_leg_link_ids, _ = self._robot.find_bodies(r".*_hip_(roll|pitch|yaw)_link")
         self.lower_leg_link_ids, _ = self._robot.find_bodies(r".*_knee_link")
 
-        self.upper_arm_link_ids, _ = self._robot.find_bodies([r".*_shoulder_.*_link",
-                                                              r".*_wrist_yaw_link"])
+        self.upper_arm_link_ids, _ = self._robot.find_bodies([r".*_shoulder_.*_link"])
         self.lower_arm_link_ids, _ = self._robot.find_bodies([r".*_elbow_link",
                                                               r".*_wrist_(roll|pitch)_link"])
         

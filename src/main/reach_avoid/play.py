@@ -339,7 +339,7 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            risk_value, _, _ = pred_agent.critic(infos["ra_states"]).float()
+            risk_value, _, _ = pred_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
@@ -348,7 +348,7 @@ def main():
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            risk_value = risk_value.squeeze(-1)
+            risk_value = risk_value.float().squeeze(-1)
             infos["viz_data"]["risk_value"] = risk_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
