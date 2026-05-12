@@ -16,9 +16,15 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-fall-play", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="", help="Path to model checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default="", help="Path to Reach-Avoid model checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
+
+parser.add_argument("--predictor",
+                    type=str,
+                    default="ra",
+                    choices=["ra", "safefall"],
+                    help="Fall predictor type to train.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -88,21 +94,31 @@ def main():
 
     # specify directory for logging experiments (load checkpoint)
     if args_cli.checkpoint is not None:
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)), "Reach_Avoid")
+        base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
+        if args_cli.predictor == "ra":
+            log_dir = os.path.join(base_dir, "Reach_Avoid")
+        elif args_cli.predictor == "safefall":
+            log_dir = os.path.join(base_dir, "Safe_Fall")
+        else:
+            raise ValueError(f"Unknown predictor: {args_cli.predictor}")
     else:
         raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
 
     # ============================ Env & Wrapper Spawn ================================
 
+    # Predictor selection
+    predictor = args_cli.predictor
+    pred_cfg = ra_cfg[predictor if predictor == "ra" else "safe_fall"]
+
     # Create isaac environment
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
         cfg["agent"]["seed"] = args_cli.seed
-        ra_cfg["agent"]["seed"] = args_cli.seed
+        pred_cfg["agent"]["seed"] = args_cli.seed
     else:
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-        ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+        pred_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -238,33 +254,68 @@ def main():
                     cfg=cfg["agent"])
         
 
-    # ============= RA Buffer and Model Spawn ===============
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
-    from lib.model.MLP import RA_Critic
-    if not hasattr(env._unwrapped.cfg, "ra_state_space"):
-        raise RuntimeError("Explicit state space is not defined.")
-    ra_buffer =  HindSightReplayBuffer(ra_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
-    ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+    # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
+    if predictor == "ra":
+        from lib.buffer.replaybuffer import HindSightReplayBuffer
+        from lib.model.MLP import RA_Critic
+        from lib.agent.reach_avoid import ReachAvoid
 
-    # ==================== RA Agent Spawn ===================
-    from lib.agent.reach_avoid import ReachAvoid
-    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
+        if not hasattr(env._unwrapped.cfg, "ra_state_space"):
+            raise RuntimeError("Explicit state space is not defined.")
+
+        pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+                                            env.num_envs, device=env.device)
+        pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+        pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+        pred_agent = ReachAvoid(pred_model, pred_buffer,
+                                device=env.device, cfg=pred_cfg["agent"])
+
+    elif predictor == "safefall":
+        from lib.buffer.recurrent_replay import RecurrentReplayBuffer
+        from lib.model.Baselines.SafeFall.safe_fall import GRU
+        from lib.agent.Baselines.safe_fall import SafeFall
+
+        if not hasattr(env._unwrapped.cfg, "safe_fall_obs_dim"):
+            raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
+
+        obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
+        max_ep_steps = int(env._unwrapped.max_episode_length)
+
+        pred_buffer = RecurrentReplayBuffer(
+            buffer_size=pred_cfg["buffer"]["buffer_size"],
+            num_envs=env.num_envs,
+            device=env.device,
+            seq_len=pred_cfg["buffer"]["seq_len"],
+            fall_lead_seconds=pred_cfg["buffer"]["fall_lead_seconds"],
+            step_dt=dt,
+            max_episode_steps=max_ep_steps,
+        )
+        pred_buffer.init_buffer(obs_dim)
+        # Model dict key is unified as "critic" with RA so that Agent.load() dispatch
+        # and checkpoint_modules indexing are predictor-agnostic.
+        pred_model = {"critic": GRU(obs_dim=obs_dim,
+                                    hidden_dim=pred_cfg["model"]["hidden_dim"],
+                                    num_layers=pred_cfg["model"].get("num_layers", 1),
+                                    dropout=pred_cfg["model"].get("dropout", 0.0),)}
+        pred_agent = SafeFall(pred_model, pred_buffer,
+                              device=env.device, cfg=pred_cfg["agent"])
+
+    else:
+        raise ValueError(f"Unknown predictor: {predictor}")
     
     # Checkpoint (Policy)
     resume_path = os.path.abspath(args_cli.checkpoint)
     agent.load(resume_path)
     print(f"[INFO] Get checkpoint of policy from {resume_path}")
-    # Checkpoint (RA value)
-    if args_cli.ra_checkpoint is not None:
-        resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
-        ra_agent.load(resume_path_ra)
-        print(f"[INFO] Get checkpoint RA Value from {resume_path_ra}")
+
+    # Checkpoint (Predictor)
+    if args_cli.predictor_checkpoint is not None:
+        resume_path_pred = os.path.abspath(args_cli.predictor_checkpoint)
+        pred_agent.load(resume_path_pred)
+        print(f"[INFO] Get predictor checkpoint ({predictor}) from {resume_path_pred}")
     else:
-        resume_path_ra = None
-        print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
-
-
+        resume_path_pred = None
+        print(f"[INFO] No pre-trained predictor ({predictor}) checkpoint found.")
 
     # ======================= Evaluation ============================
     
@@ -288,7 +339,7 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
+            risk_value, _, _ = pred_agent.critic(infos["ra_states"]).float()
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
@@ -297,9 +348,8 @@ def main():
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            RA_value = RA_value.squeeze(-1)
-            infos["viz_data"]["RA_value"] = RA_value
-            infos["viz_data"]["m_step_hist"] = RA_value
+            risk_value = risk_value.squeeze(-1)
+            infos["viz_data"]["risk_value"] = risk_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
         # Video update

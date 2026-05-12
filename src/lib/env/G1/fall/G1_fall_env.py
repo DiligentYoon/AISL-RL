@@ -36,7 +36,7 @@ class G1FallEnv(G1RecoveryEnv):
                                               self.phase.unsqueeze(-1),                           # [E, 1]
                                               self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
                                             ], dim=-1)
-        
+
         base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
 
@@ -44,7 +44,16 @@ class G1FallEnv(G1RecoveryEnv):
         self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
         # self.extras["g_values"] = 2 * is_fall - 1
 
-        return states 
+        # SafeFall baseline observation (gravity_xy, root_ang_vel, joint_pos, joint_vel)
+        total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
+        self.extras["safe_fall_obs"] = torch.cat([
+            self.projected_gravity[:, :2],          # [E, 2]
+            self.root_ang_vel_b,                    # [E, 3]
+            self.joint_pos[:, total_joint_ids],     # [E, 29]
+            self.joint_vel[:, total_joint_ids],     # [E, 29]
+        ], dim=-1)                                  # [E, 63]
+
+        return states
 
     # Overriding to add new fall termination condition
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -117,7 +126,6 @@ class G1FallEnv(G1RecoveryEnv):
         extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
         extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
         extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
-        extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
         extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
 
         return extras

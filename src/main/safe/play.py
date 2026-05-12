@@ -260,73 +260,6 @@ def main():
     from lib.agent.reach_avoid import ReachAvoid
     ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
 
-    # =============== Safe Policy Buffer and Model Spawn ===============
-    if safe_cfg["buffer"]["buffer_size"] == -1:
-        safe_cfg["buffer"]["buffer_size"] = safe_cfg["agent"]["rollouts"]
-    else:
-        raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
-    safe_obs_size = {}
-    safe_state_size = {}
-    safe_act_size = {}
-    safe_buffers = {}
-    possible_agents = env._unwrapped.cfg.possible_agents
-    for uid in possible_agents:
-        observation_space = env._unwrapped.cfg.safe_observation_space[uid]
-        action_space = env._unwrapped.cfg.safe_action_space[uid]
-        state_space = env._unwrapped.cfg.safe_state_space[uid]
-        safe_cfg["agent"]["async_actor_critic"] = True
-
-        safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-        safe_buffer.init_buffer(observation_space, state_space, action_space)
-        safe_buffers[uid] = safe_buffer
-        safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
-        safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
-        safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
-
-    # Overwrite cfg by cli argument
-    if model is not None:
-        cfg["models"]["model_type"] = model
-    safe_cfg["models"]["multi_agent"] = multi_agent
-
-    safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
-    if safe_model_manager.model_class == "mlp":
-        safe_models = safe_model_manager.generate_mlp_models(observation_size=safe_obs_size,
-                                                             state_size=safe_state_size,
-                                                             action_size=safe_act_size,
-                                                             possible_agents=possible_agents)
-    else:
-        raise RuntimeError("Not supported class")
-
-    # ======================= Safe Agent ============================
-    # safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    # if multi_agent:
-    #     if safe_model_manager.model_type == "mlp":
-    #         safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
-    #                            state_space=env._unwrapped.safe_state_space,
-    #                            action_space=env._unwrapped.safe_action_space,
-    #                            possible_agents=possible_agents,
-    #                            model=safe_models,
-    #                            buffer=safe_buffers,
-    #                            device=env.device,
-    #                            cfg=safe_cfg["agent"])
-    #     elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
-    #         safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
-    #                                       state_space=env._unwrapped.safe_state_space,
-    #                                       action_space=env._unwrapped.safe_action_space,
-    #                                       possible_agents=possible_agents,
-    #                                       model=safe_models,
-    #                                       buffer=safe_buffers,
-    #                                       device=env.device,
-    #                                       cfg=safe_cfg["agent"])
-    #     else:
-    #         raise RuntimeError("Unvalid model type.")
-    # else:
-    #     agent = PPO(model=safe_models,
-    #                 buffer=safe_buffer, 
-    #                 device=env.device,
-    #                 cfg=safe_cfg["agent"])
-
-
     # ======================= Checkpoint Load ========================
     # Checkpoint (Policy)
     if args_cli.checkpoint is not None:
@@ -343,15 +276,6 @@ def main():
     else:
         resume_path_ra = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
-    # Checkpoint (Safe Policy)
-    # if args_cli.safe_checkpoint is not None:
-    #     resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
-    #     safe_agent.load(resume_path_safe)
-    #     print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
-    # else:
-    #     resume_path_safe = None
-    #     print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
-
 
     # ======================= Evaluation ============================
     # Reset environment
@@ -376,10 +300,6 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            # RA_value, _, _ = ra_agent.critic(infos["ra_states"])
-            # safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
-            # action processing by RA Value function
-            # actions = torch.where(RA_value > 0.1, safe_actions, nominal_actions)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number

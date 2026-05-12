@@ -67,19 +67,23 @@ class ReachAvoid(Agent):
         
 
     def insert_data(self,
-                    states: torch.Tensor,
-                    next_states: torch.Tensor,
-                    l_values: torch.Tensor,
-                    g_values: torch.Tensor,
-                    truncated: torch.Tensor,
-                    terminated: torch.Tensor) -> None:
+                    infos: Dict[str, torch.Tensor],
+                    next_infos: Dict[str, torch.Tensor],
+                    terminated: torch.Tensor,
+                    truncated: torch.Tensor) -> None:
         """
         Store one transition for RA value learning.
 
-        Expected:
-            infos["l_values"] : l(s)
-            infos["g_values"] : g(s)
+        Expected keys in infos / next_infos:
+            "ra_states" : RA state vector s
+            "l_values"  : l(s)
+            "g_values"  : g(s)
         """
+        states = infos["ra_states"]
+        next_states = next_infos["ra_states"]
+        l_values = infos["l_values"]
+        g_values = infos["g_values"]
+
         # shape normalize: (N,) -> (N, 1)
         if l_values.ndim == 1:
             l_values = l_values.unsqueeze(-1)

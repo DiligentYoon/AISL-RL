@@ -349,7 +349,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         "capture_region_center",
         "capture_region_radius",
         "time_hist",
-        "m_step_hist",
+        "risk_value",
         "icp_ankle_dist_hist",
     )
 
@@ -516,7 +516,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         center0 = np.asarray(self._val("capture_region_center", 0), dtype=float).reshape(2,)
         radius0 = float(self._val("capture_region_radius", 0))
         time0 = float(self._val("time_hist", 0))
-        mstep0 = float(self._val("m_step_hist", 0))
+        risk0 = float(self._val("risk_value", 0))
         dist0 = float(self._val("icp_ankle_dist_hist", 0))
 
         self.COM_traj_ani.set_data([], [])
@@ -527,9 +527,9 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.ICP_pos_ani.set_data([icp_pos0[0]], [icp_pos0[1]])
         self.capture_region_ani.update(center=center0, radius=radius0)
         self.m_step_line_ani.set_data([], [])
-        self.m_step_curr_ani.set_data([time0], [mstep0])
+        self.m_step_curr_ani.set_data([time0], [risk0])
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (com_pos0[0], com_pos0[1], dist0, radius0, mstep0)
+            self.COM_pos_str % (com_pos0[0], com_pos0[1], dist0, radius0, risk0)
         )
 
         return [
@@ -559,7 +559,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         center = np.asarray(self._val("capture_region_center", i), dtype=float).reshape(2,)
         radius = float(self._val("capture_region_radius", i))
         t_now = float(self._val("time_hist", i))
-        m_step_now = float(self._val("m_step_hist", i))
+        risk_now = float(self._val("risk_value", i))
         dist_now = float(self._val("icp_ankle_dist_hist", i))
 
         self.COM_traj_ani.set_data(com_hist[:, 0], com_hist[:, 1])
@@ -571,7 +571,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.capture_region_ani.update(center=center, radius=radius)
 
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (com_pos[0], com_pos[1], dist_now, radius, m_step_now)
+            self.COM_pos_str % (com_pos[0], com_pos[1], dist_now, radius, risk_now)
         )
 
         if self.bx_follow_com:
@@ -580,18 +580,18 @@ class CapturabilityPlotter(GIFSavePlotter):
             self.bx.set_ylim(self.bx_follow_yspan[0] + cy, self.bx_follow_yspan[1] + cy)
 
         time_hist = np.asarray(self.buffer["time_hist"][ep_start:i + 1], dtype=float)
-        m_step_hist = np.asarray(self.buffer["m_step_hist"][ep_start:i + 1], dtype=float)
+        risk_value = np.asarray(self.buffer["risk_value"][ep_start:i + 1], dtype=float)
 
-        self.m_step_line_ani.set_data(time_hist, m_step_hist)
-        self.m_step_curr_ani.set_data([t_now], [m_step_now])
+        self.m_step_line_ani.set_data(time_hist, risk_value)
+        self.m_step_curr_ani.set_data([t_now], [risk_now])
 
         self.mx.set_xlim(
             max(0.0, t_now - self.mx_follow_window),
             max(self.mx_initial_xlim[1], t_now + self.mx_future_margin),
         )
 
-        y_min = float(np.min(m_step_hist))
-        y_max = float(np.max(m_step_hist))
+        y_min = float(np.min(risk_value))
+        y_max = float(np.max(risk_value))
         pad = max(0.05, 0.1 * (y_max - y_min + 1e-6))
         self.mx.set_ylim(y_min - pad, y_max + pad)
 

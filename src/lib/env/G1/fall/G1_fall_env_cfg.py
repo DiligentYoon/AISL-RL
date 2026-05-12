@@ -18,6 +18,9 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     ra_state_space = 40
     body_hist_length = 4
 
+    # === SafeFall baseline config === #
+    safe_fall_obs_dim = 63
+
     # === RA Setting === #
     l_max = 1.0
     target_set_threshold = 0.1
@@ -103,8 +106,7 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
             "capture_region_center": 0,    # (2,)
             "capture_region_radius": 0,    # scalar
             "time_hist": 0,                # scalar
-            "RA_value": 0,                 # scalar
-            "m_step_hist": 0,              # scalar
+            "risk_value": 0,               # scalar
             "icp_ankle_dist_hist": 0,      # scalar
         }
 

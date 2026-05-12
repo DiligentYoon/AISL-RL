@@ -18,9 +18,15 @@ parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable 
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall-unified-play", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
 parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
 # parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
+
+parser.add_argument("--predictor",
+                    type=str,
+                    default="ra",
+                    choices=["ra", "safefall"],
+                    help="Fall predictor type to train.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -106,16 +112,20 @@ def main():
 
     # ============================ Env & Wrapper Spawn ================================
 
+    # Predictor selection
+    predictor = args_cli.predictor
+    pred_cfg = ra_cfg[predictor if predictor == "ra" else "safe_fall"]
+
     # Create isaac environment
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
         cfg["agent"]["seed"] = args_cli.seed
-        ra_cfg["agent"]["seed"] = args_cli.seed
+        pred_cfg["agent"]["seed"] = args_cli.seed
         safe_cfg["agent"]["seed"] = args_cli.seed
     else:
         env_cfg.seed = cfg.get("seed", 42)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-        ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+        pred_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         safe_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -131,6 +141,12 @@ def main():
         }
         print("[INFO] Recording videos during training.")
         env = RecordVideo(env, **video_kwargs)
+
+    # Get environment (step) dt for real-time evaluation
+    try:
+        dt = env.step_dt
+    except AttributeError:
+        dt = env.unwrapped.step_dt
 
     # Wrap around environment
     env = IsaacLabWrapper(env)  
@@ -235,18 +251,54 @@ def main():
                     cfg=cfg["agent"])
         
 
-    # ============= RA Buffer and Model Spawn ===============
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
-    from lib.model.MLP import RA_Critic
-    if not hasattr(env._unwrapped.cfg, "ra_state_space"):
-        raise RuntimeError("Explicit state space is not defined.")
-    ra_buffer =  HindSightReplayBuffer(ra_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
-    ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+    # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
+    if predictor == "ra":
+        from lib.buffer.replaybuffer import HindSightReplayBuffer
+        from lib.model.MLP import RA_Critic
+        from lib.agent.reach_avoid import ReachAvoid
 
-    # ==================== RA Agent Spawn ===================
-    from lib.agent.reach_avoid import ReachAvoid
-    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
+        if not hasattr(env._unwrapped.cfg, "ra_state_space"):
+            raise RuntimeError("Explicit state space is not defined.")
+
+        pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+                                            env.num_envs, device=env.device)
+        pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+        pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+        pred_agent = ReachAvoid(pred_model, pred_buffer,
+                                device=env.device, cfg=pred_cfg["agent"])
+
+    elif predictor == "safefall":
+        from lib.buffer.recurrent_replay import RecurrentReplayBuffer
+        from lib.model.Baselines.SafeFall.safe_fall import GRU
+        from lib.agent.Baselines.safe_fall import SafeFall
+
+        if not hasattr(env._unwrapped.cfg, "safe_fall_obs_dim"):
+            raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
+
+        obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
+        max_ep_steps = int(env._unwrapped.max_episode_length)
+
+        pred_buffer = RecurrentReplayBuffer(
+            buffer_size=pred_cfg["buffer"]["buffer_size"],
+            num_envs=env.num_envs,
+            device=env.device,
+            seq_len=pred_cfg["buffer"]["seq_len"],
+            fall_lead_seconds=pred_cfg["buffer"]["fall_lead_seconds"],
+            step_dt=dt,
+            max_episode_steps=max_ep_steps,
+        )
+        pred_buffer.init_buffer(obs_dim)
+        # Model dict key is unified as "critic" with RA so that Agent.load() dispatch
+        # and checkpoint_modules indexing are predictor-agnostic.
+        pred_model = {"critic": GRU(obs_dim=obs_dim,
+                                    hidden_dim=pred_cfg["model"]["hidden_dim"],
+                                    num_layers=pred_cfg["model"].get("num_layers", 1),
+                                    dropout=pred_cfg["model"].get("dropout", 0.0),)}
+        pred_agent = SafeFall(pred_model, pred_buffer,
+                              device=env.device, cfg=pred_cfg["agent"])
+
+    else:
+        raise ValueError(f"Unknown predictor: {predictor}")
 
     # =============== Safe Policy Buffer and Model Spawn ===============
     if safe_cfg["buffer"]["buffer_size"] == -1:
@@ -323,13 +375,13 @@ def main():
         print(f"[INFO] Get checkpoint of policy from {resume_path}.")
     else:
         print(f"[INFO] Unfortunately a pre-trained Policy is not found for this task.")
-    # Checkpoint (RA value)
-    if args_cli.ra_checkpoint is not None:
-        resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
-        ra_agent.load(resume_path_ra)
-        print(f"[INFO] Get checkpoint RA Value from {resume_path_ra}.")
+    # Checkpoint (Predictor)
+    if args_cli.predictor_checkpoint is not None:
+        resume_path_pred = os.path.abspath(args_cli.predictor_checkpoint)
+        pred_agent.load(resume_path_pred)
+        print(f"[INFO] Get checkpoint RA Value from {resume_path_pred}.")
     else:
-        resume_path_ra = None
+        resume_path_pred = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
     # Checkpoint (Safe Policy)
     if args_cli.safe_checkpoint is not None:
@@ -368,9 +420,9 @@ def main():
             # agent stepping
             nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
-            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
+            risk_value, _, _ = pred_agent.critic(infos["ra_states"]).float()
             # action processing by RA Value function
-            cur_switch = RA_value.reshape(-1) > switch_threshold
+            cur_switch = risk_value.reshape(-1) > switch_threshold
 
             switch = torch.logical_or(cur_switch, prev_switch)
             actions = torch.where(switch, safe_actions, nominal_actions)

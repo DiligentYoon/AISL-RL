@@ -162,7 +162,7 @@ def main():
     seed = args_cli.seed if args_cli.seed is not None else ra_cfg.get("seed", 42)
     env_cfg.seed = seed
     cfg["agent"]["seed"] = seed
-    ra_cfg["agent"]["seed"] = seed
+    ra_cfg["ra"]["agent"]["seed"] = seed
 
     env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg,
@@ -272,7 +272,7 @@ def main():
     ra_buffer = HindSightReplayBuffer(1, env.num_envs, device=env.device)
     ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
     ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
+    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["ra"]["agent"])
 
     # Load checkpoints (both required)
     agent.load(os.path.abspath(args_cli.checkpoint))

@@ -1,23 +1,7 @@
 seed: 42
 
-buffer:
-  buffer_size: 64
-
-agent:
-  learning_epochs: 2
-  batch_size: 4096
-  discount_factor: 0.9999
-  learning_rate: 1.0e-05
-  learning_starts: 32
-  grad_norm_clip: 1.0
-
-  # logging and checkpoint
-  experiment:
-    directory: "g1_fall"
-    experiment_name: ""
-    evaluation_interval: auto
-    write_interval: auto
-    checkpoint_interval: auto
+train:
+  timesteps: 16000
 
 collection:
   capacity_per_bucket: 50000
@@ -29,5 +13,42 @@ collection:
   subsample_stride: 4
   save_subdir: "collected"
 
-train:
-  timesteps: 16000
+ra:
+  buffer:
+    buffer_size: 64
+  agent:
+    learning_epochs: 2
+    batch_size: 4096
+    discount_factor: 0.9999
+    learning_rate: 1.0e-05
+    learning_starts: 32
+    grad_norm_clip: 1.0
+    experiment:
+      directory: "g1_fall"
+      experiment_name: ""
+      evaluation_interval: auto
+      write_interval: auto
+      checkpoint_interval: auto
+
+safe_fall:
+  buffer:
+    buffer_size: 4096
+    seq_len: 128
+    fall_lead_seconds: 0.1
+  model:
+    hidden_dim: 64
+    num_layers: 1
+    dropout: 0.0
+  agent:
+    learning_epochs: 4
+    batch_size: 256
+    seq_len: 128
+    learning_rate: 1.0e-3
+    weight_decay: 1.0e-4
+    grad_norm_clip: 1.0
+    learning_starts: 64
+    experiment:
+      directory: "g1_fall"
+      experiment_name: ""
+      write_interval: auto
+      checkpoint_interval: auto
