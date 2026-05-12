@@ -108,7 +108,6 @@ class G1SafeEnv(G1BaseEnv):
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Prev value
-        self.prev_contact_force = torch.zeros((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.float, device=self.device)
         if self.cfg.num_agents > 1:
             # Multi Agent
             self.prev_actions = {
@@ -346,8 +345,6 @@ class G1SafeEnv(G1BaseEnv):
             # Single Agent
             rewards = common_rewards + (arm_rewards - common_rewards) + (leg_rewards - common_rewards)
             self.prev_actions = self.actions.clone()
-        
-        self.prev_contact_force = self.contact_force.clone()
 
         # Reward Info for logging
         self.extras["reward"] = {
@@ -402,14 +399,20 @@ class G1SafeEnv(G1BaseEnv):
         # the dataset reset event has just written the sampled rows for env_ids.
         staged = getattr(self, "_dataset_reset_prev_action", None)
         if staged is not None:
-            self.prev_actions["arm"][env_ids] = staged[env_ids][:, self.total_arm_joint_ids]
-            self.prev_actions["leg"][env_ids] = staged[env_ids][:, self.total_leg_joint_ids]
+            if self.cfg.num_agents > 1:
+                # Multi agent
+                self.prev_actions["arm"][env_ids] = staged[env_ids][:, self.total_arm_joint_ids]
+                self.prev_actions["leg"][env_ids] = staged[env_ids][:, self.total_leg_joint_ids]
+            else:
+                # Single agent
+                self.prev_actions[env_ids] = staged[env_ids]
         else:
             # Fallback: dataset reset event not registered for this env.
-            self.prev_actions["arm"][env_ids] = 0.0
-            self.prev_actions["leg"][env_ids] = 0.0
-
-        self.prev_contact_force[env_ids] = 0.0
+            if self.cfg.num_agents > 1:
+                self.prev_actions["arm"][env_ids] = 0.0
+                self.prev_actions["leg"][env_ids] = 0.0
+            else:
+                self.prev_actions[env_ids] = 0.0
 
         self._compute_intermediate_values(env_ids)
 
