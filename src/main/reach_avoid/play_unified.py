@@ -420,9 +420,9 @@ def main():
             # agent stepping
             nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
-            risk_value, _, _ = pred_agent.critic(infos["ra_states"]).float()
+            risk_value, _, _ = pred_agent.critic(infos["ra_states"])
             # action processing by RA Value function
-            cur_switch = risk_value.reshape(-1) > switch_threshold
+            cur_switch = risk_value.float().reshape(-1) > switch_threshold
 
             switch = torch.logical_or(cur_switch, prev_switch)
             actions = torch.where(switch, safe_actions, nominal_actions)

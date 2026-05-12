@@ -21,21 +21,21 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     decimation = 4          
 
     ## ========== Nominal policy Setting =========== ##
-    # possible_agents = ["arm", "leg"]
-    # action_space = {"arm": 17, "leg": 12}                         
-    # observation_space = {"arm": 60, "leg": 45}                
-    # state_space = {"arm": 97, "leg": 97}
-    # ra_state_space = 40
-    # num_agents = 2
-    # action_scale_factor = {"arm": [0.5, ()], 
-    #                        "leg": [0.5, ()]}
+    possible_agents = ["arm", "leg"]
+    action_space = {"arm": 17, "leg": 12}                         
+    observation_space = {"arm": 60, "leg": 45}                
+    state_space = {"arm": 97, "leg": 97}
+    ra_state_space = 40
+    num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
     
     ## ========== Single Agent Setting ========== ##  
-    action_space = 29                     
-    observation_space = 96   
-    ra_state_space = 40               
-    num_agents = 1
-    action_scale_factor = 0.5
+    # action_space = 29                     
+    # observation_space = 96   
+    # ra_state_space = 40               
+    # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ========== Safety policy setting ========== ##
     safe_action_space = action_space

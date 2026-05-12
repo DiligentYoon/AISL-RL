@@ -131,18 +131,20 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
         }
 
 
-# Unified Policy (Nominal Policy + RA Network + Safety Policy) Test Environment
+# Unified Policy (Nominal Policy + Predictor + Safety Policy) Test Environment
 @configclass
 class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+
+        self.episode_length_s = 5.0
 
         # visualization
         self.viz_data = None
         self.plotter = None
 
         # Disturbance
-        self.events.push_robot.interval_range_s = (4.0, 5.0)
+        self.events.push_robot.interval_range_s = (3.0, 3.0)
 
         # Safe Policy info
         self.safe_action_space = self.action_space
