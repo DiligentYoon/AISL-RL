@@ -16,7 +16,7 @@ from lib.utils.plot_utils import PNGSavePlotter
 @configclass
 class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 3.0
+    episode_length_s = 2.0 
     sim_dt = 1/200
     decimation = 4          
 
@@ -43,22 +43,20 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_alive:              float = 0.0
-
     w_limits:             float = 10.0
-    w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 0.0
+    w_joint_torque:       float = 5.0e-4
+    w_joint_torque_limit: float = 0.05
     w_joint_vel:          float = 5.0e-3
 
-    w_deviation_arm:        float = 0.003
-    w_deviation_leg:        float = 0.005
+    w_deviation_arm:        float = 0.3
+    w_deviation_leg:        float = 0.5
     w_action_rate:          float = 0.01
     
     w_max_collision:        float = 0.3
-    w_prefer_collision:     float = 0.001
-    w_not_prefer_collision: float = 0.01
+    w_prefer_collision:     float = 0.01
+    w_not_prefer_collision: float = 0.1
 
-    w_termination: float = 200
+    w_termination: float = 10
 
     # ===== Gait guidance ===== #
     time_period = 0.35
@@ -125,5 +123,7 @@ class G1SafePlayEnvCfg(G1SafeEnvCfg):
         self.viz_data = {
             "max_torque": 0.0,
             "max_contact_force": 0.0,
+            "max_contact_impulse": 0.0,
+            "torso_contact_force": 0.0,
             "mean_joint_deviation": 0.0,
         }
