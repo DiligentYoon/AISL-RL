@@ -43,6 +43,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
 
         # Action regularization
+        self.out_of_limits_velocity = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.out_of_limits_joint = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.out_of_limits_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.applied_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -126,8 +127,8 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
-                                 self.base_rot_w,                                        # [E, 4]
+        observation = torch.cat((
+                                 self.default_joint_pos[:, self.joint_ids],
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel[:, self.joint_ids],                      # [E, 6]
                                  self.previous_actions,                                  # [E, 6]
@@ -135,54 +136,30 @@ class GOATTrackFixedEnv(GOATBaseEnv):
 
         return observation
     
-    def _get_states(self) -> torch.Tensor:
-        """"
-        Get State space using previleged information
-
-        Returns
-            State space
-        """
-        observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
-                                 self.base_rot_w,                                        # [E, 4]
-                                 self.joint_pos[:, self.joint_ids],                      # [E, 6]
-                                 self.joint_vel[:, self.joint_ids],                                         # [E, 6]
-                                 self.previous_actions,                                  # [E, 6]
-                                 ), dim=1)                             
-        
-        privileged_info = torch.cat((self.base_lin_vel,                                      # [E, 3]
-                                     self.base_height,                                       # [E, 1]
-                                     self.friction_coefficient), dim=1)                      # [E, 2]
-        
-        state = torch.cat([observation, privileged_info], dim=-1)
-
-        return state
-    
     def _get_rewards(self) -> torch.Tensor:
         # Command Tracking Reward
-        joint_deviation   = torch.sum(torch.square(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
+        joint_deviation   = torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
         r_joint_deviation = torch.exp(-joint_deviation / 0.5**2)
 
         # Regularization Penalty
-        p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1) # Rolling & Pitching 
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque[:, self.joint_ids], dim=1) # wheel is not included
+        p_velocity_limit    = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1) # wheel is not included
         p_all_torque        = -torch.sum(torch.square(self.applied_torque[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc[:, self.joint_ids]), dim=1) # wheel is not included
         p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
-        p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
         total_reward = (
             self.cfg.r_joint_deviation_weight * r_joint_deviation           +
-            self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
+            self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
-            self.cfg.p_action_rate_weight * p_action_rate                   +
-            self.cfg.p_terminated_weight * p_terminated
+            self.cfg.p_action_rate_weight * p_action_rate                   
         )
 
         self.extras["reward"] = {
@@ -193,9 +170,9 @@ class GOATTrackFixedEnv(GOATBaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
             "Task Penalty / Torque_Limit"    : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
+            "Task Penalty / Velocity Limit"  : self.cfg.p_joint_vel_limit_weight * p_velocity_limit,
             "Task Penalty / Torque"          : self.cfg.p_all_torque_weight * p_all_torque,
             "Task Penalty / Joint_Vel"       : self.cfg.p_joint_velocity_weight * p_joint_velocity,
             "Task Penalty / Joint_Acc"       : self.cfg.p_joint_accel_weight * p_joint_accel,
@@ -246,6 +223,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.command_inputs_b[i] = self.commands.command_b[i]
         self.command_inputs_w[i] = self.commands.command_w[i]
         # Action regularization
+        self.out_of_limits_velocity[i] = (torch.abs(self.joint_vel[i]) - self.cfg.joint_vel_limit).clip(min=0.0)
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)
         self.out_of_limits_torque[i] = (torch.abs(self._robot.data.applied_torque[i]) - self.torque_limits[i] * self.cfg.soft_torque_limit).clip(min=0.0)
@@ -267,8 +245,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         extras["viz_data"]["right_thigh_torque (Nm)"] = applied_torque[:, 3]
         extras["viz_data"]["left_knee_torque (Nm)"]   = applied_torque[:, 4]
         extras["viz_data"]["right_knee_torque (Nm)"]  = applied_torque[:, 5]
-        extras["viz_data"]["left_wheel_torque (Nm)"]  = applied_torque[:, 6]
-        extras["viz_data"]["right_wheel_torque (Nm)"] = applied_torque[:, 7]
 
         extras["viz_data"]["left_hip_velocity (deg/s)"]    = joint_velocity[:, 0]
         extras["viz_data"]["right_hip_velocity (deg/s)"]   = joint_velocity[:, 1]
@@ -276,11 +252,5 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         extras["viz_data"]["right_thigh_velocity (deg/s)"] = joint_velocity[:, 3]
         extras["viz_data"]["left_knee_velocity (deg/s)"]   = joint_velocity[:, 4]
         extras["viz_data"]["right_knee_velocity (deg/s)"]  = joint_velocity[:, 5]
-        extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 6]
-        extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 7]
-
-        extras["viz_data"]["base_linear_velocity (m/s)"] = self.base_lin_vel[:, 0]
-        extras["viz_data"]["command_velocity (m/s)"] = self.command_inputs_b[:, 0]
-        extras["viz_data"]["command_angular_velocity (deg/s)"] = torch.rad2deg(self.command_inputs_b[:, 2])
 
         return extras 

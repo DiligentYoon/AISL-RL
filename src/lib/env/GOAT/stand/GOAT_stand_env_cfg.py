@@ -83,7 +83,6 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
         "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "command_inputs_b":  {"dim": 3,  "std": 0.00},  # Command
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
@@ -96,19 +95,19 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
 
-    curriculum = CurriculumManagerCfg(
-        warmup=warmup,
-        endup=endup,
-        params=[
-            CurriculumParamCfg(
-                name="observation_noise",
-                attr_path="cfg/observation_noise_params/std",
-                start_value=obs_noise_start,
-                end_value=obs_noise_end,
-                schedule="linear",
-            ),
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     warmup=warmup,
+    #     endup=endup,
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="observation_noise",
+    #             attr_path="cfg/observation_noise_params/std",
+    #             start_value=obs_noise_start,
+    #             end_value=obs_noise_end,
+    #             schedule="linear",
+    #         ),
+    #     ]
+    # )
     
     # ERFI
     rfi_torque_limit: list[float] = rfi_end    # N·m 
