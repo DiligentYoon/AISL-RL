@@ -441,9 +441,9 @@ class CapturabilityPlotter(GIFSavePlotter):
 
         # m_step time-series panel
         self.mx = self.fig.add_subplot(spec[1, 1])
-        self.mx.set_title(r"$m_{step}(t)=d^{(2)}_{avail}(t)-\|r_{ic}(t)-r_{ankle}\|$")
+        self.mx.set_title(r"$Risk value$")
         self.mx.set_xlabel("time (s)")
-        self.mx.set_ylabel(r"$m_{step}$ (m)")
+        self.mx.set_ylabel(r"$Risk value")
         self.mx.grid(True, ls="--")
         self.mx.axhline(0.0, color="r", linestyle="--", linewidth=1.2)
 
@@ -465,7 +465,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.right_foot_pos_ani, = self.bx.plot([], [], "o", markersize=10, color="m")
         self.ICP_traj_ani, = self.bx.plot([], [], "--", color="k", linewidth=1.5, label="ICP traj")
         self.ICP_pos_ani, = self.bx.plot([], [], marker="x", markersize=8, color="k", label="ICP")
-        self.m_step_line_ani, = self.mx.plot([], [], color="b", linewidth=2.0, label=r"$m_{step}(t)$")
+        self.m_step_line_ani, = self.mx.plot([], [], color="b", linewidth=2.0, label=r"$Risk_value$")
         self.m_step_curr_ani, = self.mx.plot([], [], marker="o", markersize=5, color="k")
         self.mx.legend(loc="upper right")
 

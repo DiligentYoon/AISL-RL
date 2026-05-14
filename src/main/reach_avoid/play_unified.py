@@ -436,6 +436,7 @@ def main():
 
         # Plot Phase
         if plot is not None:
+            infos["viz_data"]["risk_value"] = risk_value.float().squeeze(-1)
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
         # Video update

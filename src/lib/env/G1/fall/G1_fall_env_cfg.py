@@ -8,7 +8,7 @@ from isaaclab.managers import SceneEntityCfg
 
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 from lib.domain_randomizer import randomizer
-from lib.utils.plot_utils import CapturabilityPlotter
+from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 
 @configclass
@@ -150,6 +150,18 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.safe_action_space = self.action_space
         self.safe_observation_space = {"arm": 60, "leg": 45}
         self.safe_state_space = {"arm": 97, "leg": 97}
+
+        # plotter
+        self.plotter = PNGSavePlotter
+
+        self.viz_data = {
+            "risk_value": 0.0,         
+            "max_torque": 0.0,
+            "max_contact_force": 0.0,
+            "max_contact_impulse": 0.0,
+            "torso_contact_force": 0.0,
+            "mean_joint_deviation": 0.0,
+        }
 
         
 

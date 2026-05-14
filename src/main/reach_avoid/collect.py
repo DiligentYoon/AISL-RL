@@ -28,7 +28,7 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Communet"],
                     help="The NN model of the nominal policy.")
 

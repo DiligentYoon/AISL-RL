@@ -25,13 +25,13 @@ class G1SafeEnv(G1BaseEnv):
         # Collision link id
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
-                                                                              r"waist_.*_link",
-                                                                              r".*_wrist_yaw_link"])
+                                                                              r"waist_.*_link"])
         
         self.collision_upper_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_hip_(roll|pitch|yaw)_link")
         self.collision_lower_leg_link_ids, _ = self.contact_sensors.find_bodies(r".*_knee_link")
 
-        self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_shoulder_.*_link"])
+        self.collision_upper_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_shoulder_.*_link",
+                                                                                 r".*_wrist_yaw_link"])
         self.collision_lower_arm_link_ids, _ = self.contact_sensors.find_bodies([r".*_elbow_link",
                                                                                  r".*_wrist_(roll|pitch)_link"])
         
@@ -40,13 +40,13 @@ class G1SafeEnv(G1BaseEnv):
         # Link id
         self.denied_link_ids, _ = self._robot.find_bodies([r"torso_link",
                                                            r"pelvis",
-                                                           r"waist_.*_link",
-                                                           r".*_wrist_yaw_link"])
+                                                           r"waist_.*_link"])
 
         self.upper_leg_link_ids, _ = self._robot.find_bodies(r".*_hip_(roll|pitch|yaw)_link")
         self.lower_leg_link_ids, _ = self._robot.find_bodies(r".*_knee_link")
 
-        self.upper_arm_link_ids, _ = self._robot.find_bodies([r".*_shoulder_.*_link"])
+        self.upper_arm_link_ids, _ = self._robot.find_bodies([r".*_shoulder_.*_link",
+                                                              r".*_wrist_yaw_link"])
         self.lower_arm_link_ids, _ = self._robot.find_bodies([r".*_elbow_link",
                                                               r".*_wrist_(roll|pitch)_link"])
         
@@ -277,17 +277,17 @@ class G1SafeEnv(G1BaseEnv):
         max_upper_arm_collision = torch.max(upper_arm_collision, dim=-1).values
         max_lower_arm_collision = torch.max(lower_arm_collision, dim=-1).values
 
-        num_collision_illegal   = torch.sum((max_illegal_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        num_collision_illegal   = torch.sum((illegal_collision > 1e-6).float(), dim=-1).clip(min=1.0)
         num_collision_upper_leg = torch.sum((upper_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
         num_collision_lower_leg = torch.sum((lower_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
         num_collision_upper_arm = torch.sum((upper_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
         num_collision_lower_arm = torch.sum((lower_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
 
-        illegal_collision_penalty        = -torch.sum(illegal_collision, dim=-1)   / num_collision_illegal   - self.cfg.w_max_collision * max_illegal_collision
-        prefer_collision_penalty_leg     = -torch.sum(upper_leg_collision, dim=-1) / num_collision_upper_leg - self.cfg.w_max_collision * max_upper_leg_collision
-        not_prefer_collision_penalty_leg = -torch.sum(lower_leg_collision, dim=-1) / num_collision_lower_leg - self.cfg.w_max_collision * max_lower_leg_collision
-        prefer_collision_penalty_arm     = -torch.sum(lower_arm_collision, dim=-1) / num_collision_lower_arm - self.cfg.w_max_collision * max_lower_arm_collision
-        not_prefer_collision_penalty_arm = -torch.sum(upper_arm_collision, dim=-1) / num_collision_upper_arm - self.cfg.w_max_collision * max_upper_arm_collision
+        illegal_collision_penalty        = -(torch.sum(illegal_collision, dim=-1) + self.cfg.w_max_collision * max_illegal_collision) / num_collision_illegal
+        prefer_collision_penalty_leg     = -(torch.sum(upper_leg_collision, dim=-1) + self.cfg.w_max_collision * max_upper_leg_collision) / num_collision_upper_leg
+        not_prefer_collision_penalty_leg = -(torch.sum(lower_leg_collision, dim=-1) + self.cfg.w_max_collision * max_lower_leg_collision) / num_collision_lower_leg
+        prefer_collision_penalty_arm     = -(torch.sum(lower_arm_collision, dim=-1) + self.cfg.w_max_collision * max_lower_arm_collision) / num_collision_lower_arm
+        not_prefer_collision_penalty_arm = -(torch.sum(upper_arm_collision, dim=-1) + self.cfg.w_max_collision * max_upper_arm_collision) / num_collision_upper_arm
 
         # Termination
         # terminate_penalty = -self.reset_terminated.float()
