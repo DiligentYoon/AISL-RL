@@ -20,7 +20,7 @@ from lib.assets.objects.Jig.object import JIGCFG
 @configclass
 class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -44,16 +44,16 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     target_height = 0.523
 
     r_upright_weight = 1.0
-    r_height_weight = 3.0
+    r_height_weight = 6.0
 
-    p_illegal_contact_weight = 0.1
-    p_joint_deviation_weight = 1.0
+    p_illegal_contact_weight = 0.3
+    p_joint_deviation_weight = 3.0
     p_lin_vel_weight = 3.0
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.01
-    p_joint_vel_limit_weight = 10.0
+    p_joint_vel_limit_weight = 1.0
     p_joint_velocity_weight = 0.05
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.02
