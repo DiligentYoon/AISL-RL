@@ -40,6 +40,18 @@ parser.add_argument("--model",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
+parser.add_argument("--safe_algorithm",
+                    type=str,
+                    default="MAPPO",
+                    choices=["PPO", "SAC", "TD3", "MAPPO"],
+                    help="The RL algorithm used for training the agent.")
+
+parser.add_argument("--safe_model",
+                    type=str,
+                    default="Shared",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
+                    help="The NN model used for training the agent.")
+
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -78,6 +90,9 @@ from lib.utils.plot_utils import GIFSavePlotter
 algorithm = args_cli.algorithm.lower()
 model = args_cli.model.lower() if args_cli.model is not None else None
 
+safe_algorithm = args_cli.safe_algorithm.lower()
+safe_model = args_cli.safe_model.lower() if args_cli.safe_model is not None else None
+
 def main():
     """
     main training method
@@ -90,7 +105,7 @@ def main():
     try:
         cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
         ra_cfg = load_cfg_from_registry(args_cli.task, f"ra_cfg_entry_point")
-        safe_cfg = load_cfg_from_registry(args_cli.task, f"safe_cfg_entry_point")
+        safe_cfg = load_cfg_from_registry(args_cli.task, f"safe_rl_{safe_algorithm}_cfg_entry_point")
     except ValueError as e:
         print(e)
         return
@@ -324,9 +339,10 @@ def main():
         safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
 
     # Overwrite cfg by cli argument
-    if model is not None:
-        cfg["models"]["model_type"] = model
-    safe_cfg["models"]["multi_agent"] = multi_agent
+    safe_multi_agent = safe_algorithm == "mappo"
+    if safe_model is not None:
+        safe_cfg["models"]["model_type"] = safe_model
+    safe_cfg["models"]["multi_agent"] = safe_multi_agent
 
     safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
     if safe_model_manager.model_class == "mlp":
@@ -339,7 +355,7 @@ def main():
 
     # ======================= Safe Agent ============================
     safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    if multi_agent:
+    if safe_multi_agent:
         if safe_model_manager.model_type == "mlp":
             safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
                                state_space=env._unwrapped.safe_state_space,
