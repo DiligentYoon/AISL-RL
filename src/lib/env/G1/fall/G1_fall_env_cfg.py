@@ -139,21 +139,25 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
 
         self.episode_length_s = 5.0
 
-        # visualization
-        self.viz_data = None
-        self.plotter = None
-
         # Disturbance
         self.events.push_robot.interval_range_s = (3.0, 3.0)
 
-        # Safe Policy info
-        self.safe_action_space = self.action_space
-        self.safe_observation_space = {"arm": 60, "leg": 45}
-        self.safe_state_space = {"arm": 97, "leg": 97}
+        # Safe Policy info (multi agent)
+        # self.safe_action_space = self.action_space
+        # self.safe_observation_space = {"arm": 60, "leg": 45}
+        # self.safe_state_space = {"arm": 97, "leg": 97}
 
-        # plotter
+        # Safe Policy info (single agent)
+        self.num_safe_agents = 1
+        self.safe_action_space = 29
+        self.safe_observation_space = 96
+        self.safe_state_space = 96
+
+        # visualization
+        # self.plotter = None
+        # self.viz_data = None
+
         self.plotter = PNGSavePlotter
-
         self.viz_data = {
             "risk_value": 0.0,         
             "max_torque": 0.0,

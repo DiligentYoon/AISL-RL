@@ -128,7 +128,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
             Observation space
         """
         observation = torch.cat((
-                                 self.default_joint_pos[:, self.joint_ids],
                                  self.joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel[:, self.joint_ids],                      # [E, 6]
                                  self.previous_actions,                                  # [E, 6]

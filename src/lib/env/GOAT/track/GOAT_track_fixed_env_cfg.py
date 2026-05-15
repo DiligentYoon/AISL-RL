@@ -18,7 +18,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 6                            # [L + R, joint pos]
-    observation_space = 24                      # Observation space
+    observation_space = 18                      # Observation space
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
@@ -34,8 +34,8 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     r_joint_deviation_weight = 5.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.01
-    p_joint_vel_limit_weight = 10.0
+    p_all_torque_weight = 0.005
+    p_joint_vel_limit_weight = 1.0
     p_joint_velocity_weight = 0.05
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.02
@@ -58,7 +58,6 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_start = {
         # "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
         # "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
-        "default_joint_pos": {"dim": 6,  "std": 0.0},   # Joint encoder
         "joint_pos":         {"dim": 6,  "std": 0.005}, # Joint encoder
         "joint_vel":         {"dim": 6,  "std": 0.5},   # Encoder derivative (noisy)
         "previous_actions":  {"dim": 6,  "std": 0.0},   # Internal action buffer (no noise)
@@ -66,7 +65,6 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_end = {
         # "base_ang_vel":      {"dim": 3,  "std": 0.2},
         # "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "default_joint_pos": {"dim": 6,  "std": 0.0},   # Joint encoder
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 6,  "std": 1.5},
         "previous_actions":  {"dim": 6,  "std": 0.0},
@@ -106,14 +104,6 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         
         # Initial condition
         self.GOAT_cfg.spawn.articulation_props.fix_root_link = True
-        self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
-                                             "hip_R_Joint": 0.0,
-                                             "thigh_L_Joint": 0.738,
-                                             "thigh_R_Joint": -0.738,
-                                             "knee_L_Joint": 1.462,
-                                             "knee_R_Joint": -1.462,
-                                             "wheel_L_Joint": 0.0,
-                                             "wheel_R_Joint": 0.0,}
         self.GOAT_cfg.init_state.pos = (0.0, 0.0, 1.5)
         
         # disable wheel controller
@@ -128,6 +118,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
 
         self.events.reset_robot_joints.params["position_range"] = (-0.1, 0.1)
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, -0.738, 0.738, -1.462, 1.462, 0.0, 0.0)
+        self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)

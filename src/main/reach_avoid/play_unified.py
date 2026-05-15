@@ -42,13 +42,13 @@ parser.add_argument("--model",
 
 parser.add_argument("--safe_algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--safe_model",
                     type=str,
-                    default="Shared",
+                    default="MLP",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -316,33 +316,48 @@ def main():
         raise ValueError(f"Unknown predictor: {predictor}")
 
     # =============== Safe Policy Buffer and Model Spawn ===============
+    safe_multi_agent = safe_algorithm == "mappo"
+    safe_cfg["models"]["multi_agent"] = safe_multi_agent
+    # Initialization
     if safe_cfg["buffer"]["buffer_size"] == -1:
         safe_cfg["buffer"]["buffer_size"] = safe_cfg["agent"]["rollouts"]
     else:
         raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
-    safe_obs_size = {}
-    safe_state_size = {}
-    safe_act_size = {}
-    safe_buffers = {}
-    possible_agents = env._unwrapped.cfg.possible_agents
-    for uid in possible_agents:
-        observation_space = env._unwrapped.cfg.safe_observation_space[uid]
-        action_space = env._unwrapped.cfg.safe_action_space[uid]
-        state_space = env._unwrapped.cfg.safe_state_space[uid]
-        safe_cfg["agent"]["async_actor_critic"] = True
+    
+    possible_agents = None
+    if safe_multi_agent:
+        safe_obs_size = {}
+        safe_state_size = {}
+        safe_act_size = {}
+        safe_buffers = {}
+        possible_agents = env._unwrapped.cfg.possible_agents
+        for uid in possible_agents:
+            observation_space = env._unwrapped.cfg.safe_observation_space[uid]
+            action_space = env._unwrapped.cfg.safe_action_space[uid]
+            state_space = env._unwrapped.cfg.safe_state_space[uid]
+            safe_cfg["agent"]["async_actor_critic"] = True
+
+            safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+            safe_buffer.init_buffer(observation_space, state_space, action_space)
+            safe_buffers[uid] = safe_buffer
+            safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
+            safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
+            safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
+    else:
+        observation_space = env._unwrapped.cfg.safe_observation_space
+        action_space = env._unwrapped.cfg.safe_action_space
+        state_space = env._unwrapped.cfg.safe_state_space
 
         safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
         safe_buffer.init_buffer(observation_space, state_space, action_space)
-        safe_buffers[uid] = safe_buffer
-        safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
-        safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
-        safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
+        safe_buffer = safe_buffer
+        safe_obs_size = safe_buffer.tensors["observations"].shape[-1]
+        safe_state_size = safe_buffer.tensors["states"].shape[-1]
+        safe_act_size = safe_buffer.tensors["actions"].shape[-1]   
 
     # Overwrite cfg by cli argument
-    safe_multi_agent = safe_algorithm == "mappo"
     if safe_model is not None:
         safe_cfg["models"]["model_type"] = safe_model
-    safe_cfg["models"]["multi_agent"] = safe_multi_agent
 
     safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
     if safe_model_manager.model_class == "mlp":
@@ -357,6 +372,7 @@ def main():
     safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if safe_multi_agent:
         if safe_model_manager.model_type == "mlp":
+            from lib.agent.mappo import MAPPO
             safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
                                state_space=env._unwrapped.safe_state_space,
                                action_space=env._unwrapped.safe_action_space,
@@ -366,6 +382,7 @@ def main():
                                device=env.device,
                                cfg=safe_cfg["agent"])
         elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
             safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
                                           state_space=env._unwrapped.safe_state_space,
                                           action_space=env._unwrapped.safe_action_space,
@@ -377,7 +394,8 @@ def main():
         else:
             raise RuntimeError("Unvalid model type.")
     else:
-        agent = PPO(model=safe_models,
+        from lib.agent.ppo import PPO
+        safe_agent = PPO(model=safe_models,
                     buffer=safe_buffer, 
                     device=env.device,
                     cfg=safe_cfg["agent"])
