@@ -19,6 +19,11 @@ class G1FallUnifiedEnv(G1FallEnv):
     def __init__(self, cfg: G1FallUnifiedPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
+        # link id
+        self.denied_link_ids, _ = self._robot.find_bodies([r"torso_link",
+                                                           r"pelvis",
+                                                           r"waist_.*_link"])
+
         # Collision link
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
@@ -31,6 +36,7 @@ class G1FallUnifiedEnv(G1FallEnv):
         # Illegal collision
         self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
         self.contact_force = torch.zeros((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.float, device=self.device)
+        self.denied_link_mass = self._robot.data.default_mass[:, self.denied_link_ids].to(self.device)
 
         # Deviation
         self.deviation_legs = torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), dtype=torch.float, device=self.device)
@@ -262,8 +268,9 @@ class G1FallUnifiedEnv(G1FallEnv):
         # Falling and Collision
         z_c = self.CoM[:, 2]
         died_fall   = z_c <= self.cfg.termination_height
-        critical_contact_forces = self.illegal_force
-        died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
+        critical_contact_forces = (torch.norm(self.illegal_force, dim=-1) - self.denied_link_mass).clip(min=0.0)
+        # Only Dynamic Collision & Delete Additional Push Effect 
+        died_collision   = torch.any(critical_contact_forces > 10.0, dim=1)
         
         died = died_collision & died_fall
         time_out = time_out
@@ -284,7 +291,7 @@ class G1FallUnifiedEnv(G1FallEnv):
         max_torque = torch.max(torch.abs(self._robot.data.applied_torque), dim=-1).values # [E,]
         max_valid_contact_force = torch.max(self.contact_force[valid_mask], dim=-1).values # [E,]
         max_contact_impulse = max_valid_contact_force * self.cfg.sim_dt # [E,]
-        torso_collision = self.contact_force[:, self.denied_collision_link_ids[0]] # [E,]
+        torso_collision = (self.contact_force[:, self.denied_collision_link_ids[0]] - 9.81 * self.denied_link_mass[0]).clip(min=0.0) # [E,]
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["max_torque"] = max_torque

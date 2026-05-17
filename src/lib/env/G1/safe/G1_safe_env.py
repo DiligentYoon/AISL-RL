@@ -277,16 +277,25 @@ class G1SafeEnv(G1BaseEnv):
         max_lower_arm_collision = torch.max(lower_arm_collision, dim=-1).values
 
         num_collision_illegal   = torch.sum((illegal_collision > 1e-6).float(), dim=-1).clip(min=1.0)
-        num_collision_upper_leg = torch.sum((upper_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
-        num_collision_lower_leg = torch.sum((lower_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
-        num_collision_upper_arm = torch.sum((upper_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
-        num_collision_lower_arm = torch.sum((lower_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        # num_collision_upper_leg = torch.sum((upper_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        # num_collision_lower_leg = torch.sum((lower_leg_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        # num_collision_upper_arm = torch.sum((upper_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        # num_collision_lower_arm = torch.sum((lower_arm_collision > 1e-6).float(), dim=-1).clip(min=1.0)
+        num_collision_upper_leg = torch.sum((upper_leg_collision > 1e-6).float(), dim=-1)
+        num_collision_lower_leg = torch.sum((lower_leg_collision > 1e-6).float(), dim=-1)
+        num_collision_upper_arm = torch.sum((upper_arm_collision > 1e-6).float(), dim=-1)
+        num_collision_lower_arm = torch.sum((lower_arm_collision > 1e-6).float(), dim=-1)
+        total_num_collision = (num_collision_upper_leg + num_collision_lower_leg + num_collision_upper_arm + num_collision_lower_arm + num_collision_illegal).clip(min=1.0)
 
-        illegal_collision_penalty        = -(torch.sum(illegal_collision, dim=-1) + self.cfg.w_max_collision * max_illegal_collision) / num_collision_illegal
-        prefer_collision_penalty_leg     = -(torch.sum(upper_leg_collision, dim=-1) + self.cfg.w_max_collision * max_upper_leg_collision) / num_collision_upper_leg
-        not_prefer_collision_penalty_leg = -(torch.sum(lower_leg_collision, dim=-1) + self.cfg.w_max_collision * max_lower_leg_collision) / num_collision_lower_leg
-        prefer_collision_penalty_arm     = -(torch.sum(lower_arm_collision, dim=-1) + self.cfg.w_max_collision * max_lower_arm_collision) / num_collision_lower_arm
-        not_prefer_collision_penalty_arm = -(torch.sum(upper_arm_collision, dim=-1) + self.cfg.w_max_collision * max_upper_arm_collision) / num_collision_upper_arm
+        illegal_collision_penalty        = -(torch.sum(illegal_collision, dim=-1) + self.cfg.w_max_collision * max_illegal_collision) / total_num_collision
+        prefer_collision_penalty_leg     = -(torch.sum(upper_leg_collision, dim=-1) + self.cfg.w_max_collision * max_upper_leg_collision) / total_num_collision
+        not_prefer_collision_penalty_leg = -(torch.sum(lower_leg_collision, dim=-1) + self.cfg.w_max_collision * max_lower_leg_collision) / total_num_collision
+        prefer_collision_penalty_arm     = -(torch.sum(lower_arm_collision, dim=-1) + self.cfg.w_max_collision * max_lower_arm_collision) / total_num_collision
+        not_prefer_collision_penalty_arm = -(torch.sum(upper_arm_collision, dim=-1) + self.cfg.w_max_collision * max_upper_arm_collision) / total_num_collision
+        # prefer_collision_penalty_leg     = -(torch.sum(upper_leg_collision, dim=-1) + self.cfg.w_max_collision * max_upper_leg_collision) / num_collision_upper_leg
+        # not_prefer_collision_penalty_leg = -(torch.sum(lower_leg_collision, dim=-1) + self.cfg.w_max_collision * max_lower_leg_collision) / num_collision_lower_leg
+        # prefer_collision_penalty_arm     = -(torch.sum(lower_arm_collision, dim=-1) + self.cfg.w_max_collision * max_lower_arm_collision) / num_collision_lower_arm
+        # not_prefer_collision_penalty_arm = -(torch.sum(upper_arm_collision, dim=-1) + self.cfg.w_max_collision * max_upper_arm_collision) / num_collision_upper_arm
 
         # Termination
         # terminate_penalty = -self.reset_terminated.float()
@@ -355,12 +364,14 @@ class G1SafeEnv(G1BaseEnv):
             # ==========================================
             # Task Penalty (-)
             # ==========================================
+            "Task Penalty / Common_Illegal_Collision" : self.cfg.w_termination * illegal_collision_penalty,
             "Task Penalty / Arm_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_arm,
             "Task Penalty / Arm_Not_Prefer_Collision" : self.cfg.w_not_prefer_collision * not_prefer_collision_penalty_arm,
             "Task Penalty / Arm_Joint_Limit"          : self.cfg.w_limits               * joint_limit_penalty_arm,
             "Task Penalty / Arm_Torque_Limit"         : self.cfg.w_joint_torque_limit   * joint_torque_limit_penalty_arm,
             "Task Penalty / Arm_Torque"               : self.cfg.w_joint_torque         * joint_torque_penalty_arm,
             "Task Penalty / Arm_Vel"                  : self.cfg.w_joint_vel            * joint_vel_penalty_arm,
+            "Task Penalty / Arm_Deviation"            : self.cfg.w_deviation_arm        * joint_deviation_arm,
             "Task Penalty / Arm_Action_Rate"          : self.cfg.w_action_rate          * action_rate_penalty_arm,
 
             "Task Penalty / Leg_Prefer_Collision"     : self.cfg.w_prefer_collision     * prefer_collision_penalty_leg,
@@ -369,6 +380,7 @@ class G1SafeEnv(G1BaseEnv):
             "Task Penalty / Leg_Torque_Limit"         : self.cfg.w_joint_torque_limit   * joint_torque_limit_penalty_leg,
             "Task Penalty / Leg_Torque"               : self.cfg.w_joint_torque         * joint_torque_penalty_leg,
             "Task Penalty / Leg_Vel"                  : self.cfg.w_joint_vel            * joint_vel_penalty_leg,
+            "Task Penalty / Leg_Deviation"            : self.cfg.w_deviation_leg        * joint_deviation_leg,
             "Task Penalty / Leg_Action_Rate"          : self.cfg.w_action_rate          * action_rate_penalty_leg,
         }
         
@@ -445,11 +457,13 @@ class G1SafeEnv(G1BaseEnv):
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
     
     def _update_viz_data(self):
+        valid_mask = torch.ones((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.bool, device=self.device)
+        valid_mask[:, self.collision_foot_link_ids] = False
         mean_joint_deviation = torch.mean(torch.cat([self.deviation_arms, self.deviation_legs], dim=-1), dim=-1) # [E,]
         max_torque = torch.max(torch.abs(self._robot.data.applied_torque), dim=-1).values # [E,]
-        max_contact_force = torch.max(self.contact_force, dim=-1).values # [E,]
+        max_contact_force = torch.max(self.contact_force[valid_mask], dim=-1).values # [E,]
         max_contact_impulse = max_contact_force * self.cfg.sim_dt # [E,]
-        torso_collision = self.contact_force[:, self.denied_collision_link_ids[0]] # [E,]
+        torso_collision = (self.contact_force[:, self.denied_collision_link_ids[0]] - 9.81 * self._robot.data.default_mass[:, self.torso_link_ids]).clip(min=0.0) # [E,]
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["max_torque"] = max_torque
