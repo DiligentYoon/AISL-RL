@@ -40,11 +40,11 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 1.0 # rad/s
+    joint_vel_limit = 1.5 # rad/s
     target_height = 0.523
 
     r_upright_weight = 1.0
-    r_height_weight = 6.0
+    r_height_weight = 3.0
 
     p_illegal_contact_weight = 0.3
     p_joint_deviation_weight = 3.0
@@ -52,12 +52,12 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.01
-    p_joint_vel_limit_weight = 1.0
-    p_joint_velocity_weight = 0.05
+    p_all_torque_weight = 0.008
+    p_joint_vel_limit_weight = 5.0
+    p_joint_velocity_weight = 0.035
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.02
-    p_terminated_weight = 100.0
+    p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = False
