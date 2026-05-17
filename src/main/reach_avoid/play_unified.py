@@ -42,13 +42,13 @@ parser.add_argument("--model",
 
 parser.add_argument("--safe_algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--safe_model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -441,6 +441,8 @@ def main():
     obs, states, infos = env.reset()
     safe_obs = infos["safe_observations"]
     timestep = 0
+    total_ep = 0
+    success_ep = 0
 
     prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     switch_threshold = ra_cfg["collection"]["thresholds"]["mid_high"]
@@ -485,6 +487,9 @@ def main():
         safe_obs = infos["safe_observations"]
         if done:
             prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+            total_ep += 1
+            if not terminated[0]:
+                success_ep += 1
         else:
             prev_switch = switch
 
@@ -495,6 +500,9 @@ def main():
     if plot is not None:
         plot.save()
         plot.close()
+    
+    # Print success rate
+    print(f"Total Success Rate : {success_ep} / {total_ep}")
 
 
 if __name__ == "__main__":

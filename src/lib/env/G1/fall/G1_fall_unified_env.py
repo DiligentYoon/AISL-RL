@@ -23,6 +23,11 @@ class G1FallUnifiedEnv(G1FallEnv):
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
                                                                               r"waist_.*_link"])
+        
+        # Foot collision link
+        self.foot_collision_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_(pitch|roll)_link"])
+
+
         # Illegal collision
         self.illegal_force = torch.zeros((self.num_envs, len(self.denied_collision_link_ids), 3), dtype=torch.float, device=self.device)
         self.contact_force = torch.zeros((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.float, device=self.device)
@@ -166,6 +171,30 @@ class G1FallUnifiedEnv(G1FallEnv):
             # Single Agent
             states = None
 
+        # Reach-Avoid information
+        self.extras["ra_states"] = torch.cat([self.root_ang_vel_b,                                # [E, 3]
+                                              self.projected_gravity,                             # [E, 3]
+                                              self.dist_from_icp_to_stance,                       # [E, 1]
+                                              self.phase.unsqueeze(-1),                           # [E, 1]
+                                              self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
+                                            ], dim=-1)
+
+        base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+        # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
+
+        self.extras["l_values"] = torch.tanh(torch.log(base_tilt / self.cfg.target_set_threshold**2))
+        self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
+        # self.extras["g_values"] = 2 * is_fall - 1
+
+        # SafeFall baseline observation (gravity_xy, root_ang_vel, joint_pos, joint_vel)
+        total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
+        self.extras["safe_fall_obs"] = torch.cat([
+            self.projected_gravity[:, :2],          # [E, 2]
+            self.root_ang_vel_b,                    # [E, 3]
+            self.joint_pos[:, total_joint_ids],     # [E, 29]
+            self.joint_vel[:, total_joint_ids],     # [E, 29]
+        ], dim=-1)                                  # [E, 63]
+
         # Safe Policy
         if self.cfg.num_safe_agents > 1:
             # Multi Agent
@@ -212,30 +241,6 @@ class G1FallUnifiedEnv(G1FallEnv):
                 ], dim=-1
             )
 
-        # Reach-Avoid information
-        self.extras["ra_states"] = torch.cat([self.root_ang_vel_b,                                # [E, 3]
-                                              self.projected_gravity,                             # [E, 3]
-                                              self.dist_from_icp_to_stance,                       # [E, 1]
-                                              self.phase.unsqueeze(-1),                           # [E, 1]
-                                              self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
-                                            ], dim=-1)
-
-        base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
-        # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
-
-        self.extras["l_values"] = torch.tanh(torch.log(base_tilt / self.cfg.target_set_threshold**2))
-        self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
-        # self.extras["g_values"] = 2 * is_fall - 1
-
-        # SafeFall baseline observation (gravity_xy, root_ang_vel, joint_pos, joint_vel)
-        total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
-        self.extras["safe_fall_obs"] = torch.cat([
-            self.projected_gravity[:, :2],          # [E, 2]
-            self.root_ang_vel_b,                    # [E, 3]
-            self.joint_pos[:, total_joint_ids],     # [E, 29]
-            self.joint_vel[:, total_joint_ids],     # [E, 29]
-        ], dim=-1)                                  # [E, 63]
-
         return states 
     
     # Overriding to handle previous actions of multi-agent nominal policy and single-agent safety policy
@@ -254,10 +259,13 @@ class G1FallUnifiedEnv(G1FallEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
+        # Falling and Collision
+        z_c = self.CoM[:, 2]
+        died_fall   = z_c <= self.cfg.termination_height
         critical_contact_forces = self.illegal_force
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         
-        died = died_collision
+        died = died_collision & died_fall
         time_out = time_out
 
         return died, time_out
@@ -270,16 +278,18 @@ class G1FallUnifiedEnv(G1FallEnv):
         self.deviation_legs[i] = self.joint_pos[i][:, self.total_leg_joint_ids] - self._robot.data.default_joint_pos[i][:, self.total_leg_joint_ids]
     
     def _update_viz_data(self):
+        valid_mask = torch.ones((self.num_envs, self.contact_sensors.num_bodies), dtype=torch.bool, device=self.device)
+        valid_mask[:, self.foot_collision_link_ids] = False
         mean_joint_deviation = torch.mean(torch.cat([self.deviation_arms, self.deviation_legs], dim=-1), dim=-1) # [E,]
         max_torque = torch.max(torch.abs(self._robot.data.applied_torque), dim=-1).values # [E,]
-        max_contact_force = torch.max(self.contact_force, dim=-1).values # [E,]
-        max_contact_impulse = max_contact_force * self.cfg.sim_dt # [E,]
+        max_valid_contact_force = torch.max(self.contact_force[valid_mask], dim=-1).values # [E,]
+        max_contact_impulse = max_valid_contact_force * self.cfg.sim_dt # [E,]
         torso_collision = self.contact_force[:, self.denied_collision_link_ids[0]] # [E,]
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["max_torque"] = max_torque
         extras["viz_data"]["max_contact_impulse"] = max_contact_impulse
-        extras["viz_data"]["max_contact_force"] = max_contact_force
+        extras["viz_data"]["max_contact_force"] = max_valid_contact_force
         extras["viz_data"]["torso_contact_force"] = torso_collision
         extras["viz_data"]["mean_joint_deviation"] = mean_joint_deviation
 

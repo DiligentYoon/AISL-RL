@@ -143,15 +143,16 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.events.push_robot.interval_range_s = (3.0, 3.0)
 
         # Safe Policy info (multi agent)
-        # self.safe_action_space = self.action_space
-        # self.safe_observation_space = {"arm": 60, "leg": 45}
-        # self.safe_state_space = {"arm": 97, "leg": 97}
+        self.num_safe_agents = 2
+        self.safe_action_space = self.action_space
+        self.safe_observation_space = {"arm": 60, "leg": 45}
+        self.safe_state_space = {"arm": 97, "leg": 97}
 
         # Safe Policy info (single agent)
-        self.num_safe_agents = 1
-        self.safe_action_space = 29
-        self.safe_observation_space = 96
-        self.safe_state_space = 96
+        # self.num_safe_agents = 1
+        # self.safe_action_space = 29
+        # self.safe_observation_space = 96
+        # self.safe_state_space = 96
 
         # visualization
         # self.plotter = None
