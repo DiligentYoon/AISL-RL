@@ -481,10 +481,6 @@ def main():
             break
 
         # update
-        obs = next_obs
-        states = next_states
-        infos = next_infos
-        safe_obs = infos["safe_observations"]
         if done:
             prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
             total_ep += 1
@@ -492,6 +488,10 @@ def main():
                 success_ep += 1
         else:
             prev_switch = switch
+        obs = next_obs
+        states = next_states
+        infos = next_infos
+        safe_obs = infos["safe_observations"]
 
     # close the simulator
     env.close()

@@ -139,6 +139,10 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
 
         self.episode_length_s = 5.0
 
+        # visualization
+        self.viz_data = None
+        self.plotter = None
+
         # Disturbance
         self.events.push_robot.interval_range_s = (3.0, 3.0)
 
@@ -158,7 +162,9 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         # self.plotter = None
         # self.viz_data = None
 
+        # plotter
         self.plotter = PNGSavePlotter
+
         self.viz_data = {
             "risk_value": 0.0,         
             "max_torque": 0.0,
