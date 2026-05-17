@@ -85,7 +85,7 @@ class SafeFall(Agent):
                 seq_len=self.seq_len,
             )
 
-            logits, _ = self.critic(obs_seq)                  # (B, T, 2)
+            logits, _, _ = self.critic(obs_seq)                  # (B, T, 2)
 
             flat_logits = logits.reshape(-1, 2)
             flat_label = label_seq.reshape(-1)
