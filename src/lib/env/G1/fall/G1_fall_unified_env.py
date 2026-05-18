@@ -52,94 +52,6 @@ class G1FallUnifiedEnv(G1FallEnv):
         # Action buffer for handling two policies
         self.action_buffer = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
 
-    # Overriding to handle actions of multi-agent nominal policy and single-agent safety policy
-    def _apply_action(self):
-        if isinstance(self.actions, dict):
-            arm_actions = self.actions["arm"]
-            leg_actions = self.actions["leg"]
-
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                joint_ids=self.total_arm_joint_ids
-            )
-
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                joint_ids=self.total_leg_joint_ids
-            )
-        elif isinstance(self.actions, torch.Tensor):
-            # Single Agent
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                joint_ids=self._joint_dof_ids
-            )
-        else:
-            raise ValueError
-
-    # Overriding to handle previous actions of multi-agent nominal policy and single-agent safety policy
-    def _get_observations(self):
-        # Action Processing
-        if isinstance(self.prev_actions, dict):
-            arm_actions = self.prev_actions["arm"]
-            leg_actions = self.prev_actions["leg"]
-        else:
-            arm_actions = self.prev_actions[:, self.total_arm_joint_ids]
-            leg_actions = self.prev_actions[:, self.total_leg_joint_ids]
-
-        if self.cfg.num_agents > 1:
-            # Multi Agent
-            observations = {
-                "arm": torch.cat(
-                    [
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
-                        self.joint_vel[:, self.total_arm_joint_ids],        # [E, 17]
-                        arm_actions
-                    ],
-                    dim=-1
-                ),
-                "leg": torch.cat(
-                    [
-                        self.root_lin_vel_b,                                # [E, 3]
-                        self.root_ang_vel_b,                                # [E, 3]
-                        self.projected_gravity,                             # [E, 3]
-                        self.command_inputs_b,                              # [E, 3]
-                        self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                        self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                        self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
-                        self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
-                        leg_actions
-                    ],
-                    dim=-1
-                )
-            }
-        else:
-            # Single Agent
-            action_buffer = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
-            action_buffer[:, self.total_arm_joint_ids] = arm_actions
-            action_buffer[:, self.total_leg_joint_ids] = leg_actions
-            total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
-            observations = torch.cat(
-                [
-                    self.root_lin_vel_b,                                # [E, 3]
-                    self.root_ang_vel_b,                                # [E, 3]
-                    self.projected_gravity,                             # [E, 3]
-                    self.command_inputs_b,                              # [E, 3]
-                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
-                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
-                    self.joint_pos[:, total_joint_ids],                 # [E, 29]
-                    self.joint_vel[:, total_joint_ids],                 # [E, 29]
-                    action_buffer                                       # [E, 29]
-                ], dim=-1) 
-
-        return observations
-
-
     # Overriding to add Safety policy information
     def _get_states(self) -> dict[str, torch.Tensor]:
         # Action Processing
@@ -165,8 +77,8 @@ class G1FallUnifiedEnv(G1FallEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
-                    leg_actions,
-                    arm_actions,
+                    self.prev_actions["leg"],
+                    self.prev_actions["arm"],
                 ], dim=-1) 
             
             states = {
@@ -212,7 +124,7 @@ class G1FallUnifiedEnv(G1FallEnv):
                         self.projected_gravity,                             # [E, 3]
                         self.joint_pos[:, self.total_arm_joint_ids],        # [E, 17]
                         self.joint_vel[:, self.total_arm_joint_ids],        # [E, 17]
-                        arm_actions                                         # [E, 17]
+                        self.prev_actions["arm"]                            # [E, 17]
                     ],
                     dim=-1
                 ),
@@ -223,7 +135,7 @@ class G1FallUnifiedEnv(G1FallEnv):
                         self.projected_gravity,                             # [E, 3]
                         self.joint_pos[:, self.total_leg_joint_ids],        # [E, 12]
                         self.joint_vel[:, self.total_leg_joint_ids],        # [E, 12]
-                        leg_actions                                         # [E, 12]
+                        self.prev_actions["leg"]                            # [E, 12]
                     ],
                     dim=-1
                 )
@@ -233,8 +145,8 @@ class G1FallUnifiedEnv(G1FallEnv):
         else:
             # Single Agent
             action_buffer = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float, device=self.device)
-            action_buffer[:, self.total_arm_joint_ids] = arm_actions
-            action_buffer[:, self.total_leg_joint_ids] = leg_actions
+            action_buffer[:, self.total_arm_joint_ids] = self.prev_actions["arm"] 
+            action_buffer[:, self.total_leg_joint_ids] = self.prev_actions["leg"] 
             total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             self.extras["safe_observations"] = torch.cat(
                 [
@@ -248,17 +160,6 @@ class G1FallUnifiedEnv(G1FallEnv):
             )
 
         return states 
-    
-    # Overriding to handle previous actions of multi-agent nominal policy and single-agent safety policy
-    def _get_rewards(self):
-        if isinstance(self.actions, dict):
-            self.prev_actions = {k: v.clone() for k, v in self.actions.items()}
-        elif isinstance(self.actions, torch.Tensor):
-            self.prev_actions = self.actions.clone()
-        else:
-            raise ValueError
-
-        return torch.zeros((self.num_envs, self.cfg.num_agents), dtype=torch.float, device=self.device)
 
     # Overriding to add Safety policy information
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:

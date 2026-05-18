@@ -463,7 +463,7 @@ class G1SafeEnv(G1BaseEnv):
         max_torque = torch.max(torch.abs(self._robot.data.applied_torque), dim=-1).values # [E,]
         max_contact_force = torch.max(self.contact_force[valid_mask], dim=-1).values # [E,]
         max_contact_impulse = max_contact_force * self.cfg.sim_dt # [E,]
-        torso_collision = (self.contact_force[:, self.denied_collision_link_ids[0]] - 9.81 * self._robot.data.default_mass[:, self.torso_link_ids]).clip(min=0.0) # [E,]
+        torso_collision = (self.contact_force[:, self.denied_collision_link_ids[0]] - 9.81 * self.denied_link_mass[0]).clip(min=0.0) # [E,]
         
         extras = copy.deepcopy(self.extras)
         extras["viz_data"]["max_torque"] = max_torque

@@ -187,6 +187,9 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.3563, -0.3563, 0.4232, -0.4232, 0.0, 0.0)
         self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
 
+        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.6, 1.2)
+        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.6, 1.2)
+
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
         self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)

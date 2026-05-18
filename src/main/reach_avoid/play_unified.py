@@ -42,13 +42,13 @@ parser.add_argument("--model",
 
 parser.add_argument("--safe_algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--safe_model",
                     type=str,
-                    default="Shared",
+                    default="MLP",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -457,6 +457,13 @@ def main():
             nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
             risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+            # safe action post-processing
+            if not safe_multi_agent:
+                # NOTE: Exceptionally, use env variables for assigning action with dictionary convention
+                safe_actions_buffer = torch.zeros_like(safe_actions)
+                safe_actions_buffer[:, :len(env._unwrapped.total_arm_joint_ids)] = safe_actions[:, env._unwrapped.total_arm_joint_ids]
+                safe_actions_buffer[:, len(env._unwrapped.total_arm_joint_ids):] = safe_actions[:, env._unwrapped.total_leg_joint_ids]
+                safe_actions = safe_actions_buffer
             # action processing by RA Value function
             cur_switch = risk_value.float().reshape(-1) > switch_threshold
 

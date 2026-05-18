@@ -332,8 +332,8 @@ class PPO(Agent):
                 
 
         # Learning rate scheduler update
+        kl = torch.tensor(kl_divergences, device=self.device).mean().item()
         if self.learning_rate_scheduler is not None:
-            kl = torch.tensor(kl_divergences, device=self.device).mean().item()
             self.learning_rate_scheduler.step(kl)
             learning_rate = self.learning_rate_scheduler.get_last_lr()[0]
         else:
