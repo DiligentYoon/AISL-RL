@@ -21,21 +21,21 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     decimation = 4          
 
     ## ========== Nominal policy Setting =========== ##
-    possible_agents = ["arm", "leg"]
-    action_space = {"arm": 17, "leg": 12}                         
-    observation_space = {"arm": 60, "leg": 45}                
-    state_space = {"arm": 97, "leg": 97}
-    ra_state_space = 40
-    num_agents = 2
-    action_scale_factor = {"arm": [0.5, ()], 
-                           "leg": [0.5, ()]}
+    # possible_agents = ["arm", "leg"]
+    # action_space = {"arm": 17, "leg": 12}                         
+    # observation_space = {"arm": 60, "leg": 45}                
+    # state_space = {"arm": 97, "leg": 97}
+    # ra_state_space = 40
+    # num_agents = 2
+    # action_scale_factor = {"arm": [0.5, ()], 
+    #                        "leg": [0.5, ()]}
     
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 29                     
-    # observation_space = 96   
-    # ra_state_space = 40               
-    # num_agents = 1
-    # action_scale_factor = 0.5
+    action_space = 29                     
+    observation_space = 96   
+    ra_state_space = 40               
+    num_agents = 1
+    action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_limits:             float = 10.0
@@ -48,8 +48,8 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_action_rate:          float = 0.01
     
     w_max_collision:        float = 0.3
-    w_prefer_collision:     float = 0.03
-    w_not_prefer_collision: float = 0.1
+    w_prefer_collision:     float = 0.25
+    w_not_prefer_collision: float = 0.5
 
     w_termination: float = 10
 
