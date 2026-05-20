@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from lib.agent.agent import Agent
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
+from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 
 class PPO(Agent):
     def __init__(self,
@@ -50,6 +51,9 @@ class PPO(Agent):
         self.mini_batches = self.cfg["mini_batches"]
 
         self.learning_rate = self.cfg["learning_rate"]
+        self.learning_rate_scheduler = self.cfg["learning_rate_scheduler"]
+        self.kl_threshold = self.cfg["kl_threshold"]
+
         self.discount_factor = self.cfg["discount_factor"]
         self.gae_lambda = self.cfg["lambda"]
 
@@ -86,6 +90,10 @@ class PPO(Agent):
             self.optimizer = torch.optim.Adam(
                     itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
             self.checkpoint_modules["optimizer"] = self.optimizer
+
+        # Set up learning rate scheduler
+        if self.learning_rate_scheduler is not None:
+                self.learning_rate_scheduler = KLAdaptiveLR(self.optimizer, self.kl_threshold)
 
         self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
                               "value_preds", "rewards", "truncated", "terminated",
@@ -322,13 +330,21 @@ class PPO(Agent):
                 if self.entropy_loss_scale:
                     cumulative_entropy_loss += entropy_loss.item()
                 
+
+        # Learning rate scheduler update
+        kl = torch.tensor(kl_divergences, device=self.device).mean().item()
+        if self.learning_rate_scheduler is not None:
+            self.learning_rate_scheduler.step(kl)
+            learning_rate = self.learning_rate_scheduler.get_last_lr()[0]
+        else:
+            learning_rate = self.optimizer.param_groups[0]["lr"]
+
         self.set_running_mode("eval")
 
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches)
         mean_value_loss = cumulative_value_loss / (self.learning_epochs * self.mini_batches)
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches)
-        mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches)
+        mean_kl_divergence = kl
 
-
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, None
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, learning_rate
             

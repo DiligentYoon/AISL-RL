@@ -40,6 +40,18 @@ parser.add_argument("--model",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
+parser.add_argument("--safe_algorithm",
+                    type=str,
+                    default="PPO",
+                    choices=["PPO", "SAC", "TD3", "MAPPO"],
+                    help="The RL algorithm used for training the agent.")
+
+parser.add_argument("--safe_model",
+                    type=str,
+                    default="MLP",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
+                    help="The NN model used for training the agent.")
+
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -78,6 +90,9 @@ from lib.utils.plot_utils import GIFSavePlotter
 algorithm = args_cli.algorithm.lower()
 model = args_cli.model.lower() if args_cli.model is not None else None
 
+safe_algorithm = args_cli.safe_algorithm.lower()
+safe_model = args_cli.safe_model.lower() if args_cli.safe_model is not None else None
+
 def main():
     """
     main training method
@@ -90,7 +105,7 @@ def main():
     try:
         cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
         ra_cfg = load_cfg_from_registry(args_cli.task, f"ra_cfg_entry_point")
-        safe_cfg = load_cfg_from_registry(args_cli.task, f"safe_cfg_entry_point")
+        safe_cfg = load_cfg_from_registry(args_cli.task, f"safe_rl_{safe_algorithm}_cfg_entry_point")
     except ValueError as e:
         print(e)
         return
@@ -301,32 +316,48 @@ def main():
         raise ValueError(f"Unknown predictor: {predictor}")
 
     # =============== Safe Policy Buffer and Model Spawn ===============
+    safe_multi_agent = safe_algorithm == "mappo"
+    safe_cfg["models"]["multi_agent"] = safe_multi_agent
+    # Initialization
     if safe_cfg["buffer"]["buffer_size"] == -1:
         safe_cfg["buffer"]["buffer_size"] = safe_cfg["agent"]["rollouts"]
     else:
         raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
-    safe_obs_size = {}
-    safe_state_size = {}
-    safe_act_size = {}
-    safe_buffers = {}
-    possible_agents = env._unwrapped.cfg.possible_agents
-    for uid in possible_agents:
-        observation_space = env._unwrapped.cfg.safe_observation_space[uid]
-        action_space = env._unwrapped.cfg.safe_action_space[uid]
-        state_space = env._unwrapped.cfg.safe_state_space[uid]
-        safe_cfg["agent"]["async_actor_critic"] = True
+    
+    possible_agents = None
+    if safe_multi_agent:
+        safe_obs_size = {}
+        safe_state_size = {}
+        safe_act_size = {}
+        safe_buffers = {}
+        possible_agents = env._unwrapped.cfg.possible_agents
+        for uid in possible_agents:
+            observation_space = env._unwrapped.cfg.safe_observation_space[uid]
+            action_space = env._unwrapped.cfg.safe_action_space[uid]
+            state_space = env._unwrapped.cfg.safe_state_space[uid]
+            safe_cfg["agent"]["async_actor_critic"] = True
+
+            safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+            safe_buffer.init_buffer(observation_space, state_space, action_space)
+            safe_buffers[uid] = safe_buffer
+            safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
+            safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
+            safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
+    else:
+        observation_space = env._unwrapped.cfg.safe_observation_space
+        action_space = env._unwrapped.cfg.safe_action_space
+        state_space = env._unwrapped.cfg.safe_state_space
 
         safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
         safe_buffer.init_buffer(observation_space, state_space, action_space)
-        safe_buffers[uid] = safe_buffer
-        safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
-        safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
-        safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
+        safe_buffer = safe_buffer
+        safe_obs_size = safe_buffer.tensors["observations"].shape[-1]
+        safe_state_size = safe_buffer.tensors["states"].shape[-1]
+        safe_act_size = safe_buffer.tensors["actions"].shape[-1]   
 
     # Overwrite cfg by cli argument
-    if model is not None:
-        cfg["models"]["model_type"] = model
-    safe_cfg["models"]["multi_agent"] = multi_agent
+    if safe_model is not None:
+        safe_cfg["models"]["model_type"] = safe_model
 
     safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
     if safe_model_manager.model_class == "mlp":
@@ -339,8 +370,9 @@ def main():
 
     # ======================= Safe Agent ============================
     safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    if multi_agent:
+    if safe_multi_agent:
         if safe_model_manager.model_type == "mlp":
+            from lib.agent.mappo import MAPPO
             safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
                                state_space=env._unwrapped.safe_state_space,
                                action_space=env._unwrapped.safe_action_space,
@@ -350,6 +382,7 @@ def main():
                                device=env.device,
                                cfg=safe_cfg["agent"])
         elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
             safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
                                           state_space=env._unwrapped.safe_state_space,
                                           action_space=env._unwrapped.safe_action_space,
@@ -361,7 +394,8 @@ def main():
         else:
             raise RuntimeError("Unvalid model type.")
     else:
-        agent = PPO(model=safe_models,
+        from lib.agent.ppo import PPO
+        safe_agent = PPO(model=safe_models,
                     buffer=safe_buffer, 
                     device=env.device,
                     cfg=safe_cfg["agent"])
@@ -407,6 +441,8 @@ def main():
     obs, states, infos = env.reset()
     safe_obs = infos["safe_observations"]
     timestep = 0
+    total_ep = 0
+    success_ep = 0
 
     prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     switch_threshold = ra_cfg["collection"]["thresholds"]["mid_high"]
@@ -421,6 +457,13 @@ def main():
             nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
             risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+            # safe action post-processing
+            if not safe_multi_agent:
+                # NOTE: Exceptionally, use env variables for assigning action with dictionary convention
+                safe_actions_buffer = torch.zeros_like(safe_actions)
+                safe_actions_buffer[:, :len(env._unwrapped.total_arm_joint_ids)] = safe_actions[:, env._unwrapped.total_arm_joint_ids]
+                safe_actions_buffer[:, len(env._unwrapped.total_arm_joint_ids):] = safe_actions[:, env._unwrapped.total_leg_joint_ids]
+                safe_actions = safe_actions_buffer
             # action processing by RA Value function
             cur_switch = risk_value.float().reshape(-1) > switch_threshold
 
@@ -445,14 +488,17 @@ def main():
             break
 
         # update
+        if done:
+            prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+            total_ep += 1
+            if not terminated[0]:
+                success_ep += 1
+        else:
+            prev_switch = switch
         obs = next_obs
         states = next_states
         infos = next_infos
         safe_obs = infos["safe_observations"]
-        if done:
-            prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
-        else:
-            prev_switch = switch
 
     # close the simulator
     env.close()
@@ -461,6 +507,9 @@ def main():
     if plot is not None:
         plot.save()
         plot.close()
+    
+    # Print success rate
+    print(f"Total Success Rate : {success_ep} / {total_ep}")
 
 
 if __name__ == "__main__":

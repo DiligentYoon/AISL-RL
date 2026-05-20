@@ -49,6 +49,7 @@ gym.register(
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
         "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
-        "safe_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml"
+        "safe_rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+        "safe_rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml"
     }
 )

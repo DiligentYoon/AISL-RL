@@ -18,6 +18,7 @@ class G1FallEnv(G1RecoveryEnv):
 
         # History buffer
         self.hist_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.prev_state_buffer = torch.zeros((self.num_envs, 8), dtype=torch.float32, device=self.device)
         self.root_state_buffer = torch.zeros((self.num_envs, self.cfg.body_hist_length, 8), dtype=torch.float32, device=self.device)
 
         # Capturability information
@@ -69,10 +70,10 @@ class G1FallEnv(G1RecoveryEnv):
 
     # Overriding to add history buffer reset
     def _reset_idx(self, env_ids):
-        super()._reset_idx(env_ids)
         # History buffer reset
         self.hist_count[env_ids] = 0
         self.root_state_buffer[env_ids] = 0.0
+        super()._reset_idx(env_ids)
 
     # Overriding to compute capturability information and update history buffer
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
@@ -85,11 +86,14 @@ class G1FallEnv(G1RecoveryEnv):
         self.capturable_boundary[i] = radius.unsqueeze(-1)
         self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
 
-        # History buffer update
-        self.root_state_buffer[i, self.hist_count[i] % self.cfg.body_hist_length] = torch.cat([self.root_ang_vel_b[i], self.projected_gravity[i], self.dist_from_icp_to_stance[i], self.phase[i].unsqueeze(-1)], dim=-1)
-
-        # History count
-        self.hist_count[i] += 1
+        if env_ids is None:
+            # History buffer update
+            self.root_state_buffer[i, self.hist_count[i] % self.cfg.body_hist_length] = self.prev_state_buffer[i].clone()
+            # History count
+            self.hist_count[i] += 1
+        
+        # Prev state for history buffer
+        self.prev_state_buffer[i] = torch.cat([self.root_ang_vel_b[i], self.projected_gravity[i], self.dist_from_icp_to_stance[i], self.phase[i].unsqueeze(-1)], dim=-1)
 
 
     # ======================= Auxillary functions ======================= #
