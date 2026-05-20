@@ -125,6 +125,16 @@ def main():
     except AttributeError:
         dt = env.unwrapped.step_dt
 
+    # Sync SafeFall seq_len with the env's actual max_episode_length so the
+    # sliding-window evaluator does not pad beyond the episode horizon.
+    if predictor == "safefall":
+        env_max_ep = int(env.unwrapped.max_episode_length)
+        cfg_seq_len = pred_cfg["buffer"].get("seq_len")
+        if cfg_seq_len != env_max_ep:
+            print(f"[INFO] Overriding safe_fall.buffer.seq_len ({cfg_seq_len}) "
+                  f"with env max_episode_length ({env_max_ep}).")
+            pred_cfg["buffer"]["seq_len"] = env_max_ep
+
     env = IsaacLabWrapper(env)
 
     # ======================= Buffer (nominal policy) =========================
@@ -243,7 +253,6 @@ def main():
                                 device=env.device, cfg=pred_cfg["agent"])
 
     elif predictor == "safefall":
-        from lib.buffer.recurrent_replay import RecurrentReplayBuffer
         from lib.model.Baselines.SafeFall.safe_fall import GRU
         from lib.agent.Baselines.safe_fall import SafeFall
 
@@ -251,24 +260,12 @@ def main():
             raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
 
         obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
-        max_ep_steps = int(env._unwrapped.max_episode_length)
-
-        pred_buffer = RecurrentReplayBuffer(
-            buffer_size=pred_cfg["buffer"]["buffer_size"],
-            num_envs=env.num_envs,
-            device=env.device,
-            seq_len=pred_cfg["buffer"]["seq_len"],
-            fall_lead_seconds=pred_cfg["buffer"]["fall_lead_seconds"],
-            step_dt=dt,
-            max_episode_steps=max_ep_steps,
-        )
-        pred_buffer.init_buffer(obs_dim)
+        # Inference-only model holder; trained offline via collect_offline.py + train_offline.py.
         pred_model = {"critic": GRU(obs_dim=obs_dim,
                                     hidden_dim=pred_cfg["model"]["hidden_dim"],
                                     num_layers=pred_cfg["model"].get("num_layers", 1),
                                     dropout=pred_cfg["model"].get("dropout", 0.0))}
-        pred_agent = SafeFall(pred_model, pred_buffer,
-                              device=env.device, cfg=pred_cfg["agent"])
+        pred_agent = SafeFall(pred_model, device=env.device, cfg=pred_cfg["agent"])
     else:
         raise ValueError(f"Unknown predictor: {predictor}")
 

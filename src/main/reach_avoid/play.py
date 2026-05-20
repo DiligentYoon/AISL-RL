@@ -271,7 +271,6 @@ def main():
                                 device=env.device, cfg=pred_cfg["agent"])
 
     elif predictor == "safefall":
-        from lib.buffer.recurrent_replay import RecurrentReplayBuffer
         from lib.model.Baselines.SafeFall.safe_fall import GRU
         from lib.agent.Baselines.safe_fall import SafeFall
 
@@ -279,26 +278,12 @@ def main():
             raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
 
         obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
-        max_ep_steps = int(env._unwrapped.max_episode_length)
-
-        pred_buffer = RecurrentReplayBuffer(
-            buffer_size=pred_cfg["buffer"]["buffer_size"],
-            num_envs=env.num_envs,
-            device=env.device,
-            seq_len=pred_cfg["buffer"]["seq_len"],
-            fall_lead_seconds=pred_cfg["buffer"]["fall_lead_seconds"],
-            step_dt=dt,
-            max_episode_steps=max_ep_steps,
-        )
-        pred_buffer.init_buffer(obs_dim)
-        # Model dict key is unified as "critic" with RA so that Agent.load() dispatch
-        # and checkpoint_modules indexing are predictor-agnostic.
+        # Inference-only model holder; trained offline via collect_offline.py + train_offline.py.
         pred_model = {"critic": GRU(obs_dim=obs_dim,
                                     hidden_dim=pred_cfg["model"]["hidden_dim"],
                                     num_layers=pred_cfg["model"].get("num_layers", 1),
-                                    dropout=pred_cfg["model"].get("dropout", 0.0),)}
-        pred_agent = SafeFall(pred_model, pred_buffer,
-                              device=env.device, cfg=pred_cfg["agent"])
+                                    dropout=pred_cfg["model"].get("dropout", 0.0))}
+        pred_agent = SafeFall(pred_model, device=env.device, cfg=pred_cfg["agent"])
 
     else:
         raise ValueError(f"Unknown predictor: {predictor}")
@@ -331,7 +316,15 @@ def main():
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
-    
+
+    # SafeFall predictor recurrent state; carried across steps within an episode,
+    # zeroed per-env on done. None for RA (stateless MLP).
+    pred_h = None
+    if predictor == "safefall":
+        n_layers = int(pred_cfg["model"].get("num_layers", 1))
+        hidden_dim = int(pred_cfg["model"]["hidden_dim"])
+        pred_h = torch.zeros(n_layers, env.num_envs, hidden_dim, device=env.device)
+
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
 
@@ -339,11 +332,25 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+
+            # Predictor forward
+            if predictor == "ra":
+                risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+            else:  # safefall
+                obs_in = infos["safe_fall_obs"].unsqueeze(1)            # (N, 1, obs_dim)
+                logits, pred_h, _ = pred_agent.critic(obs_in, pred_h)
+                risk_value = logits.softmax(dim=-1)[..., 1].reshape(-1, 1)
+
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
+
+        # Per-env hidden state reset for SafeFall on episode boundary
+        if pred_h is not None:
+            done_mask = (terminated | truncated).reshape(-1)
+            if done_mask.any():
+                pred_h[:, done_mask, :] = 0.0
 
         # Plot Phase
         if plot is not None:

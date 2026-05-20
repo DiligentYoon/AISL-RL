@@ -23,8 +23,8 @@ parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path
 parser.add_argument("--predictor",
                     type=str,
                     default="ra",
-                    choices=["ra", "safefall"],
-                    help="Fall predictor type to train.")
+                    choices=["ra"],
+                    help="Fall predictor type to train. SafeFall baseline is trained offline; see main/reach_avoid/baselines/safefall/.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -96,25 +96,14 @@ def main():
     # specify directory for logging experiments (load checkpoint)
     if args_cli.checkpoint is not None:
         base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
-        if args_cli.predictor == "ra":
-            log_dir = os.path.join(base_dir, "Reach_Avoid")
-        elif args_cli.predictor == "safefall":
-            log_dir = os.path.join(base_dir, "Safe_Fall")
-        else:
-            raise ValueError(f"Unknown predictor: {args_cli.predictor}")
+        log_dir = os.path.join(base_dir, "Reach_Avoid")
     else:
-        if args_cli.predictor == "ra":
-            log_dir = os.path.join(os.getcwd(), "Reach_Avoid")
-        elif args_cli.predictor == "safefall":
-            log_dir = os.path.join(os.getcwd(), "Safe_Fall")
-        else:
-            raise ValueError(f"Unknown predictor: {args_cli.predictor}")
+        log_dir = os.path.join(os.getcwd(), "Reach_Avoid")
 
     # ============================ Env & Wrapper Spawn ================================
 
-    # Predictor selection (ra | safefall)
     predictor = args_cli.predictor
-    pred_cfg = ra_cfg[predictor if predictor == "ra" else "safe_fall"]
+    pred_cfg = ra_cfg["ra"]
 
     # Create isaac environment
     if args_cli.seed is not None:
@@ -270,53 +259,19 @@ def main():
         
 
     # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
-    if predictor == "ra":
-        from lib.buffer.replaybuffer import HindSightReplayBuffer
-        from lib.model.MLP import RA_Critic
-        from lib.agent.reach_avoid import ReachAvoid
+    from lib.buffer.replaybuffer import HindSightReplayBuffer
+    from lib.model.MLP import RA_Critic
+    from lib.agent.reach_avoid import ReachAvoid
 
-        if not hasattr(env._unwrapped.cfg, "ra_state_space"):
-            raise RuntimeError("Explicit state space is not defined.")
+    if not hasattr(env._unwrapped.cfg, "ra_state_space"):
+        raise RuntimeError("Explicit state space is not defined.")
 
-        pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
-                                            env.num_envs, device=env.device)
-        pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
-        pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-        pred_agent = ReachAvoid(pred_model, pred_buffer,
-                                device=env.device, cfg=pred_cfg["agent"])
-
-    elif predictor == "safefall":
-        from lib.buffer.recurrent_replay import RecurrentReplayBuffer
-        from lib.model.Baselines.SafeFall.safe_fall import GRU
-        from lib.agent.Baselines.safe_fall import SafeFall
-
-        if not hasattr(env._unwrapped.cfg, "safe_fall_obs_dim"):
-            raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
-
-        obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
-        max_ep_steps = int(env._unwrapped.max_episode_length)
-
-        pred_buffer = RecurrentReplayBuffer(
-            buffer_size=pred_cfg["buffer"]["buffer_size"],
-            num_envs=env.num_envs,
-            device=env.device,
-            seq_len=pred_cfg["buffer"]["seq_len"],
-            fall_lead_seconds=pred_cfg["buffer"]["fall_lead_seconds"],
-            step_dt=dt,
-            max_episode_steps=max_ep_steps,
-        )
-        pred_buffer.init_buffer(obs_dim)
-        # Model dict key is unified as "critic" with RA so that Agent.load() dispatch
-        # and checkpoint_modules indexing are predictor-agnostic.
-        pred_model = {"critic": GRU(obs_dim=obs_dim,
-                                    hidden_dim=pred_cfg["model"]["hidden_dim"],
-                                    num_layers=pred_cfg["model"].get("num_layers", 1),
-                                    dropout=pred_cfg["model"].get("dropout", 0.0),)}
-        pred_agent = SafeFall(pred_model, pred_buffer,
-                              device=env.device, cfg=pred_cfg["agent"])
-
-    else:
-        raise ValueError(f"Unknown predictor: {predictor}")
+    pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+                                        env.num_envs, device=env.device)
+    pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+    pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+    pred_agent = ReachAvoid(pred_model, pred_buffer,
+                            device=env.device, cfg=pred_cfg["agent"])
 
     # Checkpoint (Policy)
     if args_cli.checkpoint is not None:
