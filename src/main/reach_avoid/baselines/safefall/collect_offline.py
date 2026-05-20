@@ -35,6 +35,7 @@ simulation_app = app_launcher.app
 
 
 import json
+import math
 import os
 from datetime import datetime
 
@@ -197,21 +198,28 @@ def main():
               f"with env max_episode_length ({max_ep_steps}).")
         sf_cfg["buffer"]["seq_len"] = max_ep_steps
 
+    target = int(collection_cfg["target_trajectories"])
+    train_val_split = tuple(collection_cfg["train_val_split"])
+    shard_size = int(collection_cfg["shard_size"])
+
+    # buffer_size is the number of circular-buffer rows (timesteps); each row
+    # already stores num_envs samples in parallel. Size it so that the worst
+    # case (all envs survive to max_ep_steps) closes `target` trajectories
+    # without wrap-around overwriting still-referenced closed_episodes rows.
+    episodes_per_env = math.ceil(target / env.num_envs) + 1
+    buffer_rows = max_ep_steps * episodes_per_env
+
     buffer = RecurrentReplayBuffer(
-        buffer_size=max_ep_steps * env.num_envs,
+        buffer_size=buffer_rows,
         num_envs=env.num_envs,
         device=env.device,
         seq_len=sf_cfg["buffer"]["seq_len"],
         fall_lead_seconds=sf_cfg["buffer"]["fall_lead_seconds"],
         step_dt=step_dt,
         max_episode_steps=max_ep_steps,
-        max_closed_episodes=collection_cfg["target_trajectories"] + max_ep_steps,
+        max_closed_episodes=target + max_ep_steps,
     )
     buffer.init_buffer(obs_dim=obs_dim)
-
-    target = int(collection_cfg["target_trajectories"])
-    train_val_split = tuple(collection_cfg["train_val_split"])
-    shard_size = int(collection_cfg["shard_size"])
 
     if sum(train_val_split) != target:
         raise ValueError(

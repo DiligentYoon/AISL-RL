@@ -32,7 +32,10 @@ ra:
 
 safe_fall:
   buffer:
-    # buffer_size is auto-derived in collect_offline as env.max_episode_length * num_envs.
+    # buffer_size (rows) is auto-derived in collect_offline as
+    #   max_episode_length * (ceil(target_trajectories / num_envs) + 1).
+    # Each row stores num_envs samples in parallel; the +1 is a wrap-around
+    # safety margin for worst-case (max_ep_steps long) episodes.
     # seq_len is overridden at collect time with env.max_episode_length (this is a hint).
     seq_len: 200
     fall_lead_seconds: 0.1
@@ -41,8 +44,8 @@ safe_fall:
     num_layers: 1
     dropout: 0.0
   collection:                       # Stage 1 (collect_offline.py)
-    target_trajectories: 81920
-    train_val_split: [65536, 16384]
+    target_trajectories: 40960
+    train_val_split: [32768, 8192]
     shard_size: 1024
     output_root: "Safe_Fall"
   train:                            # Stage 2 (train_offline.py) — paper hyperparameters
