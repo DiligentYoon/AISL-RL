@@ -26,7 +26,7 @@ class ModelFactory:
         
         # Load model cfg
         self.is_squashed = self.model_cfg.get("squashed", False)
-        self.is_multi_agent = self.model_cfg.get("multi_agent", False)
+        self.is_multi_agent = self.model_cfg.get("multi_agent", True)
         self.model_type = self.model_cfg.get("model_type", "mlp").lower()
 
         if (self.model_type == "nervenet") or (self.model_type == "bodytransformer"):

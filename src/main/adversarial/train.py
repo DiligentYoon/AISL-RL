@@ -76,6 +76,7 @@ import lib
 from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
+from lib.utils.wrapper_utils import unflatten_tensorized_space
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
 
@@ -120,9 +121,11 @@ def main():
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
         cfg_nominal["agent"]["seed"] = args_cli.seed
+        cfg_adversarial["agent"]["seed"] = args_cli.seed
     else:
         env_cfg.seed = cfg_nominal.get("seed", None)
         cfg_nominal["agent"]["seed"] = cfg_nominal.get("seed", 42)                                              # 42 is a default seed (equal to env)
+        cfg_adversarial["agent"]["seed"] = cfg_adversarial.get("seed", 42)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -162,7 +165,6 @@ def main():
     else:
         raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
     
-    possible_agents = None
     state_space = None
     nominal_update_turn = True                                                  # Update flag
     obs_size = {}
@@ -295,7 +297,6 @@ def main():
 
 ### ========================================= Adversarial Agent ========================================= ###
     
-    adversarial_agents = cfg_adversarial["agent"]["agents_name"]
     # Specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", cfg_adversarial["agent"]["experiment"]["directory"])
     log_root_path = os.path.abspath(log_root_path)
@@ -303,6 +304,8 @@ def main():
     print(f"[INFO] Exact adversarial experiment name requested from command line: {log_dir}")
     if cfg_adversarial["agent"]["experiment"]["experiment_name"]:
         log_dir_adversarial = log_dir + f"_{cfg_adversarial['agent']['experiment']['experiment_name']}"
+    else:
+        log_dir_adversarial = log_dir
     log_dir_adversarial = os.path.join(log_root_path, log_dir_adversarial)
 
     if cfg_adversarial["agent"]["experiment"]["write_interval"] == "auto":
@@ -439,11 +442,11 @@ def main():
     rollout = 0
     elapsed_time = 0
     
-    nominal_obs = {k: v for k, v in obs.items() if k not in adversarial_agents}
-    adv_obs = {k: v for k, v in obs.items() if k in adversarial_agents}
+    nominal_obs = filter_tensor(tensor=obs, space_dict=env.observation_space, keys=adversarial_agents, exclude=True)
+    adv_obs = filter_tensor(tensor=obs, space_dict=env.observation_space, keys=adversarial_agents)
 
-    nominal_states = {k: v for k, v in states.items() if k not in adversarial_agents}
-    adv_states = {k: v for k, v in states.items() if k in adversarial_agents}
+    nominal_states = filter_tensor(tensor=states, space_dict=env.state_space, keys=adversarial_agents, exclude=True)
+    adv_states = filter_tensor(tensor=states, space_dict=env.state_space, keys=adversarial_agents)
 
     nominal_update_turn = False                                                             # NOTE: for test
 
@@ -463,11 +466,11 @@ def main():
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             
             # Data slicing
-            nominal_next_obs = {k: v for k, v in next_obs.items() if k not in adversarial_agents}
-            adv_next_obs = {k: v for k, v in next_obs.items() if k in adversarial_agents}
+            nominal_next_obs = filter_tensor(tensor=next_obs, space_dict=env.observation_space, keys=adversarial_agents, exclude=True)
+            adv_next_obs = filter_tensor(tensor=next_obs, space_dict=env.observation_space, keys=adversarial_agents)
             
-            nominal_next_states = {k: v for k, v in next_states.items() if k not in adversarial_agents}
-            adv_next_states = {k: v for k, v in next_states.items() if k in adversarial_agents}
+            nominal_next_states = filter_tensor(tensor=next_states, space_dict=env.state_space, keys=adversarial_agents, exclude=True)
+            adv_next_states = filter_tensor(tensor=next_states, space_dict=env.state_space, keys=adversarial_agents)
             
             nominal_rewards = {k: v for k, v in rewards.items() if k not in adversarial_agents}
             adv_rewards = {k: v for k, v in rewards.items() if k in adversarial_agents}
@@ -763,6 +766,31 @@ def main():
     # close the simulator
     env.close()
 
+def filter_tensor(tensor: torch.Tensor,
+                  space_dict: dict,
+                  keys: list,
+                  exclude: bool=False,
+                  dim: int=-1) -> torch.Tensor:
+    """Extract specific key's value from Tensor which used to be dictionary"""
+    dictionary = unflatten_tensorized_space(space_dict, tensor)
+    filtered_tensor =[]
+
+    if exclude:
+        for k in dictionary:
+            if not k in keys:
+                filtered_tensor.append(dictionary[k])
+            
+        result_tensor = torch.cat(filtered_tensor, dim=dim)
+    else:
+        for k in keys:
+            if k in dictionary:
+                filtered_tensor.append(dictionary[k])
+            else:
+                raise KeyError(f"Key '{k}'doesn't exist in dictionary")
+
+        result_tensor = torch.cat(filtered_tensor, dim=dim)
+
+    return result_tensor
 
 if __name__ == "__main__":
     # run the main function
