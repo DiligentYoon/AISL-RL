@@ -63,3 +63,12 @@ _isaac_sim*
 _repo
 _build
 .lastformat
+
+# LaTeX Paper
+**.aux
+**.bbl
+**.blg
+**.fdb_latexmk
+**.fls
+**.out
+**.synctex.gz
