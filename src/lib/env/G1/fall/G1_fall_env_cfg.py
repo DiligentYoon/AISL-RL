@@ -34,6 +34,9 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        # self collision off for deleting fishy and chaotic collisions
+        self.robot.spawn.articulation_props.enabled_self_collisions = False
+
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
             warmup=0.2,
             endup=0.5,
