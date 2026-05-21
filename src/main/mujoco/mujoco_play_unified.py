@@ -181,7 +181,7 @@ def main():
     safe_payload = load_pt(args.safe_checkpoint, role="safe", device=device)
 
     # ---- Random push helper ----
-    push = RandomPush(
+    pusher = RandomPush(
         model, body_name=args.push_body,
         period_sec=args.push_period,
         duration_sec=args.push_duration,
@@ -189,9 +189,8 @@ def main():
         rng=rng,
     )
 
-    # ---- Switching state (latched, mirrors play_unified.py) ----
-    prev_switch = False
-    # TODO: reset prev_switch on episode boundary once an "episode" is defined here.
+    # Switching latch
+    switch_latch = False
 
     # ---- Passive viewer ----
     viewer = mujoco.viewer.launch_passive(model, data)
@@ -217,8 +216,8 @@ def main():
 
                 # 2) Latched switching: once risk crosses threshold we stay on safe.
                 cur_switch = bool(risk > args.switch_threshold)
-                switch = cur_switch or prev_switch
-                prev_switch = switch
+                switch = cur_switch or switch_latch
+                switch_latch = switch
                 actions_t = safe if switch else nominal
 
                 # 3) Defensive shape match before writing to mjData.ctrl.
@@ -228,7 +227,7 @@ def main():
                 np.copyto(data.ctrl, actions_np)
 
                 # 4) Apply scheduled random push (no-op if outside the active window).
-                push.apply(data)
+                pusher.apply(data)
 
                 # 5) Step physics.
                 mujoco.mj_step(model, data)
