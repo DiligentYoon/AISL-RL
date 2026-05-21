@@ -22,6 +22,29 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import torch
+import torch.nn as nn
+
+
+# ---------------------------------------------------------------------- #
+# Fixed tuning constants (edit here, not via CLI)                        #
+# ---------------------------------------------------------------------- #
+# Body-frame velocity command driving the nominal policy's command_inputs.
+CMD_VX = 0.0
+CMD_VY = 0.0
+CMD_WZ = 0.0
+
+# Gait phase frequency (Hz) producing phase_sin / phase_cos for the nominal obs.
+PHASE_FREQ_HZ = 1.5
+
+# Length of the RA predictor's root_state_buffer history (rows of 8 features); 0 = stub.
+RA_HISTORY_LEN = 0
+
+# Per-uid action scaling — must match the action_scale_factor used at training time.
+ACTION_SCALE_ARM = 0.25
+ACTION_SCALE_LEG = 0.25
+
+# Tanh squashing on actor outputs. Must match the training cfg's `squash` flag.
+SQUASH = True
 
 
 # ---------------------------------------------------------------------- #
@@ -64,36 +87,211 @@ def parse_args() -> argparse.Namespace:
 
 
 # ---------------------------------------------------------------------- #
-# Checkpoint loading                                                     #
+# Inline policy / critic architectures (mirror lib.model.MLP exactly)    #
 # ---------------------------------------------------------------------- #
-def load_pt(ckpt_path: str | None, role: str, device: torch.device):
-    """Best-effort .pt loader. Returns raw torch.load payload, or None on miss."""
-    if ckpt_path is None:
+# These are inference-only re-implementations of the classes used at training
+# time. We re-declare them here so the MuJoCo runner stays free of lib.* imports
+# (which transitively pull in Isaac Lab via lib/__init__.py).
+
+class _RunningMeanStd(nn.Module):
+    """Inference-only mirror of lib.utils.Running_mean_std.RunningMeanStd."""
+
+    def __init__(self, shape: int, epsilon: float = 1e-4):
+        super().__init__()
+        # Buffer names must match the training class so state_dicts load 1:1.
+        self.epsilon = epsilon
+        self.register_buffer("mean", torch.zeros(shape, dtype=torch.float32))
+        self.register_buffer("var", torch.ones(shape, dtype=torch.float32))
+        self.register_buffer("count", torch.tensor(epsilon, dtype=torch.float32))
+
+    def standardize(self, x: torch.Tensor) -> torch.Tensor:
+        # (x - mean) / sqrt(var + epsilon). The training-time update path is a no-op here.
+        return (x - self.mean) / torch.sqrt(self.var + self.epsilon)
+
+
+class _SharedBackbone(nn.Module):
+    """Mirror of lib.model.MLP.SharedBackbone."""
+
+    def __init__(self, in_dim: int, d_arm: int = 128, d_leg: int = 128):
+        super().__init__()
+        # NOTE: the training class uses d_arm as the output dim for both heads
+        # (see SharedBackbone.__init__). We replicate that exactly so weights load.
+        self.shared = nn.Sequential(
+            nn.Linear(in_dim, 128), nn.ELU(),
+            nn.Linear(128, 128), nn.ELU(),
+        )
+        self.head_arm = nn.Sequential(nn.Linear(128, d_arm), nn.ELU())
+        self.head_leg = nn.Sequential(nn.Linear(128, d_arm), nn.ELU())
+
+    def forward(self, x: torch.Tensor, role: str) -> torch.Tensor:
+        g = self.shared(x)
+        return self.head_arm(g) if role == "arm" else self.head_leg(g)
+
+
+class _SharedActor(nn.Module):
+    """Inference-only mirror of lib.model.MLP.SharedActor (deterministic path)."""
+
+    def __init__(self, num_obs_arm: int, num_obs_leg: int,
+                 num_act_arm: int, num_act_leg: int,
+                 encoder_hidden_dim: int, squash: bool):
+        super().__init__()
+        self.squash = squash
+
+        # Per-role observation normalizer.
+        self.actor_standardizer = nn.ModuleDict({
+            "arm": _RunningMeanStd(num_obs_arm),
+            "leg": _RunningMeanStd(num_obs_leg),
+        })
+
+        # Per-role encoder: obs -> encoder_hidden_dim.
+        self.encoder = nn.ModuleDict({
+            "arm": nn.Sequential(nn.Linear(num_obs_arm, encoder_hidden_dim), nn.ELU()),
+            "leg": nn.Sequential(nn.Linear(num_obs_leg, encoder_hidden_dim), nn.ELU()),
+        })
+
+        # Shared dual-head trunk over [z_self | z_other].
+        self.shared_backbone = _SharedBackbone(in_dim=encoder_hidden_dim * 2)
+
+        # Per-role action head: [z_self | h_self] -> action mean.
+        self.head = nn.ModuleDict({
+            "arm": nn.Sequential(
+                nn.Linear(encoder_hidden_dim + 128, 128), nn.ELU(),
+                nn.Linear(128, 64), nn.ELU(),
+                nn.Linear(64, num_act_arm),
+            ),
+            "leg": nn.Sequential(
+                nn.Linear(encoder_hidden_dim + 128, 128), nn.ELU(),
+                nn.Linear(128, 64), nn.ELU(),
+                nn.Linear(64, num_act_leg),
+            ),
+        })
+
+        # State-independent log std is in the saved state_dict; we keep it so load_state_dict
+        # is strict-clean, but it is unused in deterministic inference.
+        self.log_std_parameter = nn.ParameterDict({
+            "arm": nn.Parameter(torch.zeros(num_act_arm), requires_grad=False),
+            "leg": nn.Parameter(torch.zeros(num_act_leg), requires_grad=False),
+        })
+
+    @torch.no_grad()
+    def act_deterministic(self, obs_arm: torch.Tensor, obs_leg: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        # Standardize -> encode -> shared trunk -> per-role head -> optional tanh squash.
+        z_arm = self.encoder["arm"](self.actor_standardizer["arm"].standardize(obs_arm))
+        z_leg = self.encoder["leg"](self.actor_standardizer["leg"].standardize(obs_leg))
+        h_arm = self.shared_backbone(torch.cat([z_arm, z_leg], dim=-1), role="arm")
+        h_leg = self.shared_backbone(torch.cat([z_leg, z_arm], dim=-1), role="leg")
+        a_arm = self.head["arm"](torch.cat([z_arm, h_arm], dim=-1))
+        a_leg = self.head["leg"](torch.cat([z_leg, h_leg], dim=-1))
+        if self.squash:
+            a_arm = torch.tanh(a_arm)
+            a_leg = torch.tanh(a_leg)
+        return a_arm, a_leg
+
+
+class _RA_Critic(nn.Module):
+    """Inference-only mirror of lib.model.MLP.RA_Critic."""
+
+    def __init__(self, num_states: int):
+        super().__init__()
+        self.critic_standardizer = _RunningMeanStd(num_states)
+        self.net = nn.Sequential(
+            nn.Linear(num_states, 128), nn.ELU(),
+            nn.Linear(128, 64), nn.ELU(),
+            nn.Linear(64, 1),
+        )
+
+    @torch.no_grad()
+    def value(self, x: torch.Tensor) -> torch.Tensor:
+        # Returns V(s) as a (B, 1) tensor; caller takes .item() when a float is needed.
+        return self.net(self.critic_standardizer.standardize(x))
+
+
+# ---------------------------------------------------------------------- #
+# Checkpoint loaders                                                     #
+# ---------------------------------------------------------------------- #
+def load_cooperative_actor(checkpoint_path: str | None, role: str, device: torch.device,
+                           squash: bool) -> "_SharedActor | None":
+    """Load a CooperativeMAPPO state-dict and rebuild SharedActor for inference.
+
+    Expects payload['shared']['actor'] to be a SharedActor state_dict.
+    Architecture dimensions are inferred from saved tensor shapes.
+    """
+    if checkpoint_path is None:
         print(f"[WARN] {role}: no checkpoint provided; using zero-action stub")
         return None
-    if not os.path.isfile(ckpt_path):
-        print(f"[WARN] {role}: checkpoint '{ckpt_path}' not found; using zero-action stub")
+    if not os.path.isfile(checkpoint_path):
+        print(f"[WARN] {role}: checkpoint '{checkpoint_path}' not found; using zero-action stub")
         return None
     try:
-        payload = torch.load(ckpt_path, map_location=device)
-        print(f"[INFO] {role}: loaded checkpoint from {ckpt_path}")
-        return payload
+        payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
     except Exception as e:
-        print(f"[ERROR] {role}: failed to load checkpoint: {e}")
+        print(f"[ERROR] {role}: failed to torch.load: {e}")
+        return None
+    if not isinstance(payload, dict) or "actor" not in payload.get("shared", {}):
+        print(f"[ERROR] {role}: unexpected layout — expected payload['shared']['actor'] state_dict")
+        return None
+    sd = payload["shared"]["actor"]
+    try:
+        # Infer dims directly from saved tensors — robust to training-time changes.
+        num_obs_arm = int(sd["actor_standardizer.arm.mean"].shape[0])
+        num_obs_leg = int(sd["actor_standardizer.leg.mean"].shape[0])
+        enc_dim = int(sd["encoder.arm.0.weight"].shape[0])
+        # Final Linear of each per-role head sits at index 4 (Linear-ELU-Linear-ELU-Linear).
+        num_act_arm = int(sd["head.arm.4.weight"].shape[0])
+        num_act_leg = int(sd["head.leg.4.weight"].shape[0])
+    except KeyError as e:
+        print(f"[ERROR] {role}: missing expected key in actor state_dict: {e}")
         return None
 
+    actor = _SharedActor(num_obs_arm, num_obs_leg, num_act_arm, num_act_leg,
+                         encoder_hidden_dim=enc_dim, squash=squash)
+    missing, unexpected = actor.load_state_dict(sd, strict=False)
+    if missing:
+        print(f"[WARN] {role}: missing keys when loading actor: {missing}")
+    if unexpected:
+        print(f"[WARN] {role}: unexpected keys when loading actor: {unexpected}")
+    actor = actor.to(device).eval()
+    print(f"[INFO] {role}: loaded actor from {checkpoint_path}  "
+          f"obs=(arm={num_obs_arm}, leg={num_obs_leg})  "
+          f"act=(arm={num_act_arm}, leg={num_act_leg})  enc={enc_dim}")
+    return actor
 
-# ---------------------------------------------------------------------- #
-# Agent stubs (real inference TBD)                                       #
-# ---------------------------------------------------------------------- #
-def agent_act(agent_payload, obs: torch.Tensor, nu: int, device: torch.device) -> torch.Tensor:
-    """Zero-action placeholder; replace once obs builder + real model are wired."""
-    return torch.zeros((1, nu), device=device)
 
+def load_ra_critic(checkpoint_path: str | None, role: str, device: torch.device) -> "_RA_Critic | None":
+    """Load a ReachAvoid state-dict and rebuild RA_Critic for inference.
 
-def predictor_value(predictor_payload, obs: torch.Tensor) -> float:
-    """Zero-risk placeholder; replace with real RA / SafeFall head later."""
-    return 0.0
+    Accepts both {"critic": sd, "optimizer": ...} (Agent.save format) and a raw sd.
+    """
+    if checkpoint_path is None:
+        print(f"[WARN] {role}: no checkpoint provided; using zero-risk stub")
+        return None
+    if not os.path.isfile(checkpoint_path):
+        print(f"[WARN] {role}: checkpoint '{checkpoint_path}' not found; using zero-risk stub")
+        return None
+    try:
+        payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    except Exception as e:
+        print(f"[ERROR] {role}: failed to torch.load: {e}")
+        return None
+    sd = payload["critic"] if isinstance(payload, dict) and "critic" in payload else payload
+    if not isinstance(sd, dict):
+        print(f"[ERROR] {role}: unexpected RA critic payload type: {type(sd)}")
+        return None
+    try:
+        num_states = int(sd["net.0.weight"].shape[1])
+    except KeyError as e:
+        print(f"[ERROR] {role}: missing 'net.0.weight' in RA critic state_dict: {e}")
+        return None
+
+    critic = _RA_Critic(num_states)
+    missing, unexpected = critic.load_state_dict(sd, strict=False)
+    if missing:
+        print(f"[WARN] {role}: missing keys when loading RA critic: {missing}")
+    if unexpected:
+        print(f"[WARN] {role}: unexpected keys when loading RA critic: {unexpected}")
+    critic = critic.to(device).eval()
+    print(f"[INFO] {role}: loaded RA critic from {checkpoint_path}  num_states={num_states}")
+    return critic
 
 
 # ---------------------------------------------------------------------- #
@@ -152,16 +350,201 @@ class RandomPush:
 
 
 # ---------------------------------------------------------------------- #
+# Joint ordering (must match Isaac Lab's total_leg_joint_ids + total_arm_joint_ids) #
+# ---------------------------------------------------------------------- #
+# Legs first (12), then arms+waist (17). Policies were trained against this exact
+# ordering, so it must be preserved when feeding observations.
+LEG_JOINT_NAMES: list[str] = [
+    "left_hip_pitch_joint",   "left_hip_roll_joint",   "left_hip_yaw_joint",
+    "left_knee_joint",        "left_ankle_pitch_joint","left_ankle_roll_joint",
+    "right_hip_pitch_joint",  "right_hip_roll_joint",  "right_hip_yaw_joint",
+    "right_knee_joint",       "right_ankle_pitch_joint","right_ankle_roll_joint",
+]
+ARM_JOINT_NAMES: list[str] = [
+    "waist_yaw_joint", "waist_roll_joint", "waist_pitch_joint",
+    "left_shoulder_pitch_joint",  "left_shoulder_roll_joint",  "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "left_wrist_roll_joint",  "left_wrist_pitch_joint",  "left_wrist_yaw_joint",
+    "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
+]
+
+
+# ---------------------------------------------------------------------- #
+# Observation builder helpers                                            #
+# ---------------------------------------------------------------------- #
+class JointIndex:
+    """Resolve MuJoCo qpos/qvel addresses for a fixed list of joint names."""
+
+    def __init__(self, model: mujoco.MjModel, names: list[str]):
+        # qpos_idx[i] / qvel_idx[i] are the qpos/qvel slot of joint names[i].
+        self.qpos_idx = np.empty(len(names), dtype=np.int64)
+        self.qvel_idx = np.empty(len(names), dtype=np.int64)
+        for i, n in enumerate(names):
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+            if jid < 0:
+                raise ValueError(f"joint not found in scene: {n}")
+            self.qpos_idx[i] = model.jnt_qposadr[jid]
+            self.qvel_idx[i] = model.jnt_dofadr[jid]
+
+    @property
+    def n(self) -> int:
+        # Number of joints in this group.
+        return int(self.qpos_idx.shape[0])
+
+
+class RootState:
+    """Extract base pose/velocities and rotate vectors into the body frame."""
+
+    # World-frame gravity unit vector; projected gravity == R^T · this.
+    _GRAVITY_W = np.array([0.0, 0.0, -1.0])
+
+    def __init__(self):
+        # Cached base state, refreshed each call to update().
+        self.pos_w = np.zeros(3)                          # world-frame base position
+        self.quat_w = np.array([1.0, 0.0, 0.0, 0.0])      # base orientation (w,x,y,z)
+        self.lin_b = np.zeros(3)                          # base linear vel, body frame
+        self.ang_b = np.zeros(3)                          # base angular vel, body frame
+        self.proj_grav = np.array([0.0, 0.0, -1.0])       # projected gravity, body frame
+
+    def update(self, data: mujoco.MjData):
+        # Free-joint layout: qpos[0:3]=xyz_world, qpos[3:7]=quat(w,x,y,z);
+        # qvel[0:3]=lin_world, qvel[3:6]=ang_world.
+        self.pos_w = data.qpos[0:3].copy()
+        self.quat_w = data.qpos[3:7].copy()
+        lin_w = data.qvel[0:3].copy()
+        ang_w = data.qvel[3:6].copy()
+
+        # body->world rotation R from quaternion, then take transpose for world->body.
+        R = np.zeros(9)
+        mujoco.mju_quat2Mat(R, self.quat_w)
+        R = R.reshape(3, 3)
+        Rt = R.T
+        self.lin_b = Rt @ lin_w
+        self.ang_b = Rt @ ang_w
+        self.proj_grav = Rt @ self._GRAVITY_W
+
+
+class PhaseClock:
+    """Drive sin/cos of a gait phase variable from sim time."""
+
+    def __init__(self, freq_hz: float):
+        # omega so that one full cycle takes 1/freq_hz seconds of sim time.
+        self.omega = 2.0 * np.pi * float(freq_hz)
+
+    def tick(self, sim_t: float) -> tuple[float, float, float]:
+        # Return (phase, sin, cos) wrapped to [0, 2π).
+        phase = (self.omega * float(sim_t)) % (2.0 * np.pi)
+        return phase, float(np.sin(phase)), float(np.cos(phase))
+
+
+class ActionBuffer:
+    """Hold the last applied 29-dim action and expose leg/arm splits + the full vector."""
+
+    def __init__(self, leg_idx: JointIndex, arm_idx: JointIndex):
+        self.leg = leg_idx
+        self.arm = arm_idx
+        # Storage laid out as [leg_actions | arm_actions], matching Isaac concat order.
+        self.prev_full = np.zeros(leg_idx.n + arm_idx.n)
+        self.prev_leg = np.zeros(leg_idx.n)
+        self.prev_arm = np.zeros(arm_idx.n)
+
+    def update(self, action_full: np.ndarray):
+        # action_full must already be ordered [legs..., arms...] — same as obs concat.
+        n_leg = self.leg.n
+        self.prev_full[:n_leg] = action_full[:n_leg]
+        self.prev_full[n_leg:] = action_full[n_leg:]
+        self.prev_leg = self.prev_full[:n_leg]
+        self.prev_arm = self.prev_full[n_leg:]
+
+
+class ObsBuilder:
+    """Construct per-agent observations from the current MuJoCo data."""
+
+    def __init__(self, leg_idx: JointIndex, arm_idx: JointIndex, ra_history_len: int):
+        self.leg = leg_idx
+        self.arm = arm_idx
+        # Zero-filled history of root states. Replace with a rolling buffer once the
+        # exact 8-feature schema of root_state_buffer is defined.
+        self.ra_history_len = ra_history_len
+        self.ra_history = np.zeros((ra_history_len, 8))
+
+    def _joint_pos_vel(self, data: mujoco.MjData) -> tuple[np.ndarray, np.ndarray]:
+        # Concatenate legs first, then arms — matches total_leg_joint_ids + total_arm_joint_ids.
+        jp = np.concatenate([data.qpos[self.leg.qpos_idx], data.qpos[self.arm.qpos_idx]])
+        jv = np.concatenate([data.qvel[self.leg.qvel_idx], data.qvel[self.arm.qvel_idx]])
+        return jp, jv
+
+    def nominal(self, root: RootState, data: mujoco.MjData,
+                phase_sin: float, phase_cos: float,
+                cmd_b: np.ndarray, prev_leg: np.ndarray, prev_arm: np.ndarray) -> np.ndarray:
+        # Mirrors G1FallUnifiedEnv._get_states shared_states (102 dims).
+        jp, jv = self._joint_pos_vel(data)
+        return np.concatenate([
+            root.pos_w[2:3],            # 1   base height
+            root.lin_b,                 # 3   base linear vel (body frame)
+            root.ang_b,                 # 3   base angular vel (body frame)
+            root.proj_grav,             # 3   projected gravity (body frame)
+            cmd_b,                      # 3   velocity command (body frame)
+            np.array([phase_sin]),      # 1   gait phase sin
+            np.array([phase_cos]),      # 1   gait phase cos
+            jp,                         # 29  joint pos (leg+arm)
+            jv,                         # 29  joint vel (leg+arm)
+            prev_leg,                   # 12  prev leg action
+            prev_arm,                   # 17  prev arm action
+        ])
+
+    def safe(self, root: RootState, data: mujoco.MjData,
+             prev_arm: np.ndarray, prev_leg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # Mirrors extras["safe_observations"] multi-agent branch:
+        #   arm (60): lin_b(3)+ang_b(3)+grav(3)+jp_arm(17)+jv_arm(17)+prev_arm(17)
+        #   leg (45): lin_b(3)+ang_b(3)+grav(3)+jp_leg(12)+jv_leg(12)+prev_leg(12)
+        jp_leg = data.qpos[self.leg.qpos_idx]
+        jv_leg = data.qvel[self.leg.qvel_idx]
+        jp_arm = data.qpos[self.arm.qpos_idx]
+        jv_arm = data.qvel[self.arm.qvel_idx]
+        arm_obs = np.concatenate([
+            root.lin_b, root.ang_b, root.proj_grav,
+            jp_arm, jv_arm,
+            prev_arm,
+        ])
+        leg_obs = np.concatenate([
+            root.lin_b, root.ang_b, root.proj_grav,
+            jp_leg, jv_leg,
+            prev_leg,
+        ])
+        return arm_obs, leg_obs
+
+    def ra(self, root: RootState, phase: float, dist_icp_stance: float) -> np.ndarray:
+        # Mirrors extras["ra_states"]: ang_b(3) + proj_grav(3) + d_icp(1) + phase(1) + history.
+        return np.concatenate([
+            root.ang_b,
+            root.proj_grav,
+            np.array([dist_icp_stance]),
+            np.array([phase]),
+            self.ra_history.reshape(-1),
+        ])
+
+    def safe_fall(self, root: RootState, data: mujoco.MjData) -> np.ndarray:
+        # Mirrors extras["safe_fall_obs"] SafeFall baseline (63 dims).
+        jp, jv = self._joint_pos_vel(data)
+        return np.concatenate([
+            root.proj_grav[:2],   # 2   gravity_xy
+            root.ang_b,           # 3
+            jp,                   # 29
+            jv,                   # 29
+        ])
+
+
+# ---------------------------------------------------------------------- #
 # Main                                                                   #
 # ---------------------------------------------------------------------- #
 def main():
     args = parse_args()
 
-    # Torch device -- explicit override > cuda if available > cpu.
-    if args.device is not None:
-        device = torch.device(args.device)
-    else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Torch device
+    device = torch.device(args.device)
     print(f"[INFO] torch device: {device}")
 
     # Numpy RNG for the push schedule (so seeding gives reproducible push patterns).
@@ -175,10 +558,10 @@ def main():
     nu = model.nu                                    # number of actuators
     print(f"[INFO] scene: {args.scene}  nu={nu}  nq={model.nq}  nv={model.nv}")
 
-    # ---- Load three .pt checkpoints (dummy payload usage for now) ----
-    nominal_payload = load_pt(args.checkpoint, role="nominal", device=device)
-    predictor_payload = load_pt(args.predictor_checkpoint, role="predictor", device=device)
-    safe_payload = load_pt(args.safe_checkpoint, role="safe", device=device)
+    # ---- Load three checkpoints (CooperativeMAPPO state-dicts + ReachAvoid critic) ----
+    nominal_actor = load_cooperative_actor(args.checkpoint,      role="nominal", device=device, squash=SQUASH)
+    safe_actor    = load_cooperative_actor(args.safe_checkpoint, role="safe",    device=device, squash=SQUASH)
+    predictor     = load_ra_critic(args.predictor_checkpoint,    role="predictor", device=device)
 
     # ---- Random push helper ----
     pusher = RandomPush(
@@ -188,6 +571,29 @@ def main():
         force_max_n=args.push_force_max,
         rng=rng,
     )
+
+    # ---- Observation builder + per-step state holders ----
+    leg_idx = JointIndex(model, LEG_JOINT_NAMES)
+    arm_idx = JointIndex(model, ARM_JOINT_NAMES)
+    root_state = RootState()
+    phase_clock = PhaseClock(freq_hz=PHASE_FREQ_HZ)
+    act_buf = ActionBuffer(leg_idx, arm_idx)
+    obs_builder = ObsBuilder(leg_idx, arm_idx, ra_history_len=RA_HISTORY_LEN)
+    # Velocity command kept in body frame; static across the episode for this eval script.
+    cmd_b = np.array([CMD_VX, CMD_VY, CMD_WZ], dtype=np.float64)
+
+    # Default joint targets captured from the home keyframe — used as the offset for
+    # position actuators: ctrl = default_qpos + scaled_action. Order matches Isaac concat
+    # ([legs(12) | arms(17)]), which by construction matches the MJCF actuator order.
+    default_q_isaac = np.concatenate([
+        data.qpos[leg_idx.qpos_idx].copy(),
+        data.qpos[arm_idx.qpos_idx].copy(),
+    ])
+    n_joints = leg_idx.n + arm_idx.n
+
+    def _to_t(arr: np.ndarray) -> torch.Tensor:
+        # Add the batch (env) dimension MuJoCo lacks and move to the policy's device.
+        return torch.from_numpy(arr.astype(np.float32)).unsqueeze(0).to(device)
 
     # Switching latch
     switch_latch = False
@@ -207,29 +613,70 @@ def main():
             target_sim_t = sim_anchor + (time.monotonic() - wall_anchor)
             substeps = 0
             while data.time < target_sim_t and substeps < max_substeps_per_tick:
-                # 1) 3-agent decision -- observations are dummy zeros for now.
-                dummy_obs = torch.zeros((1, 1), device=device)
-                with torch.no_grad():
-                    nominal = agent_act(nominal_payload, dummy_obs, nu, device)
-                    safe = agent_act(safe_payload, dummy_obs, nu, device)
-                    risk = predictor_value(predictor_payload, dummy_obs)
+                # 1) Refresh root state and gait phase from the live MuJoCo data.
+                root_state.update(data)
+                phase, phase_sin, phase_cos = phase_clock.tick(float(data.time))
 
-                # 2) Latched switching: once risk crosses threshold we stay on safe.
+                # 2) Build per-agent observations. Nominal is multi-agent dict with the
+                #    same shared 102-dim tensor for arm/leg; safe is split (arm 60, leg 45).
+                nominal_np = obs_builder.nominal(
+                    root_state, data, phase_sin, phase_cos,
+                    cmd_b, act_buf.prev_leg, act_buf.prev_arm,
+                )
+                safe_arm_np, safe_leg_np = obs_builder.safe(
+                    root_state, data, act_buf.prev_arm, act_buf.prev_leg
+                )
+                ra_np = obs_builder.ra(root_state, phase, dist_icp_stance=0.0)
+
+                # 3) Run actor inference (SharedActor returns (a_arm, a_leg) in [-1, 1]).
+                with torch.no_grad():
+                    if nominal_actor is not None:
+                        n_in = _to_t(nominal_np)
+                        a_arm_n, a_leg_n = nominal_actor.act_deterministic(n_in, n_in)
+                        nominal_act = torch.cat([a_leg_n, a_arm_n], dim=-1)
+                    else:
+                        nominal_act = torch.zeros((1, n_joints), device=device)
+
+                    if safe_actor is not None:
+                        a_arm_s, a_leg_s = safe_actor.act_deterministic(
+                            _to_t(safe_arm_np), _to_t(safe_leg_np),
+                        )
+                        safe_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
+                    else:
+                        safe_act = torch.zeros((1, n_joints), device=device)
+
+                    if predictor is not None:
+                        risk = float(predictor.value(_to_t(ra_np)).item())
+                    else:
+                        risk = 0.0
+
+                # 4) Latched switching: once risk crosses threshold we stay on safe.
                 cur_switch = bool(risk > args.switch_threshold)
                 switch = cur_switch or switch_latch
                 switch_latch = switch
-                actions_t = safe if switch else nominal
+                actions_t = safe_act if switch else nominal_act
 
-                # 3) Defensive shape match before writing to mjData.ctrl.
+                # 5) Move to numpy, with a defensive shape check.
                 actions_np = actions_t.detach().cpu().numpy().reshape(-1)
-                if actions_np.shape[0] != nu:
-                    actions_np = np.zeros(nu, dtype=np.float64)
-                np.copyto(data.ctrl, actions_np)
+                if actions_np.shape[0] != n_joints:
+                    actions_np = np.zeros(n_joints, dtype=np.float64)
 
-                # 4) Apply scheduled random push (no-op if outside the active window).
+                # 6) Record the non-scaled action so the next obs sees prev_actions in [-1, 1].
+                act_buf.update(actions_np)
+
+                # 7) Apply per-uid scaling and offset by default joint position to form ctrl.
+                scaled = np.empty_like(actions_np)
+                scaled[:leg_idx.n] = actions_np[:leg_idx.n] * ACTION_SCALE_LEG
+                scaled[leg_idx.n:] = actions_np[leg_idx.n:] * ACTION_SCALE_ARM
+                ctrl_np = default_q_isaac + scaled
+                if ctrl_np.shape[0] != nu:
+                    ctrl_np = np.zeros(nu, dtype=np.float64)
+                np.copyto(data.ctrl, ctrl_np)
+
+                # 8) Apply scheduled random push (no-op if outside the active window).
                 pusher.apply(data)
 
-                # 5) Step physics.
+                # 9) Step physics.
                 mujoco.mj_step(model, data)
                 substeps += 1
 
