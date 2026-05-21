@@ -16,7 +16,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="Evaluate a fall predictor (FAR / Lead Time).")
 parser.add_argument("--seed", type=int, default=None, help="Seed of RL environment")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=64, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=128, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall-play", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="C:/Users/kuty1/AISL_RL/logs/baselines/nominal/ours/agent_32000.pt", help="Path to nominal policy checkpoint.")
 parser.add_argument("--predictor_checkpoint", type=str, default="C:/Users/kuty1/AISL_RL/logs/baselines/nominal/ours/Reach_Avoid/ra_agent_16000.pt", help="Path to fall predictor checkpoint.")
@@ -40,8 +40,8 @@ parser.add_argument("--model",
                     help="The NN model used for training the agent.")
 
 # evaluation control
-parser.add_argument("--num_eval_falls", type=int, default=100, help="Target number of fall episodes.")
-parser.add_argument("--num_eval_safe", type=int, default=100, help="Target number of safe episodes.")
+parser.add_argument("--num_eval_falls", type=int, default=150, help="Target number of fall episodes.")
+parser.add_argument("--num_eval_safe", type=int, default=150, help="Target number of safe episodes.")
 parser.add_argument("--sustain_k", type=int, default=1, help="Minimum consecutive steps for a valid alarm.")
 parser.add_argument("--gap_tol", type=int, default=5, help="Max gap (steps) merged into one alarm run.")
 

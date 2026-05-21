@@ -38,7 +38,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.robot.spawn.articulation_props.enabled_self_collisions = False
 
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.2,
+            warmup=0.1,
             endup=0.5,
             params=[
                 CurriculumParamCfg(
