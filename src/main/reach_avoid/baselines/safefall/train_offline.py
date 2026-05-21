@@ -5,7 +5,6 @@ Train the GRU fall predictor offline on a dataset produced by
 ``collect_offline.py``. Reads ``meta.json`` (including a snapshot of the
 safe_fall cfg block) and the .pt shards under
 ``<dataset_dir>/shards/``; writes checkpoints / TensorBoard / metrics under
-``<output_root>/run_<timestamp>/``.
 
 This script intentionally avoids Isaac Lab — it only needs PyTorch.
 """
@@ -27,26 +26,39 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Repo root: this file is .../src/main/reach_avoid/baselines/safefall/train_offline.py
 # Add src to sys.path so `lib.*` imports resolve when running as a module from elsewhere.
-import sys
-_THIS = os.path.abspath(os.path.dirname(__file__))
-_SRC_ROOT = os.path.abspath(os.path.join(_THIS, "..", "..", "..", ".."))
-if _SRC_ROOT not in sys.path:
-    sys.path.insert(0, _SRC_ROOT)
+# import sys
+# _THIS = os.path.abspath(os.path.dirname(__file__))
+# _SRC_ROOT = os.path.abspath(os.path.join(_THIS, "..", "..", "..", ".."))
+# if _SRC_ROOT not in sys.path:
+#     sys.path.insert(0, _SRC_ROOT)
+
+
+from isaaclab.app import AppLauncher
+
+parser = argparse.ArgumentParser(description="Offline training for the SafeFall GRU predictor.")
+parser.add_argument("--dataset_dir", type=str, required=True,
+                    help="Path to a dataset directory produced by collect_offline.py.")
+parser.add_argument("--seed", type=int, default=None, help="Override seed from cfg snapshot.")
+
+AppLauncher.add_app_launcher_args(parser)
+args_cli = parser.parse_args()
+args_cli.headless = True
+
+app_launcher = AppLauncher(args_cli)
+simulation_app = app_launcher.app
+
 
 from lib.buffer.baselines.recurrent_replay import RecurrentReplayBuffer
 from lib.model.Baselines.SafeFall.safe_fall import GRU
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Offline training for the SafeFall GRU predictor.")
-    parser.add_argument("--dataset_dir", type=str, required=True,
-                        help="Path to a dataset directory produced by collect_offline.py.")
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
-                        help="Compute device.")
-    parser.add_argument("--output_root", type=str, default=None,
-                        help="Override safe_fall_cfg.collection.output_root for run dir.")
-    parser.add_argument("--seed", type=int, default=None, help="Override seed from cfg snapshot.")
-    return parser.parse_args()
+# def parse_args() -> argparse.Namespace:
+#     parser = argparse.ArgumentParser(description="Offline training for the SafeFall GRU predictor.")
+#     parser.add_argument("--dataset_dir", type=str, required=True,
+#                         help="Path to a dataset directory produced by collect_offline.py.")
+#     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
+#                         help="Compute device.")
+#     parser.add_argument("--seed", type=int, default=None, help="Override seed from cfg snapshot.")
+#     return parser.parse_args()
 
 
 def _load_dataset_meta(dataset_dir: str) -> Dict[str, Any]:
@@ -143,7 +155,7 @@ def evaluate(model: nn.Module,
 
 
 def main():
-    args = parse_args()
+    args = args_cli
     device = torch.device(args.device)
 
     # ---- Load dataset metadata (includes a snapshot of safe_fall cfg). ----
@@ -159,7 +171,6 @@ def main():
     eval_cfg = sf_cfg["eval"]
     model_cfg = sf_cfg["model"]
 
-    output_root = args.output_root or sf_cfg["collection"].get("output_root", "Safe_Fall")
     seed = args.seed if args.seed is not None else meta.get("seed", 42)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -189,18 +200,17 @@ def main():
     )
     grad_norm_clip = float(tr_cfg.get("grad_norm_clip", 0.0))
     batch_size = int(tr_cfg["batch_size"])
-    epochs = int(tr_cfg["learning_epochs"])
     seq_len = int(sf_cfg["buffer"]["seq_len"])
     threshold = float(eval_cfg.get("threshold", 0.5))
+    # epochs = int(tr_cfg["learning_epochs"])
+    epochs = 20
+    checkpoint_interval = int(epochs / 5)
 
     # ---- Run dir. ----
     timestamp = datetime.now().strftime("%y-%m-%d_%H-%M-%S")
-    run_dir = os.path.join(os.getcwd(), output_root, f"run_{timestamp}")
+    run_dir = os.path.join(dataset_dir, f"run_{timestamp}")
     ckpt_dir = os.path.join(run_dir, "checkpoints")
-    tb_dir = os.path.join(run_dir, "tensorboard")
     os.makedirs(ckpt_dir, exist_ok=True)
-    os.makedirs(tb_dir, exist_ok=True)
-    writer = SummaryWriter(log_dir=tb_dir)
 
     # Dump effective config + dataset meta link.
     with open(os.path.join(run_dir, "training_cfg.json"), "w", encoding="utf-8") as f:
@@ -276,11 +286,6 @@ def main():
             "elapsed_s": elapsed,
         })
 
-        writer.add_scalar("train/loss", train_loss, epoch)
-        writer.add_scalar("train/acc", train_acc, epoch)
-        for k, v in metrics.items():
-            writer.add_scalar(f"val/{k.replace('val_', '')}", float(v), epoch)
-
         print(f"[epoch {epoch+1:02d}/{epochs}] "
               f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} "
               f"val_loss={metrics['val_loss']:.4f} val_acc={metrics['val_acc']:.4f} "
@@ -289,8 +294,9 @@ def main():
               f"({elapsed:.1f}s)")
 
         # Per-epoch checkpoint (mirrors train.py: <predictor>_agent_<step>.pt naming style).
-        ckpt_path = os.path.join(ckpt_dir, f"safefall_agent_{epoch+1}.pt")
-        torch.save({"critic": model.state_dict()}, ckpt_path)
+        if (epoch+1) % checkpoint_interval == 0:
+            ckpt_path = os.path.join(ckpt_dir, f"safefall_agent_{epoch+1}.pt")
+            torch.save({"critic": model.state_dict()}, ckpt_path)
 
         # Best-by metric: higher lead time at low false alarm is better; tie-break on accuracy.
         score = -metrics["val_false_alarm"] + (metrics["val_lead_time_s"] if not math.isnan(metrics["val_lead_time_s"]) else 0.0)
@@ -300,13 +306,13 @@ def main():
 
     with open(os.path.join(run_dir, "eval_metrics.json"), "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
-    writer.close()
 
     print("=" * 72)
     print(f"  Final checkpoint : {os.path.join(ckpt_dir, 'best.pt')}")
     print(f"  Run directory    : {run_dir}")
     print("=" * 72)
 
+    simulation_app.close()
 
 if __name__ == "__main__":
     main()

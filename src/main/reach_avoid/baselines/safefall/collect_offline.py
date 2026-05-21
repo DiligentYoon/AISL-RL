@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description="SafeFall offline data collection."
 parser.add_argument("--seed", type=int, default=None, help="Override seed from cfg.")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of parallel envs.")
-parser.add_argument("--task", type=str, default="G1-fall", help="Task name.")
+parser.add_argument("--task", type=str, default="G1-fall-collect", help="Task name.")
 parser.add_argument("--checkpoint", type=str, required=True,
                     help="Path to the nominal locomotion policy checkpoint (.pt).")
 parser.add_argument("--algorithm", type=str, default="MAPPO",
