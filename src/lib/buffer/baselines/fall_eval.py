@@ -22,9 +22,8 @@ class FallPredictorEvaluator:
         - ``W`` is the predictor's training-time labelling window:
           RA -> number of positive entries in the hindsight ramp;
           SafeFall -> ``round(fall_lead_seconds / dt)``.
-        - SafeFall scores are computed with a sliding window of length
-          ``seq_len`` (zero hidden state, left zero-padding) to match the
-          training input distribution.
+        - Both predictors push a per-step scalar score (RA value or
+          ``P(falling)``); thresholding lives in ``compute_metrics``.
     """
 
     def __init__(
@@ -39,7 +38,6 @@ class FallPredictorEvaluator:
         hindsight_min_value: float = -0.8,
         hindsight_max_value: float = 1.0,
         fall_lead_seconds: float = 0.1,
-        seq_len: int = 16,
     ) -> None:
         if predictor_type not in ("ra", "safefall"):
             raise ValueError(f"Unknown predictor_type: {predictor_type}")
@@ -57,26 +55,17 @@ class FallPredictorEvaluator:
         self.hindsight_min_value = float(hindsight_min_value)
         self.hindsight_max_value = float(hindsight_max_value)
 
-        # SafeFall GT-window / inference parameters
+        # SafeFall GT-window parameter (detection danger window length)
         self.fall_lead_seconds = float(fall_lead_seconds)
-        self.seq_len = int(seq_len)
 
-        # SafeFall GRU model reference (set via set_predictor_model)
-        self.gru = None
-
-        # Per-env in-progress episode buffers
-        #   ra       -> list of scalar score tensors
-        #   safefall -> list of (obs_dim,) observation tensors
+        # Per-env in-progress episode buffers — list of scalar score tensors
+        # for both predictors (CPU-resident to avoid GPU fragmentation).
         self._buf: List[List[torch.Tensor]] = [[] for _ in range(self.num_envs)]
 
         # Finalized episode records
         self.records: List[Dict] = []
         self.count_fall = 0
         self.count_safe = 0
-
-    def set_predictor_model(self, model: torch.nn.Module) -> None:
-        """Register the SafeFall GRU model used for sliding-window scoring."""
-        self.gru = model
 
     # ------------------------------------------------------------------ #
     # Data collection
@@ -90,22 +79,19 @@ class FallPredictorEvaluator:
         """Store one multi-env step and finalize episodes that ended.
 
         Args:
-            step_data: RA -> per-env score, shape (N,) or (N, 1).
-                       SafeFall -> per-env observation, shape (N, obs_dim).
+            step_data: Per-env scalar score, shape (N,) or (N, 1).
+                       RA -> value-function output; SafeFall -> P(falling).
             terminated: Termination flags, shape (N,) or (N, 1).
             truncated: Truncation flags, shape (N,) or (N, 1).
         """
         terminated = terminated.reshape(-1).bool()
         truncated = truncated.reshape(-1).bool()
 
-        if self.predictor_type == "ra":
-            scores = step_data.reshape(-1).detach()
-            for env_id in range(self.num_envs):
-                self._buf[env_id].append(scores[env_id])
-        else:
-            obs = step_data.detach()
-            for env_id in range(self.num_envs):
-                self._buf[env_id].append(obs[env_id])
+        scores = step_data.reshape(-1).detach()
+        if scores.is_cuda:
+            scores = scores.cpu()
+        for env_id in range(self.num_envs):
+            self._buf[env_id].append(scores[env_id])
 
         done = torch.logical_or(terminated, truncated)
         done_env_ids = torch.nonzero(done, as_tuple=False).flatten().tolist()
@@ -120,11 +106,7 @@ class FallPredictorEvaluator:
         if T_e == 0:
             return
 
-        if self.predictor_type == "ra":
-            score = torch.stack(items).reshape(-1).float().cpu()
-        else:
-            obs_seq = torch.stack(items, dim=0)  # (T_e, obs_dim)
-            score = self._safefall_scores(obs_seq).float().cpu()
+        score = torch.stack(items).reshape(-1).float()
 
         record = {
             "predictor": self.predictor_type,
@@ -140,34 +122,6 @@ class FallPredictorEvaluator:
             self.count_fall += 1
         else:
             self.count_safe += 1
-
-    @torch.no_grad()
-    def _safefall_scores(self, obs_seq: torch.Tensor) -> torch.Tensor:
-        """Sliding-window SafeFall scoring (matches training input format).
-
-        For step t, the GRU is fed obs[t-L+1 : t+1] left zero-padded to
-        length L=seq_len with a zero hidden state; the fall probability is
-        read from the last position.
-
-        Args:
-            obs_seq: (T_e, obs_dim) observation sequence of one episode.
-
-        Returns:
-            (T_e,) per-step fall probability.
-        """
-        if self.gru is None:
-            raise RuntimeError("SafeFall GRU model is not set. Call set_predictor_model().")
-
-        T_e, obs_dim = obs_seq.shape
-        L = self.seq_len
-        windows = torch.zeros((T_e, L, obs_dim), device=obs_seq.device, dtype=obs_seq.dtype)
-        for t in range(T_e):
-            chunk = obs_seq[max(0, t - L + 1): t + 1]   # (<=L, obs_dim)
-            windows[t, L - chunk.shape[0]:] = chunk     # left zero-pad
-
-        logits, _, _ = self.gru(windows)                # (T_e, L, 2)
-        prob = torch.softmax(logits[:, -1, :], dim=-1)[:, 1]
-        return prob
 
     def _compute_window(self, T_e: int) -> int:
         """Per-predictor training-time danger window length (in steps)."""
@@ -300,6 +254,5 @@ class FallPredictorEvaluator:
             "hindsight_min_value": self.hindsight_min_value,
             "hindsight_max_value": self.hindsight_max_value,
             "fall_lead_seconds": self.fall_lead_seconds,
-            "seq_len": self.seq_len,
         }
         torch.save({"meta": meta, "records": self.records}, path)

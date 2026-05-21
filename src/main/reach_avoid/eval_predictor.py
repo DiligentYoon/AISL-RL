@@ -125,16 +125,6 @@ def main():
     except AttributeError:
         dt = env.unwrapped.step_dt
 
-    # Sync SafeFall seq_len with the env's actual max_episode_length so the
-    # sliding-window evaluator does not pad beyond the episode horizon.
-    if predictor == "safefall":
-        env_max_ep = int(env.unwrapped.max_episode_length)
-        cfg_seq_len = pred_cfg["buffer"].get("seq_len")
-        if cfg_seq_len != env_max_ep:
-            print(f"[INFO] Overriding safe_fall.buffer.seq_len ({cfg_seq_len}) "
-                  f"with env max_episode_length ({env_max_ep}).")
-            pred_cfg["buffer"]["seq_len"] = env_max_ep
-
     env = IsaacLabWrapper(env)
 
     # ======================= Buffer (nominal policy) =========================
@@ -290,10 +280,15 @@ def main():
         sustain_k=args_cli.sustain_k,
         gap_tol=args_cli.gap_tol,
         fall_lead_seconds=pred_cfg["buffer"].get("fall_lead_seconds", 0.1),
-        seq_len=pred_cfg["buffer"].get("seq_len", 16),
     )
+
+    # SafeFall online inference state — per-env GRU hidden state, reset on done.
     if predictor == "safefall":
-        evaluator.set_predictor_model(pred_agent.critic)
+        H = int(pred_cfg["model"]["hidden_dim"])
+        num_layers = int(pred_cfg["model"].get("num_layers", 1))
+        h_pred = torch.zeros(num_layers, env.num_envs, H, device=env.device)
+    else:
+        h_pred = None
 
     threshold = ALARM_THRESHOLD[predictor]
 
@@ -310,18 +305,27 @@ def main():
             # nominal policy stepping (deterministic; predictor is passive)
             actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
 
-            # predictor step data
+            # predictor step data — per-env scalar score (RA value or P(falling))
             if predictor == "ra":
-                score, _, _ = pred_agent.critic(infos["ra_states"])   # (N, 1)
-                step_data = score
-            else:
-                step_data = infos["safe_fall_obs"]                    # (N, obs_dim)
+                score, _, _ = pred_agent.critic(infos["ra_states"])         # (N, 1)
+                step_data = score.reshape(-1)
+            else:  # safefall — online stateful GRU
+                sf_obs = infos["safe_fall_obs"].unsqueeze(1)                # (N, 1, obs_dim)
+                logits, h_pred, _ = pred_agent.critic(sf_obs, h_pred)       # (N, 1, 2)
+                step_data = torch.softmax(logits[:, -1, :], dim=-1)[:, 1]   # (N,)
 
             # env stepping
             next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
             timestep += 1
 
         evaluator.add_step(step_data, terminated, truncated)
+
+        # Reset per-env GRU hidden state for envs whose episode just ended;
+        # next iteration's obs for those envs is already from the new episode.
+        if predictor == "safefall":
+            done = torch.logical_or(terminated.bool(), truncated.bool()).reshape(-1)
+            if done.any():
+                h_pred[:, done, :] = 0.0
 
         if timestep % 200 == 0:
             print(f"[INFO] step {timestep} | falls {evaluator.count_fall}/{args_cli.num_eval_falls}"
