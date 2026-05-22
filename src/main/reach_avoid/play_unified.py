@@ -483,12 +483,14 @@ def main():
 
         # Per-env hidden state reset for SafeFall on episode boundary
         if pred_h is not None:
+            action_norm = torch.norm(actions, dim=-1)
             done_mask = (terminated | truncated).reshape(-1)
             if done_mask.any():
                 pred_h[:, done_mask, :] = 0.0
 
         # Plot Phase
         if plot is not None:
+            infos["viz_data"]["action_norm"] = action_norm
             infos["viz_data"]["risk_value"] = risk_value.float().squeeze(-1)
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 

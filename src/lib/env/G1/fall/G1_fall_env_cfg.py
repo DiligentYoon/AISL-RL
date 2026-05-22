@@ -34,9 +34,12 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        # self collision off for deleting fishy and chaotic collisions
+        self.robot.spawn.articulation_props.enabled_self_collisions = False
+
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.2,
-            endup=0.5,
+            warmup=0.1,
+            endup=0.3,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
@@ -166,6 +169,7 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.plotter = PNGSavePlotter
 
         self.viz_data = {
+            "action_norm": 0.0,
             "risk_value": 0.0,         
             "max_torque": 0.0,
             "max_contact_force": 0.0,
