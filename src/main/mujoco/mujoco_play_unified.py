@@ -29,19 +29,19 @@ import torch.nn as nn
 # Fixed tuning constants (edit here, not via CLI)                        #
 # ---------------------------------------------------------------------- #
 # Body-frame velocity command driving the nominal policy's command_inputs.
-CMD_VX = 0.0
+CMD_VX = 0.8
 CMD_VY = 0.0
 CMD_WZ = 0.0
 
 # Gait phase frequency (Hz) producing phase_sin / phase_cos for the nominal obs.
 PHASE_FREQ_HZ = 1.5
 
-# Length of the RA predictor's root_state_buffer history (rows of 8 features); 0 = stub.
-RA_HISTORY_LEN = 0
+# Length of the RA predictor's root_state_buffer history (rows of 8 features)
+RA_HISTORY_LEN = 4
 
 # Per-uid action scaling — must match the action_scale_factor used at training time.
-ACTION_SCALE_ARM = 0.25
-ACTION_SCALE_LEG = 0.25
+ACTION_SCALE_ARM = 0.5
+ACTION_SCALE_LEG = 0.5
 
 # Tanh squashing on actor outputs. Must match the training cfg's `squash` flag.
 SQUASH = True
@@ -57,18 +57,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--scene", type=str,
                    default="src/lib/assets/robots/G1/G1_hand/xml/g1_box_foot_scene.xml",
                    help="Path to the MuJoCo XML scene file.")
-    p.add_argument("--checkpoint", type=str, default=None,
+    p.add_argument("--checkpoint", type=str, default="/home/oksusu/Downloads/agent_32000.pt",
                    help="Path to the nominal policy .pt checkpoint.")
-    p.add_argument("--predictor_checkpoint", type=str, default=None,
+    p.add_argument("--predictor_checkpoint", type=str, default="/home/oksusu/Downloads/ra_agent_16000.pt",
                    help="Path to the fall predictor .pt checkpoint.")
-    p.add_argument("--safe_checkpoint", type=str, default=None,
+    p.add_argument("--instinct_checkpoint", type=str, default="/home/oksusu/Downloads/agent_56000.pt",
                    help="Path to the safe fclallback policy .pt checkpoint.")
     # Loop pacing
     p.add_argument("--sim_rate_hz", type=float, default=200.0,
                    help="Wall-clock catch-up target rate for the outer loop.")
     # Switching rule
-    p.add_argument("--switch_threshold", type=float, default=0.5,
-                   help="Predictor risk threshold above which we switch to the safe policy.")
+    p.add_argument("--switch_threshold", type=float, default=0.1,
+                   help="Predictor risk threshold above which we switch to the safe policy. "
+                        "[DEBUG] default raised to 1e9 to disable the safe-latch while we isolate "
+                        "other suspects; restore to ~0.1 once the obs/policy path is verified.")
     # Random push
     p.add_argument("--push_body", type=str, default="pelvis",
                    help="Body to apply the random horizontal force-push to.")
@@ -76,7 +78,7 @@ def parse_args() -> argparse.Namespace:
                    help="Seconds between push events (sim time).")
     p.add_argument("--push_duration", type=float, default=0.2,
                    help="Seconds each push force is held (sim time).")
-    p.add_argument("--push_force_max", type=float, default=200.0,
+    p.add_argument("--push_force_max", type=float, default=300.0,
                    help="Max horizontal force magnitude in Newtons.")
     # Misc
     p.add_argument("--seed", type=int, default=42,
@@ -354,20 +356,29 @@ class RandomPush:
 # ---------------------------------------------------------------------- #
 # Legs first (12), then arms+waist (17). Policies were trained against this exact
 # ordering, so it must be preserved when feeding observations.
+# Order matches Isaac Lab's articulation joint order exactly. The training-time
+# total_leg_joint_ids / total_arm_joint_ids interleave left/right per joint type
+# (e.g. left_hip_pitch, right_hip_pitch, left_hip_roll, ...), not all-left-then-all-right.
+# These are the names resolved from the IDs:
+#   total_leg_joint_ids = [0,1,3,4,6,7,9,10,13,14,17,18]
+#   total_arm_joint_ids = [2,5,8,11,12,15,16,19,20,21,22,23,24,25,26,27,28]
 LEG_JOINT_NAMES: list[str] = [
-    "left_hip_pitch_joint",   "left_hip_roll_joint",   "left_hip_yaw_joint",
-    "left_knee_joint",        "left_ankle_pitch_joint","left_ankle_roll_joint",
-    "right_hip_pitch_joint",  "right_hip_roll_joint",  "right_hip_yaw_joint",
-    "right_knee_joint",       "right_ankle_pitch_joint","right_ankle_roll_joint",
+    "left_hip_pitch_joint",   "right_hip_pitch_joint",
+    "left_hip_roll_joint",    "right_hip_roll_joint",
+    "left_hip_yaw_joint",     "right_hip_yaw_joint",
+    "left_knee_joint",        "right_knee_joint",
+    "left_ankle_pitch_joint", "right_ankle_pitch_joint",
+    "left_ankle_roll_joint",  "right_ankle_roll_joint",
 ]
 ARM_JOINT_NAMES: list[str] = [
     "waist_yaw_joint", "waist_roll_joint", "waist_pitch_joint",
-    "left_shoulder_pitch_joint",  "left_shoulder_roll_joint",  "left_shoulder_yaw_joint",
-    "left_elbow_joint",
-    "left_wrist_roll_joint",  "left_wrist_pitch_joint",  "left_wrist_yaw_joint",
-    "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
-    "right_elbow_joint",
-    "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
+    "left_shoulder_pitch_joint", "right_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",  "right_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",   "right_shoulder_yaw_joint",
+    "left_elbow_joint",          "right_elbow_joint",
+    "left_wrist_roll_joint",     "right_wrist_roll_joint",
+    "left_wrist_pitch_joint",    "right_wrist_pitch_joint",
+    "left_wrist_yaw_joint",      "right_wrist_yaw_joint",
 ]
 
 
@@ -392,6 +403,35 @@ class JointIndex:
     def n(self) -> int:
         # Number of joints in this group.
         return int(self.qpos_idx.shape[0])
+
+
+def build_ctrl_index(model: mujoco.MjModel, joint_names: list[str]) -> np.ndarray:
+    """Return ctrl_idx[i] = data.ctrl slot that drives joint_names[i].
+
+    Walks every actuator, reads its transmission target joint (actuator_trnid[a, 0])
+    and inverts it into a {joint_id: actuator_id} map. Then orders the actuator ids
+    to follow joint_names. Used to scatter Isaac-order q_des into MJCF-order ctrl.
+    """
+    # Map joint_id -> actuator_id for every joint-driving actuator in the model.
+    joint_to_actuator: dict[int, int] = {}
+    for a_id in range(model.nu):
+        j_id = int(model.actuator_trnid[a_id, 0])
+        if j_id < 0:
+            # Tendon / site actuator with no joint target — skip.
+            continue
+        # If multiple actuators drive the same joint, first one wins. G1 MJCFs use
+        # one position actuator per joint, so this is informational only.
+        joint_to_actuator.setdefault(j_id, a_id)
+
+    ctrl_idx = np.empty(len(joint_names), dtype=np.int64)
+    for i, n in enumerate(joint_names):
+        j_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+        if j_id < 0:
+            raise ValueError(f"joint not found in scene: {n}")
+        if j_id not in joint_to_actuator:
+            raise ValueError(f"no actuator drives joint: {n}")
+        ctrl_idx[i] = joint_to_actuator[j_id]
+    return ctrl_idx
 
 
 class RootState:
@@ -439,6 +479,48 @@ class PhaseClock:
         return phase, float(np.sin(phase)), float(np.cos(phase))
 
 
+class RootHistoryBuffer:
+    """Rolling root-state history mirroring G1FallEnv.root_state_buffer.
+
+    Stores a fixed-length window of 8-feature rows:
+        [root_ang_vel_b (3), projected_gravity (3),
+         dist_from_icp_to_stance (1), phase (1)]
+    Writes use the same circular index as training: row = buffer[hist_count % length],
+    so the flattened layout matches what the RA critic saw at training time.
+    """
+
+    def __init__(self, length: int):
+        # length=0 disables the buffer and produces a zero-length flatten().
+        self.length = int(length)
+        # Pre-allocate with at least 1 row so update() can be a no-op safely.
+        self.buffer = np.zeros((max(self.length, 1), 8), dtype=np.float64)
+        self.hist_count = 0
+
+    def update(self, ang_b: np.ndarray, proj_grav: np.ndarray,
+               d_icp: float, phase: float):
+        # No-op when the predictor was trained without history.
+        if self.length == 0:
+            return
+        idx = self.hist_count % self.length
+        # Pack the same 8 features in the same order as G1_fall_env.py:80.
+        self.buffer[idx, 0:3] = ang_b
+        self.buffer[idx, 3:6] = proj_grav
+        self.buffer[idx, 6]   = d_icp
+        self.buffer[idx, 7]   = phase
+        self.hist_count += 1
+
+    def reset(self):
+        # Mirrors _reset_idx: hist_count -> 0 and zero the rows.
+        self.buffer[:] = 0.0
+        self.hist_count = 0
+
+    def flatten(self) -> np.ndarray:
+        # Row-major flatten -> shape (length*8,); empty array when disabled.
+        if self.length == 0:
+            return np.zeros(0, dtype=np.float64)
+        return self.buffer.reshape(-1)
+
+
 class ActionBuffer:
     """Hold the last applied 29-dim action and expose leg/arm splits + the full vector."""
 
@@ -462,13 +544,12 @@ class ActionBuffer:
 class ObsBuilder:
     """Construct per-agent observations from the current MuJoCo data."""
 
-    def __init__(self, leg_idx: JointIndex, arm_idx: JointIndex, ra_history_len: int):
+    def __init__(self, leg_idx: JointIndex, arm_idx: JointIndex, ra_history: "RootHistoryBuffer"):
         self.leg = leg_idx
         self.arm = arm_idx
-        # Zero-filled history of root states. Replace with a rolling buffer once the
-        # exact 8-feature schema of root_state_buffer is defined.
-        self.ra_history_len = ra_history_len
-        self.ra_history = np.zeros((ra_history_len, 8))
+        # External rolling buffer owned by the main loop so other components
+        # (e.g. reset hooks) can call reset() on it directly.
+        self.ra_history = ra_history
 
     def _joint_pos_vel(self, data: mujoco.MjData) -> tuple[np.ndarray, np.ndarray]:
         # Concatenate legs first, then arms — matches total_leg_joint_ids + total_arm_joint_ids.
@@ -478,22 +559,32 @@ class ObsBuilder:
 
     def nominal(self, root: RootState, data: mujoco.MjData,
                 phase_sin: float, phase_cos: float,
-                cmd_b: np.ndarray, prev_leg: np.ndarray, prev_arm: np.ndarray) -> np.ndarray:
-        # Mirrors G1FallUnifiedEnv._get_states shared_states (102 dims).
-        jp, jv = self._joint_pos_vel(data)
-        return np.concatenate([
-            root.pos_w[2:3],            # 1   base height
-            root.lin_b,                 # 3   base linear vel (body frame)
-            root.ang_b,                 # 3   base angular vel (body frame)
-            root.proj_grav,             # 3   projected gravity (body frame)
-            cmd_b,                      # 3   velocity command (body frame)
-            np.array([phase_sin]),      # 1   gait phase sin
-            np.array([phase_cos]),      # 1   gait phase cos
-            jp,                         # 29  joint pos (leg+arm)
-            jv,                         # 29  joint vel (leg+arm)
-            prev_leg,                   # 12  prev leg action
-            prev_arm,                   # 17  prev arm action
+                cmd_b: np.ndarray, prev_arm: np.ndarray, prev_leg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # Mirrors G1RecoveryEnv._get_observations multi-agent branch:
+        #   arm (65): lin_b(3)+ang_b(3)+grav(3)+cmd(3)+phase_sin(1)+phase_cos(1)+jp_arm(17)+jv_arm(17)+prev_arm(17)
+        #   leg (50): lin_b(3)+ang_b(3)+grav(3)+cmd(3)+phase_sin(1)+phase_cos(1)+jp_leg(12)+jv_leg(12)+prev_leg(12)
+        jp_leg = data.qpos[self.leg.qpos_idx]
+        jv_leg = data.qvel[self.leg.qvel_idx]
+        jp_arm = data.qpos[self.arm.qpos_idx]
+        jv_arm = data.qvel[self.arm.qvel_idx]
+        ps = np.array([phase_sin])
+        pc = np.array([phase_cos])
+
+        arm_obs = np.concatenate([
+            root.lin_b, root.ang_b, root.proj_grav,
+            cmd_b,
+            ps, pc,
+            jp_arm, jv_arm,
+            prev_arm,
         ])
+        leg_obs = np.concatenate([
+            root.lin_b, root.ang_b, root.proj_grav,
+            cmd_b,
+            ps, pc,
+            jp_leg, jv_leg,
+            prev_leg,
+        ])
+        return arm_obs, leg_obs
 
     def safe(self, root: RootState, data: mujoco.MjData,
              prev_arm: np.ndarray, prev_leg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -516,25 +607,25 @@ class ObsBuilder:
         ])
         return arm_obs, leg_obs
 
-    def ra(self, root: RootState, phase: float, dist_icp_stance: float) -> np.ndarray:
+    def reach_avoid(self, root: RootState, phase: float, dist_icp_stance: float) -> np.ndarray:
         # Mirrors extras["ra_states"]: ang_b(3) + proj_grav(3) + d_icp(1) + phase(1) + history.
         return np.concatenate([
             root.ang_b,
             root.proj_grav,
             np.array([dist_icp_stance]),
             np.array([phase]),
-            self.ra_history.reshape(-1),
+            self.ra_history.flatten(),
         ])
 
-    def safe_fall(self, root: RootState, data: mujoco.MjData) -> np.ndarray:
-        # Mirrors extras["safe_fall_obs"] SafeFall baseline (63 dims).
-        jp, jv = self._joint_pos_vel(data)
-        return np.concatenate([
-            root.proj_grav[:2],   # 2   gravity_xy
-            root.ang_b,           # 3
-            jp,                   # 29
-            jv,                   # 29
-        ])
+    # def safe_fall(self, root: RootState, data: mujoco.MjData) -> np.ndarray:
+    #     # Mirrors extras["safe_fall_obs"] SafeFall baseline (63 dims).
+    #     jp, jv = self._joint_pos_vel(data)
+    #     return np.concatenate([
+    #         root.proj_grav[:2],   # 2   gravity_xy
+    #         root.ang_b,           # 3
+    #         jp,                   # 29
+    #         jv,                   # 29
+    #     ])
 
 
 # ---------------------------------------------------------------------- #
@@ -560,7 +651,7 @@ def main():
 
     # ---- Load three checkpoints (CooperativeMAPPO state-dicts + ReachAvoid critic) ----
     nominal_actor = load_cooperative_actor(args.checkpoint,      role="nominal", device=device, squash=SQUASH)
-    safe_actor    = load_cooperative_actor(args.safe_checkpoint, role="safe",    device=device, squash=SQUASH)
+    instinct_actor    = load_cooperative_actor(args.instinct_checkpoint, role="safe",    device=device, squash=SQUASH)
     predictor     = load_ra_critic(args.predictor_checkpoint,    role="predictor", device=device)
 
     # ---- Random push helper ----
@@ -575,16 +666,23 @@ def main():
     # ---- Observation builder + per-step state holders ----
     leg_idx = JointIndex(model, LEG_JOINT_NAMES)
     arm_idx = JointIndex(model, ARM_JOINT_NAMES)
+    # Permutation from Isaac concat order (legs(12) | arms(17)) to MJCF actuator
+    # declaration order. data.ctrl[ctrl_idx] scatters q_des into the correct
+    # slots regardless of how the XML interleaves left/right.
+    ctrl_idx = build_ctrl_index(model, LEG_JOINT_NAMES + ARM_JOINT_NAMES)
     root_state = RootState()
     phase_clock = PhaseClock(freq_hz=PHASE_FREQ_HZ)
     act_buf = ActionBuffer(leg_idx, arm_idx)
-    obs_builder = ObsBuilder(leg_idx, arm_idx, ra_history_len=RA_HISTORY_LEN)
+    # Rolling history of root states for the RA predictor; updated each substep.
+    ra_history = RootHistoryBuffer(length=RA_HISTORY_LEN)
+    obs_builder = ObsBuilder(leg_idx, arm_idx, ra_history=ra_history)
     # Velocity command kept in body frame; static across the episode for this eval script.
     cmd_b = np.array([CMD_VX, CMD_VY, CMD_WZ], dtype=np.float64)
 
-    # Default joint targets captured from the home keyframe — used as the offset for
-    # position actuators: ctrl = default_qpos + scaled_action. Order matches Isaac concat
-    # ([legs(12) | arms(17)]), which by construction matches the MJCF actuator order.
+    # Default joint targets captured from the home keyframe — used as the offset
+    # for position actuators: ctrl = default_qpos + scaled_action. Stored in
+    # Isaac concat order ([legs(12) | arms(17)]); mapped to MJCF actuator order
+    # via `ctrl_idx` at write time (see step 7).
     default_q_isaac = np.concatenate([
         data.qpos[leg_idx.qpos_idx].copy(),
         data.qpos[arm_idx.qpos_idx].copy(),
@@ -600,6 +698,20 @@ def main():
 
     # ---- Passive viewer ----
     viewer = mujoco.viewer.launch_passive(model, data)
+
+    # Camera follows the robot's pelvis. mjCAMERA_TRACKING keeps `lookat` pinned
+    # to the body each frame, so the robot stays centered even as it walks away
+    # from the origin. distance/azimuth/elevation define the spherical offset.
+    _track_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
+    if _track_body >= 0:
+        with viewer.lock():
+            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+            viewer.cam.trackbodyid = _track_body
+            viewer.cam.distance = 3.0
+            viewer.cam.azimuth = 90.0
+            viewer.cam.elevation = -20.0
+    else:
+        print("[WARN] 'pelvis' body not found; camera stays in free mode")
 
     # ---- Real-time pacing anchors (same idea as the GOAT bridge) ----
     tick_period = 1.0 / max(args.sim_rate_hz, 1.0)
@@ -617,33 +729,46 @@ def main():
                 root_state.update(data)
                 phase, phase_sin, phase_cos = phase_clock.tick(float(data.time))
 
-                # 2) Build per-agent observations. Nominal is multi-agent dict with the
-                #    same shared 102-dim tensor for arm/leg; safe is split (arm 60, leg 45).
-                nominal_np = obs_builder.nominal(
+                # 1b) Push current ra-row into the rolling history BEFORE building the
+                #     RA obs, matching training-time ordering
+                #     (_compute_intermediate_values runs before _get_states).
+                #     dist_icp_stance is stubbed to 0.0 here — same value used for the
+                #     current-step slot below, so distribution stays self-consistent.
+                ra_history.update(
+                    ang_b=root_state.ang_b,
+                    proj_grav=root_state.proj_grav,
+                    d_icp=0.0,
+                    phase=phase,
+                )
+
+                # 2) Build per-agent observations. Both nominal (arm 65, leg 50) and
+                #    instinct/safe (arm 60, leg 45) are multi-agent dicts.
+                nominal_arm_np, nominal_leg_np = obs_builder.nominal(
                     root_state, data, phase_sin, phase_cos,
-                    cmd_b, act_buf.prev_leg, act_buf.prev_arm,
+                    cmd_b, act_buf.prev_arm, act_buf.prev_leg,
                 )
                 safe_arm_np, safe_leg_np = obs_builder.safe(
                     root_state, data, act_buf.prev_arm, act_buf.prev_leg
                 )
-                ra_np = obs_builder.ra(root_state, phase, dist_icp_stance=0.0)
+                ra_np = obs_builder.reach_avoid(root_state, phase, dist_icp_stance=0.0)
 
                 # 3) Run actor inference (SharedActor returns (a_arm, a_leg) in [-1, 1]).
                 with torch.no_grad():
                     if nominal_actor is not None:
-                        n_in = _to_t(nominal_np)
-                        a_arm_n, a_leg_n = nominal_actor.act_deterministic(n_in, n_in)
+                        a_arm_n, a_leg_n = nominal_actor.act_deterministic(
+                            _to_t(nominal_arm_np), _to_t(nominal_leg_np),
+                        )
                         nominal_act = torch.cat([a_leg_n, a_arm_n], dim=-1)
                     else:
                         nominal_act = torch.zeros((1, n_joints), device=device)
 
-                    if safe_actor is not None:
-                        a_arm_s, a_leg_s = safe_actor.act_deterministic(
+                    if instinct_actor is not None:
+                        a_arm_s, a_leg_s = instinct_actor.act_deterministic(
                             _to_t(safe_arm_np), _to_t(safe_leg_np),
                         )
-                        safe_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
+                        instinct_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
                     else:
-                        safe_act = torch.zeros((1, n_joints), device=device)
+                        instinct_act = torch.zeros((1, n_joints), device=device)
 
                     if predictor is not None:
                         risk = float(predictor.value(_to_t(ra_np)).item())
@@ -653,8 +778,11 @@ def main():
                 # 4) Latched switching: once risk crosses threshold we stay on safe.
                 cur_switch = bool(risk > args.switch_threshold)
                 switch = cur_switch or switch_latch
+                if switch != switch_latch:
+                    t = float(data.time)
+                    print(f"t = {t} !!Instinct Agent!!")
                 switch_latch = switch
-                actions_t = safe_act if switch else nominal_act
+                actions_t = instinct_act if switch else nominal_act
 
                 # 5) Move to numpy, with a defensive shape check.
                 actions_np = actions_t.detach().cpu().numpy().reshape(-1)
@@ -664,14 +792,12 @@ def main():
                 # 6) Record the non-scaled action so the next obs sees prev_actions in [-1, 1].
                 act_buf.update(actions_np)
 
-                # 7) Apply per-uid scaling and offset by default joint position to form ctrl.
+                # 7) Scaling
                 scaled = np.empty_like(actions_np)
                 scaled[:leg_idx.n] = actions_np[:leg_idx.n] * ACTION_SCALE_LEG
                 scaled[leg_idx.n:] = actions_np[leg_idx.n:] * ACTION_SCALE_ARM
-                ctrl_np = default_q_isaac + scaled
-                if ctrl_np.shape[0] != nu:
-                    ctrl_np = np.zeros(nu, dtype=np.float64)
-                np.copyto(data.ctrl, ctrl_np)
+                q_des = default_q_isaac + scaled
+                data.ctrl[ctrl_idx] = q_des
 
                 # 8) Apply scheduled random push (no-op if outside the active window).
                 pusher.apply(data)
