@@ -103,8 +103,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     )
 
     # Set the scale of the visualization markers
-    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
     goal_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 

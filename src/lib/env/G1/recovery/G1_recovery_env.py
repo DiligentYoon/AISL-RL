@@ -152,18 +152,18 @@ class G1RecoveryEnv(G1BaseEnv):
                 self.goal_vel_visualizer = VisualizationMarkers(self.cfg.goal_vel_visualizer_cfg)
             if not hasattr(self, "current_vel_visualizer"):
                 self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
-            if not hasattr(self, "torso_rotation_visualizer"):
-                self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
+            # if not hasattr(self, "torso_rotation_visualizer"):
+            #     self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
             self.goal_vel_visualizer.set_visibility(True)
             self.current_vel_visualizer.set_visibility(True)
-            self.torso_rotation_visalizer.set_visibility(True)
+            # self.torso_rotation_visalizer.set_visibility(True)
         else:
             if hasattr(self, "goal_vel_visualizer"):
                 self.goal_vel_visualizer.set_visibility(False)
             if hasattr(self, "current_vel_visualizer"):
                 self.current_vel_visualizer.set_visibility(False)
-            if hasattr(self, "torso_rotation_visualizer"):
-                self.torso_rotation_visalizer.set_visibility(False)
+            # if hasattr(self, "torso_rotation_visualizer"):
+                # self.torso_rotation_visalizer.set_visibility(False)
 
 
     def _debug_vis_callback(self, event):
@@ -172,7 +172,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # ============== Arrow ================ # 
         # Arrow: get marker location
         base_pos_w = self._robot.data.root_pos_w.clone()
-        base_pos_w[:, 2] += 0.5
+        base_pos_w[:, 2] += 0.6
         # Arrow: resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                               xy_velocity=self.commands.command_b)
@@ -187,7 +187,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
+        # self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
 
     def _setup_scene(self):
         super()._setup_scene()
