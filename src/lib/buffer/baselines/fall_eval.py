@@ -38,6 +38,8 @@ class FallPredictorEvaluator:
         hindsight_min_value: float = -0.8,
         hindsight_max_value: float = 1.0,
         fall_lead_seconds: float = 0.1,
+        max_fall: Optional[int] = None,
+        max_safe: Optional[int] = None,
     ) -> None:
         if predictor_type not in ("ra", "safefall"):
             raise ValueError(f"Unknown predictor_type: {predictor_type}")
@@ -57,6 +59,12 @@ class FallPredictorEvaluator:
 
         # SafeFall GT-window parameter (detection danger window length)
         self.fall_lead_seconds = float(fall_lead_seconds)
+
+        # Per-category caps. Once a category hits its cap, further episodes of
+        # that category are dropped (not appended to records) — keeps the
+        # fall/safe sample sizes aligned with the user-requested targets.
+        self.max_fall = int(max_fall) if max_fall is not None else None
+        self.max_safe = int(max_safe) if max_safe is not None else None
 
         # Per-env in-progress episode buffers — list of scalar score tensors
         # for both predictors (CPU-resident to avoid GPU fragmentation).
@@ -104,6 +112,12 @@ class FallPredictorEvaluator:
         items = self._buf[env_id]
         T_e = len(items)
         if T_e == 0:
+            return
+
+        # Drop the episode silently once the per-category cap is reached.
+        if is_fall and self.max_fall is not None and self.count_fall >= self.max_fall:
+            return
+        if (not is_fall) and self.max_safe is not None and self.count_safe >= self.max_safe:
             return
 
         score = torch.stack(items).reshape(-1).float()

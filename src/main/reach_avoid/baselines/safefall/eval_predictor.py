@@ -280,6 +280,8 @@ def main():
         sustain_k=args_cli.sustain_k,
         gap_tol=args_cli.gap_tol,
         fall_lead_seconds=pred_cfg["buffer"].get("fall_lead_seconds", 0.1),
+        max_fall=args_cli.num_eval_falls,
+        max_safe=args_cli.num_eval_safe,
     )
 
     # SafeFall online inference state — per-env GRU hidden state, reset on done.
