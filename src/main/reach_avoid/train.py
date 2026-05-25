@@ -15,7 +15,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
@@ -344,7 +344,7 @@ def main():
         # CLI Logging about the training process at each parameter update
         if timestep % pred_buffer.buffer_size == 0:
             per_update_value_loss = float(np.mean(CLI_value_loss)) if len(CLI_value_loss) else float("nan")
-            per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.3f}"
+            per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.5f}"
 
             elapsed_time = time.time() - start_time
             elapsed_time_per_step = elapsed_time / timestep if timestep > 0 else 0

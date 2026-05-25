@@ -38,14 +38,13 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.robot.spawn.articulation_props.enabled_self_collisions = False
 
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.1,
-            endup=0.3,
+            warmup=0.6,
+            endup=1.0,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
                     attr_path="cfg/events/push_robot/params/velocity_range/x",
-                    start_value=self.events.push_robot.params["velocity_" \
-                    "range"]["x"],
+                    start_value=self.events.push_robot.params["velocity_range"]["x"],
                     end_value=self.push_x_end
                 ),
                 CurriculumParamCfg(
@@ -142,6 +141,8 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
 
         self.episode_length_s = 5.0
 
+        self.robot.spawn.articulation_props.enabled_self_collisions = True
+
         # visualization
         self.viz_data = None
         self.plotter = None
@@ -150,16 +151,16 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.events.push_robot.interval_range_s = (3.0, 3.0)
 
         # Safe Policy info (multi agent)
-        self.num_safe_agents = 2
-        self.safe_action_space = self.action_space
-        self.safe_observation_space = {"arm": 60, "leg": 45}
-        self.safe_state_space = {"arm": 97, "leg": 97}
+        # self.num_safe_agents = 2
+        # self.safe_action_space = self.action_space
+        # self.safe_observation_space = {"arm": 60, "leg": 45}
+        # self.safe_state_space = {"arm": 97, "leg": 97}
 
         # Safe Policy info (single agent)
-        # self.num_safe_agents = 1
-        # self.safe_action_space = 29
-        # self.safe_observation_space = 96
-        # self.safe_state_space = 96
+        self.num_safe_agents = 1
+        self.safe_action_space = 29
+        self.safe_observation_space = 96
+        self.safe_state_space = 96
 
         # visualization
         # self.plotter = None
@@ -169,7 +170,8 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.plotter = PNGSavePlotter
 
         self.viz_data = {
-            "action_norm": 0.0,
+            "contact_num": 0.0,
+            "action_diff": 0.0,
             "risk_value": 0.0,         
             "max_torque": 0.0,
             "max_contact_force": 0.0,

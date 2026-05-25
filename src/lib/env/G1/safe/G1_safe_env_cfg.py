@@ -21,21 +21,21 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     decimation = 4          
 
     ## ========== Nominal policy Setting =========== ##
-    # possible_agents = ["arm", "leg"]
-    # action_space = {"arm": 17, "leg": 12}                         
-    # observation_space = {"arm": 60, "leg": 45}                
-    # state_space = {"arm": 97, "leg": 97}
-    # ra_state_space = 40
-    # num_agents = 2
-    # action_scale_factor = {"arm": [0.5, ()], 
-    #                        "leg": [0.5, ()]}
+    possible_agents = ["arm", "leg"]
+    action_space = {"arm": 17, "leg": 12}                         
+    observation_space = {"arm": 60, "leg": 45}                
+    state_space = {"arm": 97, "leg": 97}
+    ra_state_space = 40
+    num_agents = 2
+    action_scale_factor = {"arm": [0.5, ()], 
+                           "leg": [0.5, ()]}
     
     ## ========== Single Agent Setting ========== ##  
-    action_space = 29                     
-    observation_space = 96   
-    ra_state_space = 40               
-    num_agents = 1
-    action_scale_factor = 0.5
+    # action_space = 29                     
+    # observation_space = 96   
+    # ra_state_space = 40               
+    # num_agents = 1
+    # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
     w_limits:             float = 10.0
@@ -43,15 +43,15 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
     w_joint_torque_limit: float = 2.0
     w_joint_vel:          float = 5.0e-3
 
-    w_deviation_arm:        float = 0.0
+    w_deviation_arm:        float = 0.01
     w_deviation_leg:        float = 0.05
     w_action_rate:          float = 0.01
     
     w_max_collision:        float = 0.3
-    w_prefer_collision:     float = 0.25
-    w_not_prefer_collision: float = 0.5
+    w_prefer_collision:     float = 0.3
+    w_not_prefer_collision: float = 1.0
 
-    w_termination: float = 10
+    w_termination: float = 10.0
 
     # ===== Gait guidance ===== #
     time_period = 0.35

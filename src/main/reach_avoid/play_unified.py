@@ -424,6 +424,7 @@ def main():
 
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
+    prev_action_norm = None
     safe_obs = infos["safe_observations"]
     timestep = 0
     total_ep = 0
@@ -483,16 +484,18 @@ def main():
 
         # Per-env hidden state reset for SafeFall on episode boundary
         if pred_h is not None:
-            action_norm = torch.norm(actions, dim=-1)
             done_mask = (terminated | truncated).reshape(-1)
             if done_mask.any():
                 pred_h[:, done_mask, :] = 0.0
 
         # Plot Phase
         if plot is not None:
-            infos["viz_data"]["action_norm"] = action_norm
+            action_norm = torch.norm(actions, dim=-1)
+            infos["viz_data"]["action_diff"] = torch.abs(action_norm - prev_action_norm) if prev_action_norm is not None else action_norm
             infos["viz_data"]["risk_value"] = risk_value.float().squeeze(-1)
             plot.append(viz_data=infos["viz_data"], episode_end=done)
+            
+            prev_action_norm = torch.clone(action_norm)
 
         # Video update
         if timestep == args_cli.video_length:
