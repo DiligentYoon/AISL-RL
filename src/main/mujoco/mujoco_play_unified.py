@@ -46,6 +46,11 @@ ACTION_SCALE_LEG = 0.5
 # Tanh squashing on actor outputs. Must match the training cfg's `squash` flag.
 SQUASH = True
 
+# Inner-loop decimation: Isaac Lab runs the policy at sim_dt * decimation = 50 Hz
+# (sim_dt = 1/200, decimation = 4). Replicate by re-inferring only every N substeps;
+# data.ctrl stays latched between calls, mirroring env.step()'s _apply_action cadence.
+POLICY_DECIMATION = 4
+
 
 # ---------------------------------------------------------------------- #
 # CLI                                                                    #
@@ -696,6 +701,10 @@ def main():
     # Switching latch
     switch_latch = False
 
+    # Decimation counter — policy fires when (decim_counter % POLICY_DECIMATION == 0).
+    # Starts at 0 so the very first substep runs inference (and thus writes ctrl).
+    decim_counter = 0
+
     # ---- Passive viewer ----
     viewer = mujoco.viewer.launch_passive(model, data)
 
@@ -725,79 +734,85 @@ def main():
             target_sim_t = sim_anchor + (time.monotonic() - wall_anchor)
             substeps = 0
             while data.time < target_sim_t and substeps < max_substeps_per_tick:
-                # 1) Refresh root state and gait phase from the live MuJoCo data.
-                root_state.update(data)
-                phase, phase_sin, phase_cos = phase_clock.tick(float(data.time))
+                # Policy / observation pipeline runs at sim_rate / POLICY_DECIMATION
+                # (50 Hz when sim is 200 Hz). data.ctrl stays latched between
+                # firings — mirrors Isaac Lab env.step() applying actions once per
+                # `decimation` physics substeps.
+                if decim_counter % POLICY_DECIMATION == 0:
+                    # 1) Refresh root state and gait phase from the live MuJoCo data.
+                    root_state.update(data)
+                    phase, phase_sin, phase_cos = phase_clock.tick(float(data.time))
 
-                # 1b) Push current ra-row into the rolling history BEFORE building the
-                #     RA obs, matching training-time ordering
-                #     (_compute_intermediate_values runs before _get_states).
-                #     dist_icp_stance is stubbed to 0.0 here — same value used for the
-                #     current-step slot below, so distribution stays self-consistent.
-                ra_history.update(
-                    ang_b=root_state.ang_b,
-                    proj_grav=root_state.proj_grav,
-                    d_icp=0.0,
-                    phase=phase,
-                )
+                    # 1b) Push current ra-row into the rolling history BEFORE building the
+                    #     RA obs, matching training-time ordering
+                    #     (_compute_intermediate_values runs before _get_states).
+                    #     dist_icp_stance is stubbed to 0.0 here — same value used for the
+                    #     current-step slot below, so distribution stays self-consistent.
+                    ra_history.update(
+                        ang_b=root_state.ang_b,
+                        proj_grav=root_state.proj_grav,
+                        d_icp=0.0,
+                        phase=phase,
+                    )
 
-                # 2) Build per-agent observations. Both nominal (arm 65, leg 50) and
-                #    instinct/safe (arm 60, leg 45) are multi-agent dicts.
-                nominal_arm_np, nominal_leg_np = obs_builder.nominal(
-                    root_state, data, phase_sin, phase_cos,
-                    cmd_b, act_buf.prev_arm, act_buf.prev_leg,
-                )
-                safe_arm_np, safe_leg_np = obs_builder.safe(
-                    root_state, data, act_buf.prev_arm, act_buf.prev_leg
-                )
-                ra_np = obs_builder.reach_avoid(root_state, phase, dist_icp_stance=0.0)
+                    # 2) Build per-agent observations. Both nominal (arm 65, leg 50) and
+                    #    instinct/safe (arm 60, leg 45) are multi-agent dicts.
+                    nominal_arm_np, nominal_leg_np = obs_builder.nominal(
+                        root_state, data, phase_sin, phase_cos,
+                        cmd_b, act_buf.prev_arm, act_buf.prev_leg,
+                    )
+                    safe_arm_np, safe_leg_np = obs_builder.safe(
+                        root_state, data, act_buf.prev_arm, act_buf.prev_leg
+                    )
+                    ra_np = obs_builder.reach_avoid(root_state, phase, dist_icp_stance=0.0)
 
-                # 3) Run actor inference (SharedActor returns (a_arm, a_leg) in [-1, 1]).
-                with torch.no_grad():
-                    if nominal_actor is not None:
-                        a_arm_n, a_leg_n = nominal_actor.act_deterministic(
-                            _to_t(nominal_arm_np), _to_t(nominal_leg_np),
-                        )
-                        nominal_act = torch.cat([a_leg_n, a_arm_n], dim=-1)
-                    else:
-                        nominal_act = torch.zeros((1, n_joints), device=device)
+                    # 3) Run actor inference (SharedActor returns (a_arm, a_leg) in [-1, 1]).
+                    with torch.no_grad():
+                        if nominal_actor is not None:
+                            a_arm_n, a_leg_n = nominal_actor.act_deterministic(
+                                _to_t(nominal_arm_np), _to_t(nominal_leg_np),
+                            )
+                            nominal_act = torch.cat([a_leg_n, a_arm_n], dim=-1)
+                        else:
+                            nominal_act = torch.zeros((1, n_joints), device=device)
 
-                    if instinct_actor is not None:
-                        a_arm_s, a_leg_s = instinct_actor.act_deterministic(
-                            _to_t(safe_arm_np), _to_t(safe_leg_np),
-                        )
-                        instinct_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
-                    else:
-                        instinct_act = torch.zeros((1, n_joints), device=device)
+                        if instinct_actor is not None:
+                            a_arm_s, a_leg_s = instinct_actor.act_deterministic(
+                                _to_t(safe_arm_np), _to_t(safe_leg_np),
+                            )
+                            instinct_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
+                        else:
+                            instinct_act = torch.zeros((1, n_joints), device=device)
 
-                    if predictor is not None:
-                        risk = float(predictor.value(_to_t(ra_np)).item())
-                    else:
-                        risk = 0.0
+                        if predictor is not None:
+                            risk = float(predictor.value(_to_t(ra_np)).item())
+                        else:
+                            risk = 0.0
 
-                # 4) Latched switching: once risk crosses threshold we stay on safe.
-                cur_switch = bool(risk > args.switch_threshold)
-                switch = cur_switch or switch_latch
-                if switch != switch_latch:
-                    t = float(data.time)
-                    print(f"t = {t} !!Instinct Agent!!")
-                switch_latch = switch
-                actions_t = instinct_act if switch else nominal_act
+                    # 4) Latched switching: once risk crosses threshold we stay on safe.
+                    cur_switch = bool(risk > args.switch_threshold)
+                    switch = cur_switch or switch_latch
+                    if switch != switch_latch:
+                        t = float(data.time)
+                        print(f"t = {t} !!Instinct Agent!!")
+                    switch_latch = switch
+                    actions_t = instinct_act if switch else nominal_act
 
-                # 5) Move to numpy, with a defensive shape check.
-                actions_np = actions_t.detach().cpu().numpy().reshape(-1)
-                if actions_np.shape[0] != n_joints:
-                    actions_np = np.zeros(n_joints, dtype=np.float64)
+                    # 5) Move to numpy, with a defensive shape check.
+                    actions_np = actions_t.detach().cpu().numpy().reshape(-1)
+                    if actions_np.shape[0] != n_joints:
+                        actions_np = np.zeros(n_joints, dtype=np.float64)
 
-                # 6) Record the non-scaled action so the next obs sees prev_actions in [-1, 1].
-                act_buf.update(actions_np)
+                    # 6) Record the non-scaled action so the next obs sees prev_actions in [-1, 1].
+                    act_buf.update(actions_np)
 
-                # 7) Scaling
-                scaled = np.empty_like(actions_np)
-                scaled[:leg_idx.n] = actions_np[:leg_idx.n] * ACTION_SCALE_LEG
-                scaled[leg_idx.n:] = actions_np[leg_idx.n:] * ACTION_SCALE_ARM
-                q_des = default_q_isaac + scaled
-                data.ctrl[ctrl_idx] = q_des
+                    # 7) Scaling — write q_des into data.ctrl; latched for the next
+                    #    (POLICY_DECIMATION - 1) substeps.
+                    scaled = np.empty_like(actions_np)
+                    scaled[:leg_idx.n] = actions_np[:leg_idx.n] * ACTION_SCALE_LEG
+                    scaled[leg_idx.n:] = actions_np[leg_idx.n:] * ACTION_SCALE_ARM
+                    q_des = default_q_isaac + scaled
+                    data.ctrl[ctrl_idx] = q_des
 
                 # 8) Apply scheduled random push (no-op if outside the active window).
                 pusher.apply(data)
@@ -805,6 +820,7 @@ def main():
                 # 9) Step physics.
                 mujoco.mj_step(model, data)
                 substeps += 1
+                decim_counter += 1
 
             # Render and yield a sliver of CPU.
             viewer.sync()
