@@ -2,6 +2,14 @@
   <!-- Robot body tree (auto-converted from URDF; do not edit by hand). -->
   <include file="g1_box_foot.xml"/>
 
+  <!-- Match Isaac Lab ImplicitActuatorCfg(armature=0.01) on every actuated joint.
+       Without this, light arm/wrist joints (intrinsic rotational inertia ~1e-3 kg·m²)
+       become massively over-damped under the same PD gains tuned for I_eff=0.011
+       (link inertia + 0.01 rotor inertia) on the Isaac Lab side. -->
+  <default>
+    <joint armature="0.01"/>
+  </default>
+
   <!-- Sim integration: 5 ms step (200 Hz) matches the outer pacing loop. -->
   <option timestep="0.005" integrator="implicitfast" iterations="10"/>
 
