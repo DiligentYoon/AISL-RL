@@ -247,7 +247,7 @@ def aggregate_runs_by_tag(
 # Plot (mean ± std)
 # -----------------------------
 def plot_prefix_statistics(
-    event_files: List[str | Path],
+    runs_by_group: Dict[str, List[str | Path]],
     save_dir: str | Path,
     *,
     prefixes: List[str] = DEFAULT_PREFIXES,
@@ -263,25 +263,39 @@ def plot_prefix_statistics(
     case_sensitive: bool = False,
     band_alpha: float = 0.2,
 ) -> Dict[str, Path]:
+    """
+    Per-tag mean±std plot, optionally comparing several groups of runs.
+    ``runs_by_group`` maps a legend label to a list of event files belonging
+    to that group; with 2+ groups, each subplot draws one mean curve and one
+    shaded std band per group sharing the same x-axis.
+    """
     if x_axis not in ("step", "wall_time"):
         raise ValueError("x_axis must be 'step' or 'wall_time'")
-    if not event_files:
-        raise ValueError("No event files were provided.")
+    if not runs_by_group:
+        raise ValueError("runs_by_group is empty.")
 
-    df = read_scalars_from_event_files(event_files, only_common_tags=only_common_tags)
-    if df.empty:
-        raise ValueError(
-            "No data to plot. Either there are no scalar events, or "
-            "(only_common_tags=True) yields an empty intersection."
-        )
+    stats_by_group: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, int]]] = {}
+    for label, files in runs_by_group.items():
+        if not files:
+            raise ValueError(f"Group '{label}' has no event files.")
+        df = read_scalars_from_event_files(files, only_common_tags=only_common_tags)
+        if df.empty:
+            raise ValueError(f"Group '{label}' yielded no scalar data.")
+        stats = aggregate_runs_by_tag(df, x_axis=x_axis, num_points=num_points)
+        if not stats:
+            raise ValueError(
+                f"Group '{label}' aggregation produced no tags. "
+                "Check that runs share overlapping ranges."
+            )
+        stats_by_group[label] = stats
 
-    stats = aggregate_runs_by_tag(df, x_axis=x_axis, num_points=num_points)
-    if not stats:
-        raise ValueError("Aggregation produced no tags. Check that runs share overlapping ranges.")
+    tag_sets = [set(s.keys()) for s in stats_by_group.values()]
+    common_tags = sorted(set.intersection(*tag_sets)) if tag_sets else []
+    if not common_tags:
+        raise ValueError("No tags shared across all groups.")
 
-    all_tags = sorted(stats.keys())
-    groups = group_tags_by_prefix(
-        all_tags, prefixes=prefixes, case_sensitive=case_sensitive,
+    groups_by_prefix = group_tags_by_prefix(
+        common_tags, prefixes=prefixes, case_sensitive=case_sensitive,
         allow_unmatched=True, unmatched_key="Unmatched",
     )
 
@@ -289,7 +303,9 @@ def plot_prefix_statistics(
     save_dir_path.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, Path] = {}
 
-    def _plot_one_group(group_name: str, tags: List[str]):
+    multi = len(stats_by_group) > 1
+
+    def _plot_one_group(prefix_name: str, tags: List[str]):
         if not tags:
             return
 
@@ -303,30 +319,34 @@ def plot_prefix_statistics(
         ax_list = axes.ravel().tolist() if isinstance(axes, np.ndarray) else [axes]
 
         for ax, tag in zip(ax_list, tags):
-            x_grid, mean, std, _n_runs = stats[tag]
-            mean_s = _moving_average(mean, smoothing)
-            std_s = _moving_average(std, smoothing)
+            for label, stats in stats_by_group.items():
+                x_grid, mean, std, _n_runs = stats[tag]
+                mean_s = _moving_average(mean, smoothing)
+                std_s = _moving_average(std, smoothing)
 
-            line, = ax.plot(x_grid, mean_s)
-            ax.fill_between(
-                x_grid, mean_s - std_s, mean_s + std_s,
-                alpha=band_alpha, color=line.get_color(), linewidth=0,
-            )
+                curve_label = label if multi else None
+                line, = ax.plot(x_grid, mean_s, label=curve_label)
+                ax.fill_between(
+                    x_grid, mean_s - std_s, mean_s + std_s,
+                    alpha=band_alpha, color=line.get_color(), linewidth=0,
+                )
 
             ax.set_title(tag, fontsize=10)
             ax.grid()
             ax.set_xlabel(x_axis)
             ax.set_ylabel("value")
+            if multi:
+                ax.legend(fontsize=8)
 
         for ax in ax_list[len(tags):]:
             ax.axis("off")
 
         fig.tight_layout()
 
-        safe_group = group_name.replace("/", "__").replace(" ", "_").replace(":", "_")
+        safe_group = prefix_name.replace("/", "__").replace(" ", "_").replace(":", "_")
         out_path = save_dir_path / f"{save_prefix}__{safe_group}.png"
         fig.savefig(out_path, dpi=200, bbox_inches="tight")
-        saved[group_name] = out_path
+        saved[prefix_name] = out_path
 
         if show:
             plt.show()
@@ -334,10 +354,10 @@ def plot_prefix_statistics(
             plt.close(fig)
 
     for p in prefixes:
-        _plot_one_group(p, groups.get(p, []))
+        _plot_one_group(p, groups_by_prefix.get(p, []))
 
     if include_unmatched:
-        _plot_one_group("Unmatched", groups.get("Unmatched", []))
+        _plot_one_group("Unmatched", groups_by_prefix.get("Unmatched", []))
 
     return saved
 
@@ -349,8 +369,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Plot mean ± std reward curves aggregated across multiple TensorBoard runs."
     )
-    parser.add_argument("--log-dir", required=True,
-                        help="Directory containing run subdirectories with events.out.tfevents.* files.")
+    parser.add_argument("--log-dir", required=True, nargs="+",
+                        help="One or more directories, each containing run subdirectories with "
+                             "events.out.tfevents.* files. With multiple log-dirs, each dir is "
+                             "treated as a separate group and drawn together for comparison.")
     parser.add_argument("--smoothing", type=int, default=1,
                         help="Moving-average window applied to mean and std (>=1).")
     return parser
@@ -359,18 +381,35 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> None:
     args = _build_arg_parser().parse_args(argv)
 
-    log_dir = Path(args.log_dir)
-    event_files = find_event_files(log_dir)
-    if not event_files:
-        raise SystemExit(f"No event files found under {log_dir}")
+    log_dirs = [Path(p) for p in args.log_dir]
 
-    print(f"[INFO] Found {len(event_files)} event file(s) under {log_dir}:")
-    for f in event_files:
-        print(f"  - {f}")
+    runs_by_group: Dict[str, List[Path]] = {}
+    for log_dir in log_dirs:
+        files = find_event_files(log_dir)
+        if not files:
+            raise SystemExit(f"No event files found under {log_dir}")
+        label = log_dir.name
+        if label in runs_by_group:
+            raise SystemExit(
+                f"Duplicate label '{label}' across log-dirs; rename one of the directories."
+            )
+        runs_by_group[label] = files
 
-    save_dir = log_dir / "figures"
+    total = sum(len(v) for v in runs_by_group.values())
+    print(f"[INFO] Found {total} event file(s) across {len(runs_by_group)} group(s):")
+    for label, files in runs_by_group.items():
+        print(f"  [{label}] ({len(files)} run(s))")
+        for f in files:
+            print(f"    - {f}")
+
+    if len(log_dirs) == 1:
+        save_dir = log_dirs[0] / "figures"
+    else:
+        labels = list(runs_by_group.keys())
+        save_dir = log_dirs[0].parent / f"figures_{'_vs_'.join(labels)}"
+
     plot_prefix_statistics(
-        event_files,
+        runs_by_group,
         save_dir=save_dir,
         smoothing=args.smoothing,
     )
