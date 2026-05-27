@@ -409,22 +409,22 @@ class G1SafeEnv(G1BaseEnv):
 
         # term.last_prev_action and env._dataset_reset_prev_action share memory;
         # the dataset reset event has just written the sampled rows for env_ids.
-        staged = getattr(self, "_dataset_reset_prev_action", None)
-        if staged is not None:
-            if self.cfg.num_agents > 1:
-                # Multi agent
-                self.prev_actions["arm"][env_ids] = staged[env_ids][:, self.total_arm_joint_ids]
-                self.prev_actions["leg"][env_ids] = staged[env_ids][:, self.total_leg_joint_ids]
-            else:
-                # Single agent
-                self.prev_actions[env_ids] = staged[env_ids]
+        # staged = getattr(self, "_dataset_reset_prev_action", None)
+        # if staged is not None:
+        #     if self.cfg.num_agents > 1:
+        #         # Multi agent
+        #         self.prev_actions["arm"][env_ids] = staged[env_ids][:, self.total_arm_joint_ids]
+        #         self.prev_actions["leg"][env_ids] = staged[env_ids][:, self.total_leg_joint_ids]
+        #     else:
+        #         # Single agent
+        #         self.prev_actions[env_ids] = staged[env_ids]
+        # else:
+        # Fallback: dataset reset event not registered for this env.
+        if self.cfg.num_agents > 1:
+            self.prev_actions["arm"][env_ids] = 0.0
+            self.prev_actions["leg"][env_ids] = 0.0
         else:
-            # Fallback: dataset reset event not registered for this env.
-            if self.cfg.num_agents > 1:
-                self.prev_actions["arm"][env_ids] = 0.0
-                self.prev_actions["leg"][env_ids] = 0.0
-            else:
-                self.prev_actions[env_ids] = 0.0
+            self.prev_actions[env_ids] = 0.0
 
         self._compute_intermediate_values(env_ids)
 
