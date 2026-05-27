@@ -313,6 +313,7 @@ def plot_prefix_statistics(
                 alpha=band_alpha, color=line.get_color(), linewidth=0,
             )
 
+            ax.set_title(tag, fontsize=10)
             ax.grid()
             ax.set_xlabel(x_axis)
             ax.set_ylabel("value")
