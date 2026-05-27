@@ -7,6 +7,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.domain_randomizer import randomizer
 from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
@@ -83,12 +84,12 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
 
         # curriculum
         self.curriculum = None
-        self.events.push_robot.params["velocity_range"] = {
-            "x": self.push_x_end,
-            "y": self.push_y_end,
-            "roll": self.push_roll_end,
-            "pitch": self.push_pitch_end,
-        }
+        # self.events.push_robot.params["velocity_range"] = {       # NOTE: Deprecate while fixed force test
+        #     "x": self.push_x_end,
+        #     "y": self.push_y_end,
+        #     "roll": self.push_roll_end,
+        #     "pitch": self.push_pitch_end,
+        # }
 
         # viewer
         self.viewer = ViewerCfg(
@@ -139,7 +140,7 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.episode_length_s = 5.0
+        self.episode_length_s = 15.0
 
         self.robot.spawn.articulation_props.enabled_self_collisions = True
 
@@ -148,7 +149,20 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.plotter = None
 
         # Disturbance
-        self.events.push_robot.interval_range_s = (3.0, 3.0)
+        self.events.push_robot.interval_range_s = (5.0, 5.0)
+
+        # Fixed force
+        self.events.push_robot.params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+            "force_range": {"x": (-223.0, -223.0), "y": (-149.0, -149), "z": (1, 1)},
+            "torque_range": {"x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (-0.0, 0.0)}}
+        
+        # Fixed command
+        self.commands.ranges = UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.8, 0.8), lin_vel_y=(-0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)              # NOTE: fixed command for test
+        )
+
+
 
         # Safe Policy info (multi agent)
         self.num_safe_agents = 2

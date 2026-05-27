@@ -72,8 +72,8 @@ class EventCfg:
         interval_range_s=(5.0, 5.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "force_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (-1.0, 1.0)},
-            "torque_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (-1.0, 1.0)}},
+            "force_range": {"x": (-223, -223), "y": (-149, -149), "z": (1, 1)},
+            "torque_range": {"x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (-0.0, 0.0)}},
     )
 
 
