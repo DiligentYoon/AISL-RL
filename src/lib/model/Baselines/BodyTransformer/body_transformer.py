@@ -7,8 +7,8 @@ from torch.distributions import Normal
 from lib.utils.Running_mean_std import RunningMeanStd
 from lib.model.model import Model
 
-from lib.model.BodyTransformer.linear_components import ObsTokenizer, ActionDetokenizer, ValueDetokenizer
-from lib.model.BodyTransformer.transformer_components import BodyTransformer
+from lib.model.Baselines.BodyTransformer.linear_components import ObsTokenizer, ActionDetokenizer, ValueDetokenizer
+from lib.model.Baselines.BodyTransformer.transformer_components import BodyTransformer
 from lib.utils.graph_utils import Mapping
 
 from lib.utils.wrapper_utils import unflatten_tensorized_space

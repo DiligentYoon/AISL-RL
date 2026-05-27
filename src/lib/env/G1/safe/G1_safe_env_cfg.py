@@ -3,84 +3,122 @@ from __future__ import annotations
 
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
-from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.domain_randomizer import randomizer
+from lib.utils.plot_utils import PNGSavePlotter
 
 
 @configclass
 class G1SafeEnvCfg(G1BaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 3.0
+    episode_length_s = 2.0 
     sim_dt = 1/200
     decimation = 4          
 
-    ## ========== Multi Agent Setting =========== ##
+    ## ========== Nominal policy Setting =========== ##
     possible_agents = ["arm", "leg"]
     action_space = {"arm": 17, "leg": 12}                         
     observation_space = {"arm": 60, "leg": 45}                
     state_space = {"arm": 97, "leg": 97}
-    ra_state_space = 11
+    ra_state_space = 40
     num_agents = 2
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()]}
     
-    ## ========== Safety policy setting ========== ##
-    safe_action_space = action_space
-    safe_observation_space = {"arm": 44, "leg": 34}
-    safe_state_space = {"arm": 68, "leg": 68}
-
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
-    # state_space = 0
+    # action_space = 29                     
+    # observation_space = 96   
+    # ra_state_space = 40               
     # num_agents = 1
     # action_scale_factor = 0.5
 
     ## ==================== Reward Shaping ==================== ##
-    w_alive:              float = 0.0
-
     w_limits:             float = 10.0
-    w_vel_limits:         float = 5.0
-    w_joint_torque:       float = 1.0e-5
-    w_joint_torque_limit: float = 5.0e-5
-    w_joint_acc:          float = 5.0e-6
+    w_joint_torque:       float = 1.0e-4
+    w_joint_torque_limit: float = 2.0
     w_joint_vel:          float = 5.0e-3
 
-    w_deviation_hip:        float = 0.2
-    w_deviation_torso:      float = 0.0
-    w_deviation_arm:        float = 1.0
-    w_action_rate:          float = 0.05
-    w_prefer_collision:     float = 0.001
-    w_yank:                 float = 0.01
-    w_not_prefer_collision: float = 0.01
+    w_deviation_arm:        float = 0.01
+    w_deviation_leg:        float = 0.05
+    w_action_rate:          float = 0.01
+    
+    w_max_collision:        float = 0.3
+    w_prefer_collision:     float = 0.3
+    w_not_prefer_collision: float = 1.0
 
-    w_termination: float = 300
+    w_termination: float = 10.0
+
+    # ===== Gait guidance ===== #
+    time_period = 0.35
+    z_c = 0.75
+
+    # Commander
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=0.0,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.5, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+        ),
+    )
+
+    ## ========== Risk-bucket reset ========== ##
+    # Sampling weights over {low, mid, high} buckets produced by collect.py.
+    # Replace the dict (do not mutate in place) to update at runtime.
+    bucket_weights: dict[str, float] = {"low": 0.0, "mid": 0.0, "high": 1.0}
 
     def __post_init__(self):
         super().__post_init__()
         self.sim.render_interval = self.decimation
-        
-        # Event
+
+        # Disable inherited reset / push events; dataset reset takes over.
         self.events.push_robot = None
-        self.events.reset_base = EventTerm(
-            func=randomizer.reset_root_state_orientation_biased_uniform,
+        self.events.reset_base = None
+        self.events.reset_robot_joints = None
+
+        # Single dataset-driven reset event. dataset_dir is injected by the
+        # train script before the first env.reset().
+        self.events.reset_state_from_dataset = EventTerm(
+            func=randomizer.reset_state_from_dataset,
             mode="reset",
             params={
-                "pose_range": {"roll": (-3.14/3, 3.14/3), "pitch": (-3.14/3, 3.14/3), "yaw": (-3.14, 3.14)},
-                "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5), "z": (-0.0, 0.0),
-                                   "roll": (-2.0, 2.0), "pitch": (-2.0, 2.0), "yaw": (-1.0, 1.0)},
-                "bias": 3.14/6
-            }
+                "dataset_dir": "",
+                "bucket_weights": self.bucket_weights,
+                "asset_cfg": SceneEntityCfg("robot"),
+            },
         )
 
-        self.events.reset_robot_joints = EventTerm(
-            func=randomizer.reset_joints_by_offset,
-            mode="reset",
-            params={
-                "position_range": {-0.3, 0.3},
-                "velocity_range": {-2.0, 2.0}
-            }
+@configclass
+class G1SafePlayEnvCfg(G1SafeEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
         )
+
+        self.scene.num_envs = 1
+
+        # plotter
+        self.plotter = PNGSavePlotter
+
+        self.viz_data = {
+            "max_torque": 0.0,
+            "max_contact_force": 0.0,
+            "max_contact_impulse": 0.0,
+            "torso_contact_force": 0.0,
+            "mean_joint_deviation": 0.0,
+        }

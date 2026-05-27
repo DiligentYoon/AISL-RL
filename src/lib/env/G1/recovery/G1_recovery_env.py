@@ -11,7 +11,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers
 
-from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, quat_from_euler_xyz
+from isaaclab.utils.math import quat_apply_inverse, yaw_quat, euler_xyz_from_quat, quat_apply, matrix_from_quat
 
 from lib.domain_randomizer.commander import UniformNonHolonomicCommand, UniformVelocityCommand
 from lib.env.G1.base.G1_base_env import G1BaseEnv
@@ -62,8 +62,6 @@ class G1RecoveryEnv(G1BaseEnv):
         if self.cfg.num_agents > 1:
             self.cfg.action_scale_factor["arm"][1] = self.total_arm_joint_ids
             self.cfg.action_scale_factor["leg"][1] = self.total_leg_joint_ids
-        else:
-            self.cfg.action_scale_factor = 1.0
 
         # Intermediate values
         self.root_pos_w         = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
@@ -154,18 +152,18 @@ class G1RecoveryEnv(G1BaseEnv):
                 self.goal_vel_visualizer = VisualizationMarkers(self.cfg.goal_vel_visualizer_cfg)
             if not hasattr(self, "current_vel_visualizer"):
                 self.current_vel_visualizer = VisualizationMarkers(self.cfg.current_vel_visualizer_cfg)
-            if not hasattr(self, "torso_rotation_visualizer"):
-                self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
+            # if not hasattr(self, "torso_rotation_visualizer"):
+            #     self.torso_rotation_visalizer = VisualizationMarkers(self.cfg.torso_rotation_visualizer_cfg)
             self.goal_vel_visualizer.set_visibility(True)
             self.current_vel_visualizer.set_visibility(True)
-            self.torso_rotation_visalizer.set_visibility(True)
+            # self.torso_rotation_visalizer.set_visibility(True)
         else:
             if hasattr(self, "goal_vel_visualizer"):
                 self.goal_vel_visualizer.set_visibility(False)
             if hasattr(self, "current_vel_visualizer"):
                 self.current_vel_visualizer.set_visibility(False)
-            if hasattr(self, "torso_rotation_visualizer"):
-                self.torso_rotation_visalizer.set_visibility(False)
+            # if hasattr(self, "torso_rotation_visualizer"):
+                # self.torso_rotation_visalizer.set_visibility(False)
 
 
     def _debug_vis_callback(self, event):
@@ -174,7 +172,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # ============== Arrow ================ # 
         # Arrow: get marker location
         base_pos_w = self._robot.data.root_pos_w.clone()
-        base_pos_w[:, 2] += 0.5
+        base_pos_w[:, 2] += 0.6
         # Arrow: resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                               xy_velocity=self.commands.command_b)
@@ -189,7 +187,7 @@ class G1RecoveryEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
+        # self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
 
     def _setup_scene(self):
         super()._setup_scene()
@@ -272,7 +270,6 @@ class G1RecoveryEnv(G1BaseEnv):
             total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
             observations = torch.cat(
                 [
-                    self.root_pos_w[:, 2:3],                            # [E, 1]
                     self.root_lin_vel_b,                                # [E, 3]
                     self.root_ang_vel_b,                                # [E, 3]
                     self.projected_gravity,                             # [E, 3]
@@ -281,6 +278,7 @@ class G1RecoveryEnv(G1BaseEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, total_joint_ids],                 # [E, 29]
                     self.joint_vel[:, total_joint_ids],                 # [E, 29]
+                    self.prev_actions,                                  # [E, 29]
                 ], dim=-1) 
 
         return observations
@@ -445,7 +443,7 @@ class G1RecoveryEnv(G1BaseEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        # critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
 
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
@@ -455,8 +453,9 @@ class G1RecoveryEnv(G1BaseEnv):
         died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_ang_vel_b[:, :3], dim=-1) >= self.cfg.termination_ang_vel
+        died_collision = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=-1)
         
-        died = died_fall | died_fall_2 | died_ang
+        died = died_fall | died_fall_2 | died_ang | died_collision
         return died, time_out
 
 
@@ -580,6 +579,54 @@ class G1RecoveryEnv(G1BaseEnv):
         self.deviation_swing[i]      = self.joint_pos[i][:, self.swing_joint_ids] - self._robot.data.default_joint_pos[i][:, self.swing_joint_ids]
         self.deviation_arms[i]       = self.joint_pos[i][:, self.arm_all_joint_ids] - self._robot.data.default_joint_pos[i][:, self.arm_all_joint_ids]
         self.deviation_torso[i]      = self.joint_pos[i][:, self.torso_joint_ids] - self._robot.data.default_joint_pos[i][:, self.torso_joint_ids]
+    
+
+    def _update_viz_data(self):
+        H_z_b = self.compute_body_angular_momentum()
+        shoulder_joint_pos = self.joint_pos[:, self.swing_joint_ids]
+
+        extras = copy.deepcopy(self.extras)
+        extras["viz_data"]["body_angular_momentum"] = H_z_b
+        extras["viz_data"]["left_shoulder_joint_pos"] = shoulder_joint_pos[:, 0]
+        extras["viz_data"]["right_shoulder_joint_pos"] = shoulder_joint_pos[:, 1]
+
+        return extras
+
+    def compute_body_angular_momentum(self):
+        p_i_w = self._robot.data.body_com_pos_w          # body COM position
+        v_i_w = self._robot.data.body_com_lin_vel_w      # body COM linear velocity
+        w_i_w = self._robot.data.body_com_ang_vel_w      # body angular velocity
+
+        m_i = self._robot.data.default_mass.to(self.device)
+        I_i_local = self._robot.data.default_inertia.reshape(*self._robot.data.default_inertia.shape[:2], 3, 3).to(self.device)
+
+        total_mass = torch.sum(m_i, dim=1, keepdim=True) # (N, 1)
+
+        p_G_w = torch.sum(m_i[..., None] * p_i_w, dim=1) / total_mass  # (N, 3)
+        v_G_w = torch.sum(m_i[..., None] * v_i_w, dim=1) / total_mass  # (N, 3)
+
+        R_i_w = matrix_from_quat(self._robot.data.body_link_quat_w)  # (N, B, 3, 3)
+
+        I_i_w = R_i_w @ I_i_local @ R_i_w.transpose(-1, -2)
+
+        H_spin_w = torch.matmul(I_i_w, w_i_w.unsqueeze(-1)).squeeze(-1)  # (N, B, 3)
+
+        r_i_G_w = p_i_w - p_G_w[:, None, :]       # (N, B, 3)
+        v_i_G_w = v_i_w - v_G_w[:, None, :]       # optional but recommended
+
+        H_orb_w = torch.cross(
+            r_i_G_w,
+            m_i[..., None] * v_i_G_w,
+            dim=-1)  # (N, B, 3)
+        
+        H_G_w = torch.sum(H_spin_w + H_orb_w, dim=1)  # (N, 3)
+        R_base_w = matrix_from_quat(self._robot.data.root_link_quat_w)  # (N, 3, 3)
+        base_z_w = R_base_w[:, :, 2] # (N, 3)
+
+        H_yaw_base = torch.sum(H_G_w * base_z_w, dim=-1) # (N,)
+
+        return H_yaw_base
+
 
 @torch.jit.script
 def wrap_to_pi(angles):

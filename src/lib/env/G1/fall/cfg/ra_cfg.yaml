@@ -1,33 +1,60 @@
 seed: 42
 
-buffer:
-  buffer_size: 64
-
-agent:
-  learning_epochs: 2
-  batch_size: 4096
-  discount_factor: 0.9999
-  learning_rate: 1.0e-05
-  learning_starts: 32
-  grad_norm_clip: 1.0
-
-  # logging and checkpoint
-  experiment:
-    directory: "g1_fall"
-    experiment_name: ""
-    evaluation_interval: auto
-    write_interval: auto
-    checkpoint_interval: auto
+train:
+  timesteps: 25600
 
 collection:
-  capacity_per_bucket: 200000
+  capacity_per_bucket: 100000
   thresholds:
-    low_high: -0.3
-    mid_high: 0.3
-  max_timestep: 20000
+    low_high: -0.1
+    mid_high: 0.1
+  max_timestep: 64000
   warmup_skip_steps: 4
   subsample_stride: 4
   save_subdir: "collected"
 
-train:
-  timesteps: 19200
+ra:
+  buffer:
+    buffer_size: 1024
+  agent:
+    learning_epochs: 1
+    batch_size: 4096
+    discount_factor: 0.9999
+    learning_rate: 5.0e-05
+    learning_starts: 1024
+    grad_norm_clip: 1.0
+    experiment:
+      directory: "g1_fall"
+      experiment_name: ""
+      evaluation_interval: auto
+      write_interval: auto
+      checkpoint_interval: auto
+
+safe_fall:
+  buffer:
+    seq_len: 200
+    fall_lead_seconds: 0.1
+  model:
+    hidden_dim: 64
+    num_layers: 1
+    dropout: 0.0
+  collection:                  
+    target_trajectories: 40960
+    train_val_split: [32768, 8192]
+    shard_size: 1024
+    output_root: "Safe_Fall"
+  train:                          
+    learning_epochs: 20
+    batch_size: 4096
+    learning_rate: 1.0e-3
+    weight_decay: 1.0e-4
+    grad_norm_clip: 0.0
+  eval:
+    threshold: 0.5
+    log_lead_time: true
+  agent:                            # Inference-only model holder; kept for Agent.load convention.
+    experiment:
+      directory: "g1_fall"
+      experiment_name: ""
+      write_interval: auto
+      checkpoint_interval: auto

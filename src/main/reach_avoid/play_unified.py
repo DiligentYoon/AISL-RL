@@ -1,5 +1,5 @@
 """
-Script to train a Reach-avoid value function.
+Script to evaluate a Unified Policy Framework.
 """
 
 """Launch Isaac Sim Simulator first."""
@@ -15,10 +15,12 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-fall-play", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="", help="Path to model checkpoint.")
+parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="G1-fall-unified-play", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
+parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
+# parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
 
 parser.add_argument("--predictor",
                     type=str,
@@ -35,7 +37,19 @@ parser.add_argument("--algorithm",
 parser.add_argument("--model",
                     type=str,
                     default="Shared",
-                    choices=["MLP", "Shared", "Communet"],
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
+                    help="The NN model used for training the agent.")
+
+parser.add_argument("--safe_algorithm",
+                    type=str,
+                    default="PPO",
+                    choices=["PPO", "SAC", "TD3", "MAPPO"],
+                    help="The RL algorithm used for training the agent.")
+
+parser.add_argument("--safe_model",
+                    type=str,
+                    default="MLP",
+                    choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
@@ -76,6 +90,9 @@ from lib.utils.plot_utils import GIFSavePlotter
 algorithm = args_cli.algorithm.lower()
 model = args_cli.model.lower() if args_cli.model is not None else None
 
+safe_algorithm = args_cli.safe_algorithm.lower()
+safe_model = args_cli.safe_model.lower() if args_cli.safe_model is not None else None
+
 def main():
     """
     main training method
@@ -88,21 +105,25 @@ def main():
     try:
         cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
         ra_cfg = load_cfg_from_registry(args_cli.task, f"ra_cfg_entry_point")
+        safe_cfg = load_cfg_from_registry(args_cli.task, f"safe_rl_{safe_algorithm}_cfg_entry_point")
     except ValueError as e:
         print(e)
         return
 
-    # specify directory for logging experiments (load checkpoint)
-    if args_cli.checkpoint is not None:
-        base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
-        if args_cli.predictor == "ra":
-            log_dir = os.path.join(base_dir, "Reach_Avoid")
-        elif args_cli.predictor == "safefall":
-            log_dir = os.path.join(base_dir, "Safe_Fall")
-        else:
-            raise ValueError(f"Unknown predictor: {args_cli.predictor}")
+    if args_cli.safe_checkpoint is not None:
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.safe_checkpoint)), "Total")
+    elif args_cli.checkpoint is not None:
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)))
     else:
-        raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
+        # specify directory for logging experiments
+        log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
+        log_root_path = os.path.abspath(log_root_path)
+        log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}"
+        print(f"[INFO] Loading experiment from directory: {log_root_path}")
+        print(f"[INFO] Exact experiment name requested from command line: {log_dir}")
+        if cfg["agent"]["experiment"]["experiment_name"]:
+            log_dir += f"_{cfg['agent']['experiment']['experiment_name']}"
+        log_dir = os.path.join(log_root_path, log_dir)
 
     # ============================ Env & Wrapper Spawn ================================
 
@@ -115,10 +136,13 @@ def main():
         env_cfg.seed = args_cli.seed
         cfg["agent"]["seed"] = args_cli.seed
         pred_cfg["agent"]["seed"] = args_cli.seed
+        safe_cfg["agent"]["seed"] = args_cli.seed
     else:
-        env_cfg.seed = cfg.get("seed", None)
+        env_cfg.seed = cfg.get("seed", 42)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
         pred_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+        safe_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+    env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -158,7 +182,6 @@ def main():
         act_size = {}
         buffers = {}
         possible_agents = env._unwrapped.cfg.possible_agents
-        num_agent = len(possible_agents)
         for uid in possible_agents:
             observation_space = env.observation_space[uid]
             action_space = env.action_space[uid]
@@ -220,17 +243,6 @@ def main():
                           buffer=buffers,
                           device=env.device,
                           cfg=cfg["agent"])
-            
-        elif model_manager.model_type == "communet":
-            from lib.agent.communet_mappo import CommunetMAPPO
-            agent = CommunetMAPPO(observation_space=env.observation_space,
-                                    state_space=env.state_space,
-                                    action_space=env.action_space,
-                                    possible_agents=possible_agents,
-                                    model=models,
-                                    buffer=buffers,
-                                    device=env.device,
-                                    cfg=cfg["agent"])
         
         elif model_manager.model_type == "shared":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
@@ -287,23 +299,120 @@ def main():
 
     else:
         raise ValueError(f"Unknown predictor: {predictor}")
-    
-    # Checkpoint (Policy)
-    resume_path = os.path.abspath(args_cli.checkpoint)
-    agent.load(resume_path)
-    print(f"[INFO] Get checkpoint of policy from {resume_path}")
 
+    # =============== Safe Policy Buffer and Model Spawn ===============
+    safe_multi_agent = safe_algorithm == "mappo"
+    safe_cfg["models"]["multi_agent"] = safe_multi_agent
+    # Initialization
+    if safe_cfg["buffer"]["buffer_size"] == -1:
+        safe_cfg["buffer"]["buffer_size"] = safe_cfg["agent"]["rollouts"]
+    else:
+        raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
+    
+    possible_agents = None
+    if safe_multi_agent:
+        safe_obs_size = {}
+        safe_state_size = {}
+        safe_act_size = {}
+        safe_buffers = {}
+        possible_agents = env._unwrapped.cfg.possible_agents
+        for uid in possible_agents:
+            observation_space = env._unwrapped.cfg.safe_observation_space[uid]
+            action_space = env._unwrapped.cfg.safe_action_space[uid]
+            state_space = env._unwrapped.cfg.safe_state_space[uid]
+            safe_cfg["agent"]["async_actor_critic"] = True
+
+            safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+            safe_buffer.init_buffer(observation_space, state_space, action_space)
+            safe_buffers[uid] = safe_buffer
+            safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
+            safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
+            safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
+    else:
+        observation_space = env._unwrapped.cfg.safe_observation_space
+        action_space = env._unwrapped.cfg.safe_action_space
+        state_space = env._unwrapped.cfg.safe_state_space
+
+        safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
+        safe_buffer.init_buffer(observation_space, state_space, action_space)
+        safe_buffer = safe_buffer
+        safe_obs_size = safe_buffer.tensors["observations"].shape[-1]
+        safe_state_size = safe_buffer.tensors["states"].shape[-1]
+        safe_act_size = safe_buffer.tensors["actions"].shape[-1]   
+
+    # Overwrite cfg by cli argument
+    if safe_model is not None:
+        safe_cfg["models"]["model_type"] = safe_model
+
+    safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
+    if safe_model_manager.model_class == "mlp":
+        safe_models = safe_model_manager.generate_mlp_models(observation_size=safe_obs_size,
+                                                             state_size=safe_state_size,
+                                                             action_size=safe_act_size,
+                                                             possible_agents=possible_agents)
+    else:
+        raise RuntimeError("Not supported class")
+
+    # ======================= Safe Agent ============================
+    safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
+    if safe_multi_agent:
+        if safe_model_manager.model_type == "mlp":
+            from lib.agent.mappo import MAPPO
+            safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
+                               state_space=env._unwrapped.safe_state_space,
+                               action_space=env._unwrapped.safe_action_space,
+                               possible_agents=possible_agents,
+                               model=safe_models,
+                               buffer=safe_buffers,
+                               device=env.device,
+                               cfg=safe_cfg["agent"])
+        elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
+            from lib.agent.cooperative_mappo import CooperativeMAPPO
+            safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
+                                          state_space=env._unwrapped.safe_state_space,
+                                          action_space=env._unwrapped.safe_action_space,
+                                          possible_agents=possible_agents,
+                                          model=safe_models,
+                                          buffer=safe_buffers,
+                                          device=env.device,
+                                          cfg=safe_cfg["agent"])
+        else:
+            raise RuntimeError("Unvalid model type.")
+    else:
+        from lib.agent.ppo import PPO
+        safe_agent = PPO(model=safe_models,
+                    buffer=safe_buffer, 
+                    device=env.device,
+                    cfg=safe_cfg["agent"])
+
+
+    # ======================= Checkpoint Load ========================
+    # Checkpoint (Policy)
+    if args_cli.checkpoint is not None:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+        agent.load(resume_path)
+        print(f"[INFO] Get checkpoint of policy from {resume_path}.")
+    else:
+        print(f"[INFO] Unfortunately a pre-trained Policy is not found for this task.")
     # Checkpoint (Predictor)
     if args_cli.predictor_checkpoint is not None:
         resume_path_pred = os.path.abspath(args_cli.predictor_checkpoint)
         pred_agent.load(resume_path_pred)
-        print(f"[INFO] Get predictor checkpoint ({predictor}) from {resume_path_pred}")
+        print(f"[INFO] Get checkpoint RA Value from {resume_path_pred}.")
     else:
         resume_path_pred = None
-        print(f"[INFO] No pre-trained predictor ({predictor}) checkpoint found.")
+        print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
+    # Checkpoint (Safe Policy)
+    if args_cli.safe_checkpoint is not None:
+        resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
+        safe_agent.load(resume_path_safe)
+        print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
+    else:
+        resume_path_safe = None
+        print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
+
 
     # ======================= Evaluation ============================
-    
     # Reset environment
     plotter_cls = getattr(env._unwrapped.cfg, "plotter", None)
     if plotter_cls is not None:
@@ -315,36 +424,63 @@ def main():
 
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
+    prev_action_norm = None
+    safe_obs = infos["safe_observations"]
     timestep = 0
+    total_ep = 0
+    success_ep = 0
+
+    prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    switch_threshold = ra_cfg["collection"]["thresholds"]["mid_high"]
 
     # SafeFall predictor recurrent state; carried across steps within an episode,
     # zeroed per-env on done. None for RA (stateless MLP).
     pred_h = None
+    safefall_threshold = 0.5
     if predictor == "safefall":
         n_layers = int(pred_cfg["model"].get("num_layers", 1))
         hidden_dim = int(pred_cfg["model"]["hidden_dim"])
         pred_h = torch.zeros(n_layers, env.num_envs, hidden_dim, device=env.device)
+        safefall_threshold = float(pred_cfg.get("eval", {}).get("threshold", 0.5))
 
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
+        t1_loop = time.time()
         with torch.no_grad():
             # agent stepping
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
 
             # Predictor forward
             if predictor == "ra":
                 risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+                cur_switch = risk_value.float().reshape(-1) > switch_threshold
             else:  # safefall
                 obs_in = infos["safe_fall_obs"].unsqueeze(1)            # (N, 1, obs_dim)
-                logits, pred_h, _ = pred_agent.critic(obs_in, pred_h)
-                risk_value = logits.softmax(dim=-1)[..., 1].reshape(-1, 1)
+                logits, pred_h, _ = pred_agent.critic(obs_in, pred_h)   # h carried over
+                prob = logits.softmax(dim=-1)[..., 1].reshape(-1)
+                risk_value = prob.unsqueeze(-1)
+                cur_switch = prob > safefall_threshold
 
+            # safe action post-processing
+            if not safe_multi_agent:
+                # NOTE: Exceptionally, use env variables for assigning action with dictionary convention
+                safe_actions_buffer = torch.zeros_like(safe_actions)
+                safe_actions_buffer[:, :len(env._unwrapped.total_arm_joint_ids)] = safe_actions[:, env._unwrapped.total_arm_joint_ids]
+                safe_actions_buffer[:, len(env._unwrapped.total_arm_joint_ids):] = safe_actions[:, env._unwrapped.total_leg_joint_ids]
+                safe_actions = safe_actions_buffer
+
+            switch = torch.logical_or(cur_switch, prev_switch)
+            actions = torch.where(switch, safe_actions, nominal_actions)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
+
+        # Check terminated
+        done = terminated[0] | truncated[0]
 
         # Per-env hidden state reset for SafeFall on episode boundary
         if pred_h is not None:
@@ -354,10 +490,12 @@ def main():
 
         # Plot Phase
         if plot is not None:
-            done = terminated[0] | truncated[0]
-            risk_value = risk_value.float().squeeze(-1)
-            infos["viz_data"]["risk_value"] = risk_value
+            action_norm = torch.norm(actions, dim=-1)
+            infos["viz_data"]["action_diff"] = torch.abs(action_norm - prev_action_norm) if prev_action_norm is not None else action_norm
+            infos["viz_data"]["risk_value"] = risk_value.float().squeeze(-1)
             plot.append(viz_data=infos["viz_data"], episode_end=done)
+            
+            prev_action_norm = torch.clone(action_norm)
 
         # Video update
         if timestep == args_cli.video_length:
@@ -365,9 +503,17 @@ def main():
             break
 
         # update
+        if done:
+            prev_switch = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+            total_ep += 1
+            if not terminated[0]:
+                success_ep += 1
+        else:
+            prev_switch = switch
         obs = next_obs
         states = next_states
         infos = next_infos
+        safe_obs = infos["safe_observations"]
 
     # close the simulator
     env.close()
@@ -376,6 +522,9 @@ def main():
     if plot is not None:
         plot.save()
         plot.close()
+    
+    # Print success rate
+    print(f"Total Success Rate : {success_ep} / {total_ep}")
 
 
 if __name__ == "__main__":

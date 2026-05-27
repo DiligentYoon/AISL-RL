@@ -18,6 +18,7 @@ class G1FallEnv(G1RecoveryEnv):
 
         # History buffer
         self.hist_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.prev_state_buffer = torch.zeros((self.num_envs, 8), dtype=torch.float32, device=self.device)
         self.root_state_buffer = torch.zeros((self.num_envs, self.cfg.body_hist_length, 8), dtype=torch.float32, device=self.device)
 
         # Capturability information
@@ -36,7 +37,7 @@ class G1FallEnv(G1RecoveryEnv):
                                               self.phase.unsqueeze(-1),                           # [E, 1]
                                               self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
                                             ], dim=-1)
-        
+
         base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
 
@@ -44,14 +45,23 @@ class G1FallEnv(G1RecoveryEnv):
         self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
         # self.extras["g_values"] = 2 * is_fall - 1
 
-        return states 
+        # SafeFall baseline observation (gravity_xy, root_ang_vel, joint_pos, joint_vel)
+        total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
+        self.extras["safe_fall_obs"] = torch.cat([
+            self.projected_gravity[:, :2],          # [E, 2]
+            self.root_ang_vel_b,                    # [E, 3]
+            self.joint_pos[:, total_joint_ids],     # [E, 29]
+            self.joint_vel[:, total_joint_ids],     # [E, 29]
+        ], dim=-1)                                  # [E, 63]
+
+        return states
 
     # Overriding to add new fall termination condition
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.critical_contact_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
         
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         died = died_collision
@@ -60,10 +70,10 @@ class G1FallEnv(G1RecoveryEnv):
 
     # Overriding to add history buffer reset
     def _reset_idx(self, env_ids):
-        super()._reset_idx(env_ids)
         # History buffer reset
         self.hist_count[env_ids] = 0
         self.root_state_buffer[env_ids] = 0.0
+        super()._reset_idx(env_ids)
 
     # Overriding to compute capturability information and update history buffer
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
@@ -76,11 +86,14 @@ class G1FallEnv(G1RecoveryEnv):
         self.capturable_boundary[i] = radius.unsqueeze(-1)
         self.dist_from_icp_to_stance[i] = torch.norm(self.ICP_pos_w[i, :2] - self.support_foot_pos[i, :2], dim=-1).unsqueeze(-1)
 
-        # History buffer update
-        self.root_state_buffer[i, self.hist_count[i] % self.cfg.body_hist_length] = torch.cat([self.root_ang_vel_b[i], self.projected_gravity[i], self.dist_from_icp_to_stance[i], self.phase[i].unsqueeze(-1)], dim=-1)
-
-        # History count
-        self.hist_count[i] += 1
+        if env_ids is None:
+            # History buffer update
+            self.root_state_buffer[i, self.hist_count[i] % self.cfg.body_hist_length] = self.prev_state_buffer[i].clone()
+            # History count
+            self.hist_count[i] += 1
+        
+        # Prev state for history buffer
+        self.prev_state_buffer[i] = torch.cat([self.root_ang_vel_b[i], self.projected_gravity[i], self.dist_from_icp_to_stance[i], self.phase[i].unsqueeze(-1)], dim=-1)
 
 
     # ======================= Auxillary functions ======================= #
@@ -117,7 +130,6 @@ class G1FallEnv(G1RecoveryEnv):
         extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
         extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
         extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
-        extras["viz_data"]["m_step_hist"]           = self.capturable_boundary[0, 0] - dist_from_icp_to_ankle
         extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
 
         return extras

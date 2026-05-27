@@ -15,8 +15,8 @@ parser.add_argument("--seed", type=int, default=None, help="Seed of RL environme
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during collection.")
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=1024, help="Number of environments (overrides cfg default if given).")
-parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
+parser.add_argument("--task", type=str, default="G1-fall-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, required=True, help="Path to nominal policy checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, required=True, help="Path to trained Reach-Avoid value checkpoint.")
 
@@ -28,7 +28,7 @@ parser.add_argument("--algorithm",
 
 parser.add_argument("--model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Communet"],
                     help="The NN model of the nominal policy.")
 
@@ -70,12 +70,13 @@ model = args_cli.model.lower() if args_cli.model is not None else None
 def extract_physical_snapshot(info) -> dict[str, torch.Tensor]:
     """Read root + joint state"""
     return {
-        "root_pos_offset_w": info["root_pos_offset_w"],
-        "root_quat_w":       info["root_quat_w"],
-        "root_lin_vel_w":    info["root_lin_vel_w"],
-        "root_ang_vel_w":    info["root_ang_vel_w"],
-        "joint_pos":         info["joint_pos"],
-        "joint_vel":         info["joint_vel"],
+        "root_pos_offset_w": info["root_pos_offset_w"].clone(),
+        "root_quat_w":       info["root_quat_w"].clone(),
+        "root_lin_vel_w":    info["root_lin_vel_w"].clone(),
+        "root_ang_vel_w":    info["root_ang_vel_w"].clone(),
+        "joint_pos":         info["joint_pos"].clone(),
+        "joint_vel":         info["joint_vel"].clone(),
+        "prev_action":       info["prev_action"].clone(),
     }
 
 
@@ -161,8 +162,9 @@ def main():
     seed = args_cli.seed if args_cli.seed is not None else ra_cfg.get("seed", 42)
     env_cfg.seed = seed
     cfg["agent"]["seed"] = seed
-    ra_cfg["agent"]["seed"] = seed
+    ra_cfg["ra"]["agent"]["seed"] = seed
 
+    env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg,
                    render_mode="rgb_array" if args_cli.video else None)
 
@@ -267,10 +269,10 @@ def main():
         raise RuntimeError("Explicit state space is not defined.")
 
     # ReachAvoid requires a buffer arg; collection does not write to it.
-    ra_buffer_dummy = HindSightReplayBuffer(1, env.num_envs, device=env.device)
-    ra_buffer_dummy.init_buffer(env._unwrapped.cfg.ra_state_space)
+    ra_buffer = HindSightReplayBuffer(1, env.num_envs, device=env.device)
+    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
     ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-    ra_agent = ReachAvoid(ra_model, ra_buffer_dummy, device=env.device, cfg=ra_cfg["agent"])
+    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["ra"]["agent"])
 
     # Load checkpoints (both required)
     agent.load(os.path.abspath(args_cli.checkpoint))
@@ -314,7 +316,7 @@ def main():
 
         valid_mask = build_valid_mask(skip_remaining, terminated,
                                       stride_counter, subsample_stride)
-        risk_buffer.add(snapshot, risk_scores, valid_mask=valid_mask)
+        risk_buffer.add(snapshot=snapshot, risk_scores=risk_scores, valid_mask=valid_mask)
 
         update_counters(skip_remaining, stride_counter,
                         done=(terminated | truncated),

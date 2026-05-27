@@ -10,24 +10,24 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent.")
-parser.add_argument("--seed", type=int, default=154, help="Seed of RL environment")
+parser.add_argument("--seed", type=int, default=None, help="Seed of RL environment")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-05-05_16-13-14_mappo/agent_32000.pt", help="Path to model checkpoint.")
+parser.add_argument("--task", type=str, default="G1-recovery-play", help="Name of the task.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--model",
                     type=str,
-                    default="Shared",
+                    default="MLP",
                     choices=["MLP", "Shared", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -39,7 +39,7 @@ if args_cli.video:
     args_cli.enable_cameras = True
 
 # launch omniverse app
-args_cli.headless = False                    # Headless mode
+args_cli.headless = True                    # Headless mode
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -92,7 +92,6 @@ def main():
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env_cfg.total_timesteps = cfg["train"]["timesteps"]
-    env_cfg.curriculum = None
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # Logging directory
@@ -386,7 +385,7 @@ def main():
 
 
         # Video update
-        if args_cli.video and timestep == args_cli.video_length:
+        if timestep == args_cli.video_length:
             # exit the play loop after recording one video
             break
         

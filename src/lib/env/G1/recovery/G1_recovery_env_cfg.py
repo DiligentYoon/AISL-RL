@@ -4,13 +4,12 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
+from lib.utils.plot_utils import PNGSavePlotter
 
 @configclass
 class G1RecoveryEnvCfg(G1BaseEnvCfg):
@@ -29,9 +28,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
                            "leg": [0.5, ()]}
 
     ## ========== Single Agent Setting ========== ##  
-    # action_space = 37                     
-    # observation_space = 106                  
-    # state_space = 0
+    # action_space = 29                     
+    # observation_space = 101                 
     # num_agents = 1
     # action_scale_factor = 0.5
 
@@ -105,8 +103,8 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     )
 
     # Set the scale of the visualization markers
-    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-    current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+    goal_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
     goal_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_ang_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
 
@@ -137,4 +135,16 @@ class G1RecoveryPlayEnvCfg(G1RecoveryEnvCfg):
 
         self.scene.num_envs = 1
 
-        # self.events.push_robot = None
+        self.plotter = PNGSavePlotter
+
+        self.viz_data = {
+            "body_angular_momentum": 0.0,
+            "left_shoulder_joint_pos": 0.0,
+            "right_shoulder_joint_pos": 0.0,}
+
+        self.events.push_robot.params["velocity_range"] = {
+            "x": (-0.5, 0.5),
+            "y": (-0.5, 0.5),
+            "roll": (-4.0, 4.0),
+            "pitch": (-4.0, 4.0)
+        }

@@ -16,20 +16,21 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-safe", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
 parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
+parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -88,6 +89,17 @@ def main():
     except ValueError as e:
         print(e)
         return
+
+    # ============================ Risk-bucket dataset ============================
+    # Pre-flight: verify all three bucket files exist before launching sim.
+    ds_dir = os.path.abspath(args_cli.dataset_dir)
+    missing = [b for b in ("low", "mid", "high")
+               if not os.path.exists(os.path.join(ds_dir, f"{b}_risk.pt"))]
+    if missing:
+        raise FileNotFoundError(
+            f"--dataset_dir is missing buckets: {missing} (looked in {ds_dir})")
+    env_cfg.events.reset_state_from_dataset.params["dataset_dir"] = ds_dir
+    print(f"[INFO] Risk-bucket dataset: {ds_dir}")
 
     # specify directory for logging experiments (load checkpoint)
     log_root_path = os.path.join("logs", cfg["agent"]["experiment"]["directory"])
@@ -255,73 +267,6 @@ def main():
     from lib.agent.reach_avoid import ReachAvoid
     ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
 
-    # =============== Safe Policy Buffer and Model Spawn ===============
-    if safe_cfg["buffer"]["buffer_size"] == -1:
-        safe_cfg["buffer"]["buffer_size"] = safe_cfg["agent"]["rollouts"]
-    else:
-        raise RuntimeError("Replaybuffer for Off-policy algorithm is not implemented yet.")
-    safe_obs_size = {}
-    safe_state_size = {}
-    safe_act_size = {}
-    safe_buffers = {}
-    possible_agents = env._unwrapped.cfg.possible_agents
-    for uid in possible_agents:
-        observation_space = env._unwrapped.cfg.safe_observation_space[uid]
-        action_space = env._unwrapped.cfg.safe_action_space[uid]
-        state_space = env._unwrapped.cfg.safe_state_space[uid]
-        safe_cfg["agent"]["async_actor_critic"] = True
-
-        safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-        safe_buffer.init_buffer(observation_space, state_space, action_space)
-        safe_buffers[uid] = safe_buffer
-        safe_obs_size[uid] = safe_buffer.tensors["observations"].shape[-1]
-        safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
-        safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
-
-    # Overwrite cfg by cli argument
-    if model is not None:
-        cfg["models"]["model_type"] = model
-    safe_cfg["models"]["multi_agent"] = multi_agent
-
-    safe_model_manager = ModelFactory(cfg=safe_cfg["models"], device=env.device)
-    if safe_model_manager.model_class == "mlp":
-        safe_models = safe_model_manager.generate_mlp_models(observation_size=safe_obs_size,
-                                                             state_size=safe_state_size,
-                                                             action_size=safe_act_size,
-                                                             possible_agents=possible_agents)
-    else:
-        raise RuntimeError("Not supported class")
-
-    # ======================= Safe Agent ============================
-    safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
-    if multi_agent:
-        if safe_model_manager.model_type == "mlp":
-            safe_agent = MAPPO(observation_space=env._unwrapped.safe_observation_space,
-                               state_space=env._unwrapped.safe_state_space,
-                               action_space=env._unwrapped.safe_action_space,
-                               possible_agents=possible_agents,
-                               model=safe_models,
-                               buffer=safe_buffers,
-                               device=env.device,
-                               cfg=safe_cfg["agent"])
-        elif safe_model_manager.model_type == "shared" or safe_model_manager.model_type == "superconnected":
-            safe_agent = CooperativeMAPPO(observation_space=env._unwrapped.safe_observation_space,
-                                          state_space=env._unwrapped.safe_state_space,
-                                          action_space=env._unwrapped.safe_action_space,
-                                          possible_agents=possible_agents,
-                                          model=safe_models,
-                                          buffer=safe_buffers,
-                                          device=env.device,
-                                          cfg=safe_cfg["agent"])
-        else:
-            raise RuntimeError("Unvalid model type.")
-    else:
-        agent = PPO(model=safe_models,
-                    buffer=safe_buffer, 
-                    device=env.device,
-                    cfg=safe_cfg["agent"])
-
-
     # ======================= Checkpoint Load ========================
     # Checkpoint (Policy)
     if args_cli.checkpoint is not None:
@@ -329,7 +274,7 @@ def main():
         agent.load(resume_path)
         print(f"[INFO] Get checkpoint of policy from {resume_path}.")
     else:
-        print(f"[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
+        print(f"[INFO] Unfortunately a pre-trained Policy is not found for this task.")
     # Checkpoint (RA value)
     if args_cli.ra_checkpoint is not None:
         resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
@@ -338,15 +283,7 @@ def main():
     else:
         resume_path_ra = None
         print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
-    # Checkpoint (Safe Policy)
-    if args_cli.safe_checkpoint is not None:
-        resume_path_safe = os.path.abspath(args_cli.safe_checkpoint)
-        safe_agent.load(resume_path_safe)
-        print(f"[INFO] Get checkpoint Safety Policy from {resume_path_safe}.")
-    else:
-        resume_path_safe = None
-        print("[INFO] Unfortunately a pre-trained Safety Policy is not found for this task.")
-    
+
     # Verify save logic
     verify_save_logic = True
     if verify_save_logic:
@@ -382,7 +319,7 @@ def main():
         with torch.no_grad():
             # agent stepping
             actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
-            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
+            # RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
@@ -406,7 +343,7 @@ def main():
                 t2_rollout = time.time()
 
                 t1_update = time.time()
-                policy_loss, value_loss, entropy_loss, approx_kl = agent.update()
+                policy_loss, value_loss, entropy_loss, approx_kl, _ = agent.update()
                 t2_update = time.time()
 
                 rollout += 1

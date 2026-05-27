@@ -20,6 +20,7 @@ class RiskClassifiedBuffer:
         root_ang_vel_w (3)
         joint_pos      (joint_dim)
         joint_vel      (joint_dim)
+        prev_action    (joint dim)
         risk_score     (1)
     """
 
@@ -54,6 +55,7 @@ class RiskClassifiedBuffer:
         self._key_dims: dict[str, int] = dict(self._ROOT_KEYS)
         self._key_dims["joint_pos"] = self.joint_dim
         self._key_dims["joint_vel"] = self.joint_dim
+        self._key_dims["prev_action"] = self.joint_dim
         self._key_dims["risk_score"] = 1
 
         # Per-bucket flat storage tensors
@@ -98,7 +100,7 @@ class RiskClassifiedBuffer:
 
         Args:
             snapshot: dict with keys
-                root_pos_offset_w, root_quat_w, root_lin_vel_w, root_ang_vel_w,
+                root_pos_offset_w, root_quat_w, root_lin_vel_w, root_ang_vel_w, prev_action
                 joint_pos, joint_vel
                 — each tensor of shape (num_envs, dim).
             risk_scores: (num_envs,) or (num_envs, 1).
@@ -142,6 +144,7 @@ class RiskClassifiedBuffer:
             store["root_ang_vel_w"][start:end].copy_(snapshot["root_ang_vel_w"][env_idx])
             store["joint_pos"][start:end].copy_(snapshot["joint_pos"][env_idx])
             store["joint_vel"][start:end].copy_(snapshot["joint_vel"][env_idx])
+            store["prev_action"][start:end].copy_(snapshot["prev_action"][env_idx])
             store["risk_score"][start:end, 0].copy_(scores[env_idx])
 
             self.write_idx[bname] = end

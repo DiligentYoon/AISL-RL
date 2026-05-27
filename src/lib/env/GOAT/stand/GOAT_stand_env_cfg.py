@@ -20,7 +20,7 @@ from lib.assets.objects.Jig.object import JIGCFG
 @configclass
 class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -40,24 +40,24 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 1.0 # rad/s
+    joint_vel_limit = 1.5 # rad/s
     target_height = 0.523
 
     r_upright_weight = 1.0
     r_height_weight = 3.0
 
-    p_illegal_contact_weight = 0.1
-    p_joint_deviation_weight = 1.0
+    p_illegal_contact_weight = 0.3
+    p_joint_deviation_weight = 3.0
     p_lin_vel_weight = 3.0
     p_ang_vel_weight = 0.5
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.01
-    p_joint_vel_limit_weight = 10.0
-    p_joint_velocity_weight = 0.05
+    p_all_torque_weight = 0.008
+    p_joint_vel_limit_weight = 5.0
+    p_joint_velocity_weight = 0.035
     p_joint_accel_weight = 5.0e-7
     p_action_rate_weight = 0.02
-    p_terminated_weight = 100.0
+    p_terminated_weight = 200.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = False
@@ -83,7 +83,6 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
         "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "command_inputs_b":  {"dim": 3,  "std": 0.00},  # Command
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
@@ -96,19 +95,19 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
     rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
 
-    curriculum = CurriculumManagerCfg(
-        warmup=warmup,
-        endup=endup,
-        params=[
-            CurriculumParamCfg(
-                name="observation_noise",
-                attr_path="cfg/observation_noise_params/std",
-                start_value=obs_noise_start,
-                end_value=obs_noise_end,
-                schedule="linear",
-            ),
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     warmup=warmup,
+    #     endup=endup,
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="observation_noise",
+    #             attr_path="cfg/observation_noise_params/std",
+    #             start_value=obs_noise_start,
+    #             end_value=obs_noise_end,
+    #             schedule="linear",
+    #         ),
+    #     ]
+    # )
     
     # ERFI
     rfi_torque_limit: list[float] = rfi_end    # N·m 
@@ -187,6 +186,9 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.3563, -0.3563, 0.4232, -0.4232, 0.0, 0.0)
         self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
+
+        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.6, 1.2)
+        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.6, 1.2)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)

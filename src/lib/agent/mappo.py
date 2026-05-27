@@ -99,7 +99,7 @@ class MAPPO(MultiAgent):
         if self.learning_rate_scheduler is not None:
             self.learning_rate_scheduler = {}
             for uid in self.possible_agents:
-                self.learning_rate_scheduler[uid] = KLAdaptiveLR(self.optimizers[uid], self.kl_threshold, min_lr=self.learning_rate)
+                self.learning_rate_scheduler[uid] = KLAdaptiveLR(self.optimizers[uid], self.kl_threshold)
 
 
         # Default Mode : Evaluation for disconnecting gradient flow

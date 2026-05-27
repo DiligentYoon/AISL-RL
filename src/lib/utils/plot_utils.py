@@ -241,6 +241,24 @@ class GIFSavePlotter:
             self.episode_ranges.append((self.current_episode_start, n - 1))
             self.current_episode_start = n
 
+    def _to_2d_series(self, key: str) -> tuple[np.ndarray, list[str]]:
+        """Convert buffered list for `key` into (n_frames, n_components) plus column names.
+
+        - Scalars or length-1 arrays produce one column named `{key}`.
+        - Length-N arrays (N>1) produce N columns named `{key}_0` ... `{key}_{N-1}`.
+        - Higher-rank arrays are flattened via reshape(-1).
+        - Steps with mismatched lengths are padded with NaN to the max width.
+        """
+        arrs = [np.asarray(v).reshape(-1) for v in self.buffer[key]]
+        if len(arrs) == 0:
+            return np.empty((0, 1), dtype=float), [key]
+        width = max(a.size for a in arrs)
+        out = np.full((len(arrs), width), np.nan, dtype=float)
+        for i, a in enumerate(arrs):
+            out[i, : a.size] = a
+        cols = [key] if width == 1 else [f"{key}_{j}" for j in range(width)]
+        return out, cols
+
     # ----------------------------------------------------------
     # GIF export (shared across all subclasses)
     # ----------------------------------------------------------
@@ -331,7 +349,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         "capture_region_center",
         "capture_region_radius",
         "time_hist",
-        "m_step_hist",
+        "risk_value",
         "icp_ankle_dist_hist",
     )
 
@@ -423,9 +441,9 @@ class CapturabilityPlotter(GIFSavePlotter):
 
         # m_step time-series panel
         self.mx = self.fig.add_subplot(spec[1, 1])
-        self.mx.set_title(r"$m_{step}(t)=d^{(2)}_{avail}(t)-\|r_{ic}(t)-r_{ankle}\|$")
+        self.mx.set_title(r"$Risk value$")
         self.mx.set_xlabel("time (s)")
-        self.mx.set_ylabel(r"$m_{step}$ (m)")
+        self.mx.set_ylabel(r"$Risk value")
         self.mx.grid(True, ls="--")
         self.mx.axhline(0.0, color="r", linestyle="--", linewidth=1.2)
 
@@ -447,7 +465,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.right_foot_pos_ani, = self.bx.plot([], [], "o", markersize=10, color="m")
         self.ICP_traj_ani, = self.bx.plot([], [], "--", color="k", linewidth=1.5, label="ICP traj")
         self.ICP_pos_ani, = self.bx.plot([], [], marker="x", markersize=8, color="k", label="ICP")
-        self.m_step_line_ani, = self.mx.plot([], [], color="b", linewidth=2.0, label=r"$m_{step}(t)$")
+        self.m_step_line_ani, = self.mx.plot([], [], color="b", linewidth=2.0, label=r"$Risk_value$")
         self.m_step_curr_ani, = self.mx.plot([], [], marker="o", markersize=5, color="k")
         self.mx.legend(loc="upper right")
 
@@ -498,7 +516,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         center0 = np.asarray(self._val("capture_region_center", 0), dtype=float).reshape(2,)
         radius0 = float(self._val("capture_region_radius", 0))
         time0 = float(self._val("time_hist", 0))
-        mstep0 = float(self._val("m_step_hist", 0))
+        risk0 = float(self._val("risk_value", 0))
         dist0 = float(self._val("icp_ankle_dist_hist", 0))
 
         self.COM_traj_ani.set_data([], [])
@@ -509,9 +527,9 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.ICP_pos_ani.set_data([icp_pos0[0]], [icp_pos0[1]])
         self.capture_region_ani.update(center=center0, radius=radius0)
         self.m_step_line_ani.set_data([], [])
-        self.m_step_curr_ani.set_data([time0], [mstep0])
+        self.m_step_curr_ani.set_data([time0], [risk0])
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (com_pos0[0], com_pos0[1], dist0, radius0, mstep0)
+            self.COM_pos_str % (com_pos0[0], com_pos0[1], dist0, radius0, risk0)
         )
 
         return [
@@ -541,7 +559,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         center = np.asarray(self._val("capture_region_center", i), dtype=float).reshape(2,)
         radius = float(self._val("capture_region_radius", i))
         t_now = float(self._val("time_hist", i))
-        m_step_now = float(self._val("m_step_hist", i))
+        risk_now = float(self._val("risk_value", i))
         dist_now = float(self._val("icp_ankle_dist_hist", i))
 
         self.COM_traj_ani.set_data(com_hist[:, 0], com_hist[:, 1])
@@ -553,7 +571,7 @@ class CapturabilityPlotter(GIFSavePlotter):
         self.capture_region_ani.update(center=center, radius=radius)
 
         self.ani_text_COM_pos.set_text(
-            self.COM_pos_str % (com_pos[0], com_pos[1], dist_now, radius, m_step_now)
+            self.COM_pos_str % (com_pos[0], com_pos[1], dist_now, radius, risk_now)
         )
 
         if self.bx_follow_com:
@@ -562,18 +580,18 @@ class CapturabilityPlotter(GIFSavePlotter):
             self.bx.set_ylim(self.bx_follow_yspan[0] + cy, self.bx_follow_yspan[1] + cy)
 
         time_hist = np.asarray(self.buffer["time_hist"][ep_start:i + 1], dtype=float)
-        m_step_hist = np.asarray(self.buffer["m_step_hist"][ep_start:i + 1], dtype=float)
+        risk_value = np.asarray(self.buffer["risk_value"][ep_start:i + 1], dtype=float)
 
-        self.m_step_line_ani.set_data(time_hist, m_step_hist)
-        self.m_step_curr_ani.set_data([t_now], [m_step_now])
+        self.m_step_line_ani.set_data(time_hist, risk_value)
+        self.m_step_curr_ani.set_data([t_now], [risk_now])
 
         self.mx.set_xlim(
             max(0.0, t_now - self.mx_follow_window),
             max(self.mx_initial_xlim[1], t_now + self.mx_future_margin),
         )
 
-        y_min = float(np.min(m_step_hist))
-        y_max = float(np.max(m_step_hist))
+        y_min = float(np.min(risk_value))
+        y_max = float(np.max(risk_value))
         pad = max(0.05, 0.1 * (y_max - y_min + 1e-6))
         self.mx.set_ylim(y_min - pad, y_max + pad)
 
@@ -670,13 +688,18 @@ class PNGSavePlotter(GIFSavePlotter):
     # ----------------------------------------------------------
     # PNG export
     # ----------------------------------------------------------
-    def save(self, filename: str = "trajectory.png"):
+    def save(self, filename: str = "trajectory.png",
+             excel_filename: str | None = "trajectory.xlsx"):
         """Render and save all buffered signals as a static multi-panel PNG.
 
         Parameters
         ----------
         filename : str
-            Output filename written inside self.plot_dir.
+            Output PNG filename written inside self.plot_dir.
+        excel_filename : str | None
+            If non-None, also dumps the same buffered signals to this
+            xlsx file (in self.plot_dir) via save_excel(). Pass None to
+            skip the Excel export.
         """
         self._finalize_open_episode()
         n_frames = self.num_frames()
@@ -726,6 +749,83 @@ class PNGSavePlotter(GIFSavePlotter):
         filepath = os.path.join(self.plot_dir, filename)
         fig.savefig(filepath, dpi=150, bbox_inches="tight")
         print(f"--------- Saved PNG to: {filepath}")
+
+        if excel_filename is not None:
+            self.save_excel(excel_filename)
+
+    def save_excel(self, filename: str = "trajectory.xlsx"):
+        """Dump buffered signals and episode boundaries to a multi-sheet xlsx.
+
+        Two sheets are written:
+          - 'trajectory': one row per step. Columns include step_index,
+            time_s, episode_index, episode_step, plus every viz_data key
+            expanded by component (scalar -> '{key}', length-N -> '{key}_j').
+          - 'episodes': one row per episode with start/end step indices and
+            timing.
+        """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "save_excel() requires pandas. Install via 'pip install pandas openpyxl'."
+            ) from e
+        try:
+            import openpyxl  # noqa: F401
+        except ImportError as e:
+            raise ImportError(
+                "save_excel() requires openpyxl for .xlsx output. "
+                "Install via 'pip install openpyxl'."
+            ) from e
+
+        self._finalize_open_episode()
+        n_frames = self.num_frames()
+        if n_frames == 0:
+            raise RuntimeError("No buffered data. Call append() first.")
+
+        t = self._build_time_axis(n_frames)
+
+        # Per-step episode metadata
+        episode_index = np.full(n_frames, -1, dtype=int)
+        episode_step = np.full(n_frames, -1, dtype=int)
+        for ep_i, (start, end) in enumerate(self.episode_ranges):
+            episode_index[start : end + 1] = ep_i
+            episode_step[start : end + 1] = np.arange(end - start + 1)
+
+        traj: dict[str, np.ndarray] = {
+            "step_index": np.arange(n_frames, dtype=int),
+            "time_s": t,
+            "episode_index": episode_index,
+            "episode_step": episode_step,
+        }
+        for key in self.cfg.keys():
+            arr, cols = self._to_2d_series(key)
+            for j, col in enumerate(cols):
+                traj[col] = arr[:, j]
+        df_traj = pd.DataFrame(traj)
+
+        ep_rows = []
+        for ep_i, (start, end) in enumerate(self.episode_ranges):
+            ep_rows.append({
+                "episode_index": ep_i,
+                "start_step": start,
+                "end_step": end,
+                "n_steps": end - start + 1,
+                "t_start_s": float(t[start]),
+                "t_end_s": float(t[end]),
+                "duration_s": float(t[end] - t[start]),
+            })
+        df_eps = pd.DataFrame(
+            ep_rows,
+            columns=["episode_index", "start_step", "end_step", "n_steps",
+                     "t_start_s", "t_end_s", "duration_s"],
+        )
+
+        os.makedirs(self.plot_dir, exist_ok=True)
+        filepath = os.path.join(self.plot_dir, filename)
+        with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+            df_traj.to_excel(writer, sheet_name="trajectory", index=False)
+            df_eps.to_excel(writer, sheet_name="episodes", index=False)
+        print(f"--------- Saved Excel to: {filepath}")
 
     def close(self):
         """Close the matplotlib figure."""

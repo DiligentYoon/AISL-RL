@@ -338,8 +338,8 @@ class Env(gym.Env):
         if (self.cfg.viz_data is not None) and (self.is_plot):
             self.extras = self._update_viz_data()
 
-        # return observations
-        return self.obs_buf, self.state_buf, self.extras
+        # return observations and extras with shallow copy
+        return self.obs_buf, self.state_buf, dict(self.extras)
 
     def step(self, action: Union[torch.Tensor | Dict[str, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
@@ -455,8 +455,8 @@ class Env(gym.Env):
         if (self.cfg.viz_data is not None) and (self.is_plot):
             self.extras = self._update_viz_data()
 
-        # return observations, rewards, resets and extras
-        return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+        # return observations, rewards, resets and extras with shallow copy
+        return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, dict(self.extras)
 
     @staticmethod
     def seed(seed: int = -1) -> int:

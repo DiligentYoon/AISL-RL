@@ -32,9 +32,24 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallCollectEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
         "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
         "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
+    }
+)
+
+gym.register(
+    id="G1-fall-unified-play",
+    entry_point=f"{__name__}.G1_fall_unified_env:G1FallUnifiedEnv",
+    disable_env_checker=True,
+    kwargs={
+        # Environment-Specific Entry Point for Env Cfg Class
+        "env_cfg_entry_point": f"{__name__}.G1_fall_env_cfg:G1FallUnifiedPlayEnvCfg",
+        "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+        "rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml",
+        "ra_cfg_entry_point": f"{__name__}.cfg:ra_cfg.yaml",
+        "safe_rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
+        "safe_rl_mappo_cfg_entry_point": f"{__name__}.cfg:mappo_cfg.yaml"
     }
 )
