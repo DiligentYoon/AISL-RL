@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -10,11 +11,12 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 DEFAULT_PREFIXES = ["Episode", "Reward", "Task Penalty", "Task Reward"]
 
+
 # -----------------------------
-# Util functions
+# Tag / scalar reading
 # -----------------------------
 def _read_scalar_tags_from_event_file(event_file: str | Path) -> List[str]:
-    """ Read only 'tag' (not value loaded)."""
+    """Read only 'tag' (no value loading)."""
     event_file = Path(event_file)
     if not event_file.exists():
         raise FileNotFoundError(event_file)
@@ -25,22 +27,17 @@ def _read_scalar_tags_from_event_file(event_file: str | Path) -> List[str]:
 
 
 def common_scalar_tags(event_files: List[str | Path]) -> List[str]:
-    """
-    Return sorted list of scalar tags that exist in ALL event files.
-    """
+    """Return sorted list of scalar tags present in ALL event files."""
     if len(event_files) == 0:
         return []
 
-    tag_sets = []
-    for f in event_files:
-        tags = _read_scalar_tags_from_event_file(f)
-        tag_sets.append(set(tags))
-
+    tag_sets = [set(_read_scalar_tags_from_event_file(f)) for f in event_files]
     common = set.intersection(*tag_sets) if tag_sets else set()
     return sorted(common)
 
+
 # -----------------------------
-# 1) Event file -> scalar DF
+# Event file -> scalar DF
 # -----------------------------
 def read_scalars_from_event_file(event_file: str | Path) -> pd.DataFrame:
     event_file = Path(event_file)
@@ -66,9 +63,9 @@ def read_scalars_from_event_files(
     only_common_tags: bool = True,
 ) -> pd.DataFrame:
     """
-    Read multiple event files and concatenate them.
-    Adds column: source_file
-    If only_common_tags=True, keeps only tags that exist in ALL files.
+    Read multiple event files and concatenate them. Adds a 'source_file'
+    column. With only_common_tags=True, keeps only tags that exist in ALL
+    files (intersection).
     """
     if len(event_files) == 0:
         return pd.DataFrame(columns=["source_file", "tag", "step", "wall_time", "value"])
@@ -77,7 +74,6 @@ def read_scalars_from_event_files(
     if only_common_tags:
         common = set(common_scalar_tags(event_files))
         if len(common) == 0:
-            # 공통 태그가 없으면 빈 DF 반환
             return pd.DataFrame(columns=["source_file", "tag", "step", "wall_time", "value"])
 
     dfs = []
@@ -99,6 +95,9 @@ def read_scalars_from_event_files(
     return out
 
 
+# -----------------------------
+# Helpers
+# -----------------------------
 def _moving_average(y: np.ndarray, window: int) -> np.ndarray:
     if window <= 1:
         return y
@@ -149,56 +148,146 @@ def group_tags_by_prefix(
     return groups
 
 
-def plot_prefix_figures_from_event_files(
-    event_files: List[str | Path],
+# -----------------------------
+# Event file discovery
+# -----------------------------
+def find_event_files(root: str | Path) -> List[Path]:
+    """
+    Recursively find tfevents files under ``root``. When a single run
+    directory contains multiple event files, keep only the most recently
+    modified one.
+    """
+    root = Path(root)
+    if not root.exists():
+        raise FileNotFoundError(root)
+
+    candidates = sorted(root.rglob("events.out.tfevents.*"))
+    by_run: Dict[Path, Path] = {}
+    for f in candidates:
+        run_dir = f.parent
+        prev = by_run.get(run_dir)
+        if prev is None or f.stat().st_mtime > prev.stat().st_mtime:
+            by_run[run_dir] = f
+    return sorted(by_run.values())
+
+
+# -----------------------------
+# Cross-run aggregation
+# -----------------------------
+def aggregate_runs_by_tag(
+    df: pd.DataFrame,
     *,
-    legend_titles: Optional[List[str]] = None,
-    task_name: str = "Task",                         
+    x_axis: str = "step",
+    num_points: Optional[int] = None,
+) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, int]]:
+    """
+    Per-tag aggregation across runs. Returns ``{tag: (x_grid, mean, std, n_runs)}``.
+
+    For each tag, run sequences (x, y) are extracted (deduplicated, sorted).
+    If every run shares the same x vector, statistics are computed without
+    interpolation; otherwise a common grid spanning the intersection of run
+    ranges is built and each run is linearly interpolated onto it. Std uses
+    ddof=1 (falls back to zeros when only one run is available).
+    """
+    if x_axis not in ("step", "wall_time"):
+        raise ValueError("x_axis must be 'step' or 'wall_time'")
+
+    out: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, int]] = {}
+    if df.empty:
+        return out
+
+    for tag, g_tag in df.groupby("tag"):
+        runs: List[Tuple[np.ndarray, np.ndarray]] = []
+        for _, g_src in g_tag.groupby("source_file"):
+            g_src = g_src.copy()
+            if x_axis == "step":
+                g_src = _dedup_by_step(g_src).sort_values("step")
+                x = g_src["step"].to_numpy(dtype=float)
+            else:
+                g_src = g_src.drop_duplicates(subset=["wall_time"], keep="last").sort_values("wall_time")
+                x = g_src["wall_time"].to_numpy(dtype=float)
+            y = g_src["value"].to_numpy(dtype=float)
+            if x.size == 0:
+                continue
+            runs.append((x, y))
+
+        if not runs:
+            continue
+
+        same_grid = all(
+            r[0].shape == runs[0][0].shape and np.array_equal(r[0], runs[0][0])
+            for r in runs
+        )
+
+        if same_grid:
+            x_grid = runs[0][0]
+            stacked = np.stack([r[1] for r in runs], axis=0)
+        else:
+            x_min = max(r[0].min() for r in runs)
+            x_max = min(r[0].max() for r in runs)
+            if x_max <= x_min:
+                # No overlapping range across runs; skip rather than fabricate.
+                continue
+            n_grid = num_points if num_points is not None else int(np.median([len(r[0]) for r in runs]))
+            n_grid = max(2, n_grid)
+            x_grid = np.linspace(x_min, x_max, n_grid)
+            stacked = np.stack([np.interp(x_grid, r[0], r[1]) for r in runs], axis=0)
+
+        mean = stacked.mean(axis=0)
+        if stacked.shape[0] >= 2:
+            std = stacked.std(axis=0, ddof=1)
+        else:
+            std = np.zeros_like(mean)
+        out[tag] = (x_grid, mean, std, stacked.shape[0])
+
+    return out
+
+
+# -----------------------------
+# Plot (mean ± std)
+# -----------------------------
+def plot_prefix_statistics(
+    event_files: List[str | Path],
+    save_dir: str | Path,
+    *,
     prefixes: List[str] = DEFAULT_PREFIXES,
     only_common_tags: bool = True,
     x_axis: str = "step",
     smoothing: int = 1,
+    num_points: Optional[int] = None,
     max_cols: int = 2,
     figsize_per_subplot: Tuple[float, float] = (10.0, 3.0),
-    save_dir: Optional[str | Path] = None,
     save_prefix: str = "tb",
     show: bool = True,
     include_unmatched: bool = False,
     case_sensitive: bool = False,
+    band_alpha: float = 0.2,
 ) -> Dict[str, Path]:
     if x_axis not in ("step", "wall_time"):
         raise ValueError("x_axis must be 'step' or 'wall_time'")
-
-    if legend_titles is not None and len(legend_titles) != len(event_files):
-        raise ValueError(
-            f"legend_titles length ({len(legend_titles)}) must match event_files length ({len(event_files)})."
-        )
+    if not event_files:
+        raise ValueError("No event files were provided.")
 
     df = read_scalars_from_event_files(event_files, only_common_tags=only_common_tags)
     if df.empty:
         raise ValueError(
-            "No data to plot. "
-            "Either there are no scalar events, or (only_common_tags=True) yields empty intersection."
+            "No data to plot. Either there are no scalar events, or "
+            "(only_common_tags=True) yields an empty intersection."
         )
 
-    all_tags = sorted(df["tag"].unique().tolist())
+    stats = aggregate_runs_by_tag(df, x_axis=x_axis, num_points=num_points)
+    if not stats:
+        raise ValueError("Aggregation produced no tags. Check that runs share overlapping ranges.")
+
+    all_tags = sorted(stats.keys())
     groups = group_tags_by_prefix(
         all_tags, prefixes=prefixes, case_sensitive=case_sensitive,
-        allow_unmatched=True, unmatched_key="Unmatched"
+        allow_unmatched=True, unmatched_key="Unmatched",
     )
 
-    # source_file -> legend title
-    file_strs = [str(Path(f)) for f in event_files]
-    if legend_titles is None:
-        legend_titles = [Path(f).name for f in file_strs]
-    file_to_title = {file_strs[i]: legend_titles[i] for i in range(len(file_strs))}
-
-    # save setup
+    save_dir_path = Path(save_dir)
+    save_dir_path.mkdir(parents=True, exist_ok=True)
     saved: Dict[str, Path] = {}
-    save_dir_path = None
-    if save_dir is not None:
-        save_dir_path = Path(save_dir)
-        save_dir_path.mkdir(parents=True, exist_ok=True)
 
     def _plot_one_group(group_name: str, tags: List[str]):
         if not tags:
@@ -211,48 +300,32 @@ def plot_prefix_figures_from_event_files(
         fig_h = figsize_per_subplot[1] * nrows
 
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
-        fig.suptitle(
-            f"{task_name} | {group_name} ({n} common tags)" if only_common_tags else f"{task_name} | {group_name} ({n} tags)",
-            y=1.02
-        )
-
         ax_list = axes.ravel().tolist() if isinstance(axes, np.ndarray) else [axes]
 
         for ax, tag in zip(ax_list, tags):
-            g_tag = df[df["tag"] == tag]
+            x_grid, mean, std, _n_runs = stats[tag]
+            mean_s = _moving_average(mean, smoothing)
+            std_s = _moving_average(std, smoothing)
 
-            for src, g_src in g_tag.groupby("source_file"):
-                g_src = g_src.copy()
-
-                if x_axis == "step":
-                    g_src = _dedup_by_step(g_src).sort_values("step")
-                    x = g_src["step"].to_numpy()
-                else:
-                    g_src = g_src.drop_duplicates(subset=["wall_time"], keep="last").sort_values("wall_time")
-                    x = g_src["wall_time"].to_numpy()
-
-                y = _moving_average(g_src["value"].to_numpy(), smoothing)
-                label = file_to_title.get(src, Path(src).name)
-                ax.plot(x, y, label=label)
-
-            ax.set_title(f"{task_name} | {tag}", fontsize=10)
+            line, = ax.plot(x_grid, mean_s)
+            ax.fill_between(
+                x_grid, mean_s - std_s, mean_s + std_s,
+                alpha=band_alpha, color=line.get_color(), linewidth=0,
+            )
 
             ax.grid()
             ax.set_xlabel(x_axis)
             ax.set_ylabel("value")
-            ax.legend(fontsize=8)
 
         for ax in ax_list[len(tags):]:
             ax.axis("off")
 
         fig.tight_layout()
 
-        if save_dir_path is not None:
-            safe_group = group_name.replace("/", "__").replace(" ", "_").replace(":", "_")
-            safe_task = task_name.replace("/", "__").replace(" ", "_").replace(":", "_")
-            out_path = save_dir_path / f"{save_prefix}__{safe_task}__{safe_group}.png"
-            fig.savefig(out_path, dpi=200, bbox_inches="tight")
-            saved[group_name] = out_path
+        safe_group = group_name.replace("/", "__").replace(" ", "_").replace(":", "_")
+        out_path = save_dir_path / f"{save_prefix}__{safe_group}.png"
+        fig.savefig(out_path, dpi=200, bbox_inches="tight")
+        saved[group_name] = out_path
 
         if show:
             plt.show()
@@ -267,24 +340,40 @@ def plot_prefix_figures_from_event_files(
 
     return saved
 
-# ======================================================================================================
 
-task_name = "G1_recovery"
+# -----------------------------
+# CLI
+# -----------------------------
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Plot mean ± std reward curves aggregated across multiple TensorBoard runs."
+    )
+    parser.add_argument("--log-dir", required=True,
+                        help="Directory containing run subdirectories with events.out.tfevents.* files.")
+    parser.add_argument("--smoothing", type=int, default=1,
+                        help="Moving-average window applied to mean and std (>=1).")
+    return parser
 
-event_files = [
-    "logs/g1_recovery/2026-03-13_00-05-45_mappo/events.out.tfevents.1773328004.AIS-simulation.17508.0",
-    "logs/g1_recovery/2026-03-13_12-24-10_mappo/events.out.tfevents.1773372308.AIS-simulation.24328.0"
-]
 
-legends = ["Cooperative MAPPO", "Vanilla MAPPO"]
+def main(argv: Optional[List[str]] = None) -> None:
+    args = _build_arg_parser().parse_args(argv)
 
-# Plot
-plot_prefix_figures_from_event_files(
-    event_files,
-    legend_titles=legends,
-    task_name=task_name,
-    only_common_tags=True,
-    smoothing=11,
-    max_cols=2,
-    show=True,
-)
+    log_dir = Path(args.log_dir)
+    event_files = find_event_files(log_dir)
+    if not event_files:
+        raise SystemExit(f"No event files found under {log_dir}")
+
+    print(f"[INFO] Found {len(event_files)} event file(s) under {log_dir}:")
+    for f in event_files:
+        print(f"  - {f}")
+
+    save_dir = log_dir / "figures"
+    plot_prefix_statistics(
+        event_files,
+        save_dir=save_dir,
+        smoothing=args.smoothing,
+    )
+
+
+if __name__ == "__main__":
+    main()
