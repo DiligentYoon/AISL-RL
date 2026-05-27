@@ -15,11 +15,11 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall-unified-play", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
-parser.add_argument("--safe_checkpoint", type=str, default=None, help="Path to safe model checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="/home/oksusu/Downloads/agent_32000.pt", help="Path to model checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default="/home/oksusu/Downloads/ra_agent_16000.pt", help="Path to fall predictor model checkpoint.")
+parser.add_argument("--safe_checkpoint", type=str, default="/home/oksusu/Downloads/agent_56000.pt", help="Path to safe model checkpoint.")
 # parser.add_argument("--dataset_dir", type=str, required=True, help="Directory containing {low,mid,high}_risk.pt produced by collect.py.")
 
 parser.add_argument("--predictor",
@@ -42,13 +42,13 @@ parser.add_argument("--model",
 
 parser.add_argument("--safe_algorithm",
                     type=str,
-                    default="PPO",
+                    default="MAPPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
 parser.add_argument("--safe_model",
                     type=str,
-                    default="MLP",
+                    default="Shared",
                     choices=["MLP", "Shared", "Superconnected", "Communet"],
                     help="The NN model used for training the agent.")
 
@@ -329,9 +329,9 @@ def main():
             safe_state_size[uid] = safe_buffer.tensors["states"].shape[-1]
             safe_act_size[uid] = safe_buffer.tensors["actions"].shape[-1]
     else:
-        observation_space = env._unwrapped.cfg.safe_observation_space
-        action_space = env._unwrapped.cfg.safe_action_space
-        state_space = env._unwrapped.cfg.safe_state_space
+        observation_space = env._unwrapped.safe_observation_space
+        action_space = env._unwrapped.safe_action_space
+        state_space = env._unwrapped.safe_state_space
 
         safe_buffer = RolloutBuffer(safe_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
         safe_buffer.init_buffer(observation_space, state_space, action_space)
@@ -473,7 +473,7 @@ def main():
                 safe_actions = safe_actions_buffer
 
             switch = torch.logical_or(cur_switch, prev_switch)
-            actions = torch.where(switch, safe_actions, nominal_actions)
+            actions = torch.where(switch.unsqueeze(-1), safe_actions, nominal_actions)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number

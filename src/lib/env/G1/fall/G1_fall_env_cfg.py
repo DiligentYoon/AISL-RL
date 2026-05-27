@@ -177,22 +177,21 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         # self.safe_state_space = 96
 
         # visualization
-        # self.plotter = None
-        # self.viz_data = None
+        self.plotter = None
+        self.viz_data = None
 
-        # plotter
-        self.plotter = PNGSavePlotter
-
-        self.viz_data = {
-            "contact_num": 0.0,
-            "action_diff": 0.0,
-            "risk_value": 0.0,         
-            "max_torque": 0.0,
-            "max_contact_force": 0.0,
-            "max_contact_impulse": 0.0,
-            "torso_contact_force": 0.0,
-            "mean_joint_deviation": 0.0,
-        }
+        # plotter (uncomment to enable visualization)
+        # self.plotter = PNGSavePlotter
+        # self.viz_data = {
+        #     "contact_num": 0.0,
+        #     "action_diff": 0.0,
+        #     "risk_value": 0.0,
+        #     "max_torque": 0.0,
+        #     "max_contact_force": 0.0,
+        #     "max_contact_impulse": 0.0,
+        #     "torso_contact_force": 0.0,
+        #     "mean_joint_deviation": 0.0,
+        # }
 
         
 
