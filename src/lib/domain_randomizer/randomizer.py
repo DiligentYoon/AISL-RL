@@ -1207,8 +1207,8 @@ class randomize_fixed_tendon_parameters(ManagerTermBase):
 def apply_external_force_torque(
     env: Env,
     env_ids: torch.Tensor,
-    force_range: tuple[float, float],
-    torque_range: tuple[float, float],
+    force_range: dict[str, tuple[float, float]],
+    torque_range: dict[str, tuple[float, float]],
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ):
     """Randomize the external forces and torques applied to the bodies.
@@ -1217,6 +1217,10 @@ def apply_external_force_torque(
     and torques is equal to the number of bodies times the number of environments. The forces and torques are
     applied to the bodies by calling ``asset.set_external_force_and_torque``. The forces and torques are only
     applied when ``asset.write_data_to_sim()`` is called in the environment.
+
+    The function takes a dictionary of force ranges for each axis and rotation. The keys of the dictionary
+    are ``x``, ``y``, ``z``. The values are tuples of the form ``(min, max)``.
+    If the dictionary does not contain a key, the velocity is set to zero for that axis.
     """
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject | Articulation = env.scene[asset_cfg.name]
@@ -1228,8 +1232,15 @@ def apply_external_force_torque(
 
     # sample random forces and torques
     size = (len(env_ids), num_bodies, 3)
-    forces = math_utils.sample_uniform(*force_range, size, asset.device)
-    torques = math_utils.sample_uniform(*torque_range, size, asset.device)
+    force_range_list = [force_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z"]]
+    torque_range_list = [torque_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z"]]
+
+    force_ranges = torch.tensor(force_range_list, device=asset.device)
+    torque_ranges = torch.tensor(torque_range_list, device=asset.device)
+
+    forces = math_utils.sample_uniform(force_ranges[:, 0], force_ranges[:, 1], size, asset.device)
+    torques = math_utils.sample_uniform(torque_ranges[:, 0], torque_ranges[:, 1], size, asset.device)
+    
     # set the forces and torques into the buffers
     # note: these are only applied when you call: `asset.write_data_to_sim()`
     asset.permanent_wrench_composer.set_forces_and_torques(

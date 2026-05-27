@@ -56,13 +56,24 @@ class EventCfg:
     )
 
     # interval
+    # push_robot = EventTerm(
+    #     func=randomizer.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(3.0, 4.0),
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
+    #         "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-1.0, 1.0), "pitch": (-1.0, 1.0)}},
+    # )
+
+    # Specific Force for validation
     push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
+        func=randomizer.apply_external_force_torque,
         mode="interval",
-        interval_range_s=(3.0, 4.0),
+        interval_range_s=(5.0, 5.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-1.0, 1.0), "pitch": (-1.0, 1.0)}},
+            "force_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (-1.0, 1.0)},
+            "torque_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (-1.0, 1.0)}},
     )
 
 
