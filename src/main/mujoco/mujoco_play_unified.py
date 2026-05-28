@@ -15,6 +15,7 @@ wall-clock catch-up pattern is borrowed from mujoco_ros2_bridge.py.
 """
 
 import argparse
+import csv
 import os
 import time
 
@@ -56,15 +57,37 @@ POLICY_DECIMATION = 4
 # Missing keys default to (0, 0). Layout matches
 # randomizer.apply_external_force_torque's contract.
 PUSH_FORCE_RANGE: dict[str, tuple[float, float]] = {
-    "x": (-223.0, -223.0),
-    "y": (-149.0, -149.0),
-    "z": (1.0, 1.0),
+    "x": (-450.0, -350.0),
+    "y": (50.0, 100.0),
+    "z": (-1.0, 1.0),
 }
 PUSH_TORQUE_RANGE: dict[str, tuple[float, float]] = {
     "x": (0.0, 0.0),
     "y": (0.0, 0.0),
     "z": (0.0, 0.0),
 }
+
+# ---- Termination thresholds (mirror G1RecoveryEnvCfg in lib) ---- #
+# Training-time values from src/lib/env/G1/recovery/G1_recovery_env_cfg.py:58-60.
+TERM_HEIGHT = 0.3        # CoM z below this -> died_fall
+TERM_GRAVITY = 0.8       # |projected_gravity_xy| above this -> died_fall_2
+TERM_ANG_VEL = 15.0      # ‖root_ang_vel_b‖ above this -> died_ang
+COLLISION_FORCE_THRESHOLD = 1000.0   # >1N pure contact on any denied body -> died_collision
+
+DENIED_COLLISION_BODIES: tuple[str, ...] = (
+    "torso_link",
+    # "left_wrist_yaw_joint",
+    # "right_wrist_yaw_link",
+)
+
+# Cause codes — int for cheap numpy aggregation in TerminationChecker.cause.
+CAUSE_ALIVE = 0
+CAUSE_FALL = 1            # CoM low
+CAUSE_FALL_TILT = 2       # gravity_xy large
+CAUSE_ANG = 3             # angular velocity large
+CAUSE_COLLISION = 4       # illegal contact
+CAUSE_NAMES = {0: "alive", 1: "died_fall", 2: "died_fall_2",
+               3: "died_ang", 4: "died_collision"}
 
 
 # ---------------------------------------------------------------------- #
@@ -94,15 +117,29 @@ def parse_args() -> argparse.Namespace:
     # Random push
     p.add_argument("--push_body", type=str, default="pelvis",
                    help="Body to apply the random horizontal force-push to.")
-    p.add_argument("--push_period", type=float, default=5.0,
+    p.add_argument("--push_period", type=float, default=2.6,
                    help="Seconds between push events (sim time).")
     p.add_argument("--push_duration", type=float, default=0.2,
                    help="Seconds each push wrench is held (sim time).")
+    # Viewer
+    p.add_argument("--headless", action="store_true",
+                   help="Skip the passive viewer; step as fast as possible.")
+    p.add_argument("--total_sim_time", type=float, default=0.0,
+                   help="Secondary stop: cumulative sim seconds across all episodes. 0 = unlimited.")
+    # Episode lifecycle
+    p.add_argument("--max_episode_sim_time", type=float, default=5.0,
+                   help="Truncation: sim seconds in one episode before forced reset (counts as success).")
+    p.add_argument("--total_episodes", type=int, default=20,
+                   help="Primary stop: number of sequential episodes to run this invocation. "
+                        "0 = unlimited.")
     # Misc
     p.add_argument("--seed", type=int, default=42,
                    help="Seed for the push RNG (reproducibility).")
     p.add_argument("--device", type=str, default="cuda",
                    help="Torch device override; defaults to cuda if available.")
+    p.add_argument("--metrics_csv", type=str, default="",
+                   help="If set, append per-episode metrics (success / max torque / "
+                        "max contact) to this CSV. Header written once; reuse across runs.")
     return p.parse_args()
 
 
@@ -344,6 +381,7 @@ class RandomPush:
         self.active_until = -1.0         # sim time at which the current push ends
         self.force = np.zeros(3)         # latched body-frame force (N) for active window
         self.torque = np.zeros(3)        # latched body-frame torque (Nm) for active window
+        self.is_pushing = False          # True while a wrench is actively applied this step
 
         if self.body_id < 0:
             print(f"[WARN] push body '{body_name}' not found; push disabled")
@@ -354,6 +392,14 @@ class RandomPush:
             return np.zeros((3, 2), dtype=np.float64)
         return np.asarray([d.get(k, (0.0, 0.0)) for k in cls._AXES], dtype=np.float64)
 
+    def reset(self) -> None:
+        """Clear schedule + latched wrench; called by reset_env(i) on episode end."""
+        self.next_at = self.period_sec
+        self.active_until = -1.0
+        self.force[:] = 0.0
+        self.torque[:] = 0.0
+        self.is_pushing = False
+
     def apply(self, data: mujoco.MjData,
               force: dict[str, tuple[float, float]] | None = None,
               torque: dict[str, tuple[float, float]] | None = None) -> None:
@@ -363,6 +409,7 @@ class RandomPush:
         uniformly at each scheduled trigger. Missing keys default to zero.
         """
         if self.body_id < 0:
+            self.is_pushing = False
             return
 
         t = float(data.time)
@@ -383,11 +430,15 @@ class RandomPush:
             )
 
         # Write the latched 6-DoF wrench during the active window; zero outside it.
+        # is_pushing flags whether a wrench is applied during the step about to run,
+        # so the termination checker can suppress collision detection while it lasts.
         if t < self.active_until:
             data.xfrc_applied[self.body_id, :3] = self.force
             data.xfrc_applied[self.body_id, 3:] = self.torque
+            self.is_pushing = True
         else:
             data.xfrc_applied[self.body_id, :] = 0.0
+            self.is_pushing = False
 
 
 # ---------------------------------------------------------------------- #
@@ -668,6 +719,116 @@ class ObsBuilder:
 
 
 # ---------------------------------------------------------------------- #
+# Termination checker (mirror of G1RecoveryEnv._get_dones)               #
+# ---------------------------------------------------------------------- #
+class TerminationChecker:
+    """
+    Single-env episode-end checker mirroring G1RecoveryEnv._get_dones (the four
+    `died_*` conditions). Stateful — once the robot dies it stays dead within the
+    current episode; reset() clears the latch so a new episode can be evaluated
+    from scratch.
+
+    Public state (read-only from outside):
+      died:    bool  — True once any death condition fired this episode
+      cause:   int   — CAUSE_* code; CAUSE_ALIVE while still alive
+      died_t:  float — sim time at death (data.time, episode-relative); NaN while alive
+    """
+
+    def __init__(self, model: mujoco.MjModel, pelvis_name: str = "pelvis"):
+        self.model = model
+        # Pelvis = root of the floating-base subtree.
+        self.pelvis_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, pelvis_name)
+        if self.pelvis_id < 0:
+            raise ValueError(f"pelvis body '{pelvis_name}' missing in model")
+
+        # Denied-body-id list: every body NOT in DENIED_COLLISION_BODIES and not
+        # the worldbody (id 0).
+        denied_link_name = set(DENIED_COLLISION_BODIES)
+        denied: list[int] = []
+        for bid in range(1, model.nbody):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, bid) or ""
+            if name and name in denied_link_name:
+                denied.append(bid)
+        self.denied_ids = np.asarray(denied, dtype=np.int64)
+        print(f"[INFO] termination checker: {len(self.denied_ids)} denied bodies, ")
+
+        # Latched per-episode state.
+        self.died = False
+        self.cause = CAUSE_ALIVE
+        self.died_t = float("nan")
+
+    def update(self, data: mujoco.MjData, root: "RootState",
+               contact_per_body: np.ndarray, skip_collision: bool = False) -> None:
+        """Re-evaluate the death conditions and latch if any fired.
+
+        `contact_per_body` is the per-body contact-force magnitude from
+        mj_contactForce (computed once by the caller and shared with the metric).
+        `skip_collision=True` suppresses only the contact check; pass it while a
+        push wrench is active. The other conditions stay live throughout.
+        """
+        if self.died:
+            return  # already dead this episode — keep first cause/time
+        # 1) died_fall — CoM z below height threshold.
+        # com_z = float(data.subtree_com[self.pelvis_id, 2])
+        # if com_z <= TERM_HEIGHT:
+        #     self._latch(CAUSE_FALL, data, detail=f"CoM_z={com_z:.3f}<={TERM_HEIGHT}")
+        #     return
+        # # 2) died_fall_2 — projected gravity x or y exceeds tilt threshold.
+        # gx, gy = float(root.proj_grav[0]), float(root.proj_grav[1])
+        # if abs(gx) >= TERM_GRAVITY or abs(gy) >= TERM_GRAVITY:
+        #     self._latch(CAUSE_FALL_TILT, data, detail=f"grav=({gx:+.3f},{gy:+.3f})")
+        #     return
+        # # 3) died_ang — body-frame angular velocity magnitude.
+        # ang_norm = float(np.linalg.norm(root.ang_b))
+        # if ang_norm >= TERM_ANG_VEL:
+        #     self._latch(CAUSE_ANG, data, detail=f"|ang_b|={ang_norm:.2f}>={TERM_ANG_VEL}")
+        #     return
+
+        # 4) died_collision — contact force on any denied body, taken from
+        #    mj_contactForce (contact_per_body). Suppressed while a push wrench is
+        #    active (skip_collision) per the "collision only after push" rule.
+        #    mj_contactForce excludes xfrc_applied, so the push is never counted
+        #    as contact; cfrc_ext is not used because it reads 0 for contacts here.
+        if not skip_collision and self.denied_ids.size > 0:
+            denied_mag = contact_per_body[self.denied_ids]
+            worst = int(np.argmax(denied_mag))
+            if denied_mag[worst] > COLLISION_FORCE_THRESHOLD:
+                bid = int(self.denied_ids[worst])
+                bname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, bid) or "?"
+                self._latch(CAUSE_COLLISION, data, detail=f"{bname} |F|={denied_mag[worst]:.1f}N")
+                return
+
+    def _latch(self, cause: int, data: mujoco.MjData, detail: str) -> None:
+        # First-death only: record cause/time and emit one console line.
+        self.died = True
+        self.cause = cause
+        self.died_t = float(data.time)
+        print(f"t={float(data.time):7.3f}s  FAILED cause={CAUSE_NAMES[cause]}  {detail}")
+
+    def reset(self) -> None:
+        """Clear death latch so a new episode can start."""
+        self.died = False
+        self.cause = CAUSE_ALIVE
+        self.died_t = float("nan")
+
+
+# ---------------------------------------------------------------------- #
+# Metrics CSV writer                                                     #
+# ---------------------------------------------------------------------- #
+def _write_metrics_csv(path: str, records: list[tuple], seed: int) -> None:
+    """Append per-episode metric rows; write the header only on a fresh/empty file."""
+    new_file = (not os.path.exists(path)) or os.path.getsize(path) == 0
+    with open(path, "a", newline="") as f:
+        w = csv.writer(f)
+        if new_file:
+            w.writerow(["seed", "episode", "success",
+                        "max_torque_nm", "torque_joint",
+                        "max_contact_n", "contact_link"])
+        for idx, succ, tq, tj, fc, fl in records:
+            w.writerow([seed, idx, int(succ), f"{tq:.4f}", tj, f"{fc:.4f}", fl])
+
+
+# ---------------------------------------------------------------------- #
 # Main                                                                   #
 # ---------------------------------------------------------------------- #
 def main():
@@ -677,192 +838,302 @@ def main():
     device = torch.device(args.device)
     print(f"[INFO] torch device: {device}")
 
-    # Numpy RNG for the push schedule (so seeding gives reproducible push patterns).
+    # Single push RNG (reproducible per invocation via --seed).
     rng = np.random.default_rng(args.seed)
 
-    # ---- MuJoCo scene + keyframe init ----
+    # ---- MuJoCo scene + keyframe init (single scene) ----
     model = mujoco.MjModel.from_xml_path(args.scene)
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
-    nu = model.nu                                    # number of actuators
-    print(f"[INFO] scene: {args.scene}  nu={nu}  nq={model.nq}  nv={model.nv}")
+    dt = float(model.opt.timestep)
+    print(f"[INFO] scene={args.scene}  "
+          f"nu={model.nu}  nq={model.nq}  nv={model.nv}  dt={dt:.4f}s")
 
     # ---- Load three checkpoints (CooperativeMAPPO state-dicts + ReachAvoid critic) ----
-    nominal_actor = load_cooperative_actor(args.checkpoint,      role="nominal", device=device, squash=SQUASH)
-    instinct_actor    = load_cooperative_actor(args.instinct_checkpoint, role="safe",    device=device, squash=SQUASH)
-    predictor     = load_ra_critic(args.predictor_checkpoint,    role="predictor", device=device)
+    nominal_actor  = load_cooperative_actor(args.checkpoint,          role="nominal",   device=device, squash=SQUASH)
+    instinct_actor = load_cooperative_actor(args.instinct_checkpoint, role="safe",      device=device, squash=SQUASH)
+    predictor      = load_ra_critic(args.predictor_checkpoint,        role="predictor", device=device)
 
-    # ---- Periodic random wrench-push helper ----
-    pusher = RandomPush(
-        model, body_name=args.push_body,
-        period_sec=args.push_period,
-        duration_sec=args.push_duration,
-        rng=rng,
-    )
-
-    # ---- Observation builder + per-step state holders ----
+    # ---- Model-derived indices ----
     leg_idx = JointIndex(model, LEG_JOINT_NAMES)
     arm_idx = JointIndex(model, ARM_JOINT_NAMES)
-    # Permutation from Isaac concat order (legs(12) | arms(17)) to MJCF actuator
-    # declaration order. data.ctrl[ctrl_idx] scatters q_des into the correct
-    # slots regardless of how the XML interleaves left/right.
     ctrl_idx = build_ctrl_index(model, LEG_JOINT_NAMES + ARM_JOINT_NAMES)
-    root_state = RootState()
-    phase_clock = PhaseClock(freq_hz=PHASE_FREQ_HZ)
-    act_buf = ActionBuffer(leg_idx, arm_idx)
-    # Rolling history of root states for the RA predictor; updated each substep.
-    ra_history = RootHistoryBuffer(length=RA_HISTORY_LEN)
-    obs_builder = ObsBuilder(leg_idx, arm_idx, ra_history=ra_history)
-    # Velocity command kept in body frame; static across the episode for this eval script.
-    cmd_b = np.array([CMD_VX, CMD_VY, CMD_WZ], dtype=np.float64)
-
-    # Default joint targets captured from the home keyframe — used as the offset
-    # for position actuators: ctrl = default_qpos + scaled_action. Stored in
-    # Isaac concat order ([legs(12) | arms(17)]); mapped to MJCF actuator order
-    # via `ctrl_idx` at write time (see step 7).
+    # Default joint targets from the home keyframe — ctrl = default_qpos + scaled_action.
     default_q_isaac = np.concatenate([
         data.qpos[leg_idx.qpos_idx].copy(),
         data.qpos[arm_idx.qpos_idx].copy(),
     ])
     n_joints = leg_idx.n + arm_idx.n
+    phase_clock = PhaseClock(freq_hz=PHASE_FREQ_HZ)
+    # Velocity command kept in body frame; static across the episode for this eval script.
+    cmd_b = np.array([CMD_VX, CMD_VY, CMD_WZ], dtype=np.float64)
+
+    # ---- Single-env helpers (mutated each substep) ----
+    pusher = RandomPush(model, body_name=args.push_body,
+                        period_sec=args.push_period,
+                        duration_sec=args.push_duration,
+                        rng=rng)
+    root_state = RootState()
+    ra_history = RootHistoryBuffer(length=RA_HISTORY_LEN)
+    act_buf = ActionBuffer(leg_idx, arm_idx)
+    obs_builder = ObsBuilder(leg_idx, arm_idx, ra_history=ra_history)
+    switch_latch = False
+    checker = TerminationChecker(model, pelvis_name="pelvis")
+
+    # ---- Episode counters ----
+    total_episodes = 0
+    total_terminated = 0   # died (failure)
+    total_truncated = 0    # survived to truncation (success)
+    cause_counts = {c: 0 for c in CAUSE_NAMES}
+
+    # Outer-loop time anchor independent of data.time (which resets on episode end).
+    global_sim_t = 0.0
+
+    # ---- Per-episode metric accumulators (peak values; reset each episode) ----
+    ep_max_torque = 0.0          # peak |motor torque| over all joints this episode (Nm)
+    ep_max_torque_joint = ""     # joint name where the torque peak occurred
+    ep_max_contact = 0.0         # peak |contact force| over all links this episode (N)
+    ep_max_contact_link = ""     # link/body name where the contact-force peak occurred
+    episode_records: list[tuple] = []   # (idx, success, tau_max, joint, Fc_max, link)
+
+    # Joint-ordered torque view + body-name table for attributing peaks.
+    joint_names_ordered = LEG_JOINT_NAMES + ARM_JOINT_NAMES
+    body_names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}"
+                  for b in range(model.nbody)]
 
     def _to_t(arr: np.ndarray) -> torch.Tensor:
-        # Add the batch (env) dimension MuJoCo lacks and move to the policy's device.
-        return torch.from_numpy(arr.astype(np.float32)).unsqueeze(0).to(device)
+        # arr: (dim,) numpy -> (1, dim) float32 torch on device (add batch dim).
+        return torch.from_numpy(arr.astype(np.float32)).to(device).unsqueeze(0)
 
-    # Switching latch
-    switch_latch = False
+    def reset_env() -> None:
+        nonlocal act_buf, root_state, switch_latch
+        nonlocal ep_max_torque, ep_max_torque_joint, ep_max_contact, ep_max_contact_link
+        # Restore keyframe state (qpos/qvel; data.time -> 0 too); xfrc_applied zeroed by mj_resetData.
+        mujoco.mj_resetDataKeyframe(model, data, 0)
+        mujoco.mj_forward(model, data)
+        pusher.reset()
+        ra_history.reset()
+        # ActionBuffer / RootState are cheap — rebuild fresh.
+        act_buf = ActionBuffer(leg_idx, arm_idx)
+        root_state = RootState()
+        switch_latch = False
+        checker.reset()
+        # Clear per-episode metric peaks.
+        ep_max_torque = 0.0
+        ep_max_torque_joint = ""
+        ep_max_contact = 0.0
+        ep_max_contact_link = ""
 
     # Decimation counter — policy fires when (decim_counter % POLICY_DECIMATION == 0).
-    # Starts at 0 so the very first substep runs inference (and thus writes ctrl).
     decim_counter = 0
 
-    # ---- Passive viewer ----
-    viewer = mujoco.viewer.launch_passive(model, data)
-
-    # Camera follows the robot's pelvis. mjCAMERA_TRACKING keeps `lookat` pinned
-    # to the body each frame, so the robot stays centered even as it walks away
-    # from the origin. distance/azimuth/elevation define the spherical offset.
-    _track_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
-    if _track_body >= 0:
-        with viewer.lock():
-            viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-            viewer.cam.trackbodyid = _track_body
-            viewer.cam.distance = 3.0
-            viewer.cam.azimuth = 90.0
-            viewer.cam.elevation = -20.0
+    # ---- Passive viewer (skipped when --headless) ----
+    viewer = None
+    if not args.headless:
+        viewer = mujoco.viewer.launch_passive(model, data)
+        _track_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
+        if _track_body >= 0:
+            with viewer.lock():
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+                viewer.cam.trackbodyid = _track_body
+                viewer.cam.distance = 3.0
+                viewer.cam.azimuth = 90.0
+                viewer.cam.elevation = -20.0
+        else:
+            print("[WARN] 'pelvis' body not found; camera stays in free mode")
     else:
-        print("[WARN] 'pelvis' body not found; camera stays in free mode")
+        print("[INFO] headless mode: viewer disabled")
 
-    # ---- Real-time pacing anchors (same idea as the GOAT bridge) ----
+    # ---- Real-time pacing anchors (viewer mode); ignored in headless ----
     tick_period = 1.0 / max(args.sim_rate_hz, 1.0)
     wall_anchor = time.monotonic()
-    sim_anchor = float(data.time)
+    sim_anchor = global_sim_t
     max_substeps_per_tick = 20                       # cap to avoid spiral-of-death
 
-    try:
-        while viewer.is_running():
-            # Catch sim time up to wall clock by stepping until we hit target or cap.
-            target_sim_t = sim_anchor + (time.monotonic() - wall_anchor)
-            substeps = 0
-            while data.time < target_sim_t and substeps < max_substeps_per_tick:
-                # Policy / observation pipeline runs at sim_rate / POLICY_DECIMATION
-                # (50 Hz when sim is 200 Hz). data.ctrl stays latched between
-                # firings — mirrors Isaac Lab env.step() applying actions once per
-                # `decimation` physics substeps.
-                if decim_counter % POLICY_DECIMATION == 0:
-                    # 1) Refresh root state and gait phase from the live MuJoCo data.
-                    root_state.update(data)
-                    phase, phase_sin, phase_cos = phase_clock.tick(float(data.time))
+    def keep_running() -> bool:
+        if viewer is not None and not viewer.is_running():
+            return False
+        if args.total_sim_time > 0 and global_sim_t >= args.total_sim_time:
+            return False
+        if args.total_episodes > 0 and total_episodes >= args.total_episodes:
+            return False
+        return True
 
-                    # 1b) Push current ra-row into the rolling history BEFORE building the
-                    #     RA obs, matching training-time ordering
-                    #     (_compute_intermediate_values runs before _get_states).
-                    #     dist_icp_stance is stubbed to 0.0 here — same value used for the
-                    #     current-step slot below, so distribution stays self-consistent.
+    stopped = False
+
+    try:
+        while keep_running():
+            if viewer is not None:
+                target_sim_t = sim_anchor + (time.monotonic() - wall_anchor)
+            substeps = 0
+            while substeps < max_substeps_per_tick and (
+                viewer is None or global_sim_t < target_sim_t
+            ):
+                if decim_counter % POLICY_DECIMATION == 0:
+                    # 1) Root state + gait phase + ra history.
+                    phase, phase_sin, phase_cos = phase_clock.tick(global_sim_t)
+                    root_state.update(data)
                     ra_history.update(
                         ang_b=root_state.ang_b,
                         proj_grav=root_state.proj_grav,
-                        d_icp=0.0,
-                        phase=phase,
+                        d_icp=0.0, phase=phase,
                     )
 
-                    # 2) Build per-agent observations. Both nominal (arm 65, leg 50) and
-                    #    instinct/safe (arm 60, leg 45) are multi-agent dicts.
-                    nominal_arm_np, nominal_leg_np = obs_builder.nominal(
-                        root_state, data, phase_sin, phase_cos,
-                        cmd_b, act_buf.prev_arm, act_buf.prev_leg,
-                    )
-                    safe_arm_np, safe_leg_np = obs_builder.safe(
-                        root_state, data, act_buf.prev_arm, act_buf.prev_leg
-                    )
-                    ra_np = obs_builder.reach_avoid(root_state, phase, dist_icp_stance=0.0)
+                    # 2) Build obs for each agent.
+                    nominal_arm, nominal_leg = obs_builder.nominal(
+                        root_state, data, phase_sin, phase_cos, cmd_b,
+                        act_buf.prev_arm, act_buf.prev_leg)
+                    safe_arm, safe_leg = obs_builder.safe(
+                        root_state, data, act_buf.prev_arm, act_buf.prev_leg)
+                    ra_obs = obs_builder.reach_avoid(root_state, phase, 0.0)
 
-                    # 3) Run actor inference (SharedActor returns (a_arm, a_leg) in [-1, 1]).
+                    # 3) Forward pass per network.
                     with torch.no_grad():
                         if nominal_actor is not None:
                             a_arm_n, a_leg_n = nominal_actor.act_deterministic(
-                                _to_t(nominal_arm_np), _to_t(nominal_leg_np),
-                            )
+                                _to_t(nominal_arm), _to_t(nominal_leg))
                             nominal_act = torch.cat([a_leg_n, a_arm_n], dim=-1)
                         else:
                             nominal_act = torch.zeros((1, n_joints), device=device)
-
                         if instinct_actor is not None:
                             a_arm_s, a_leg_s = instinct_actor.act_deterministic(
-                                _to_t(safe_arm_np), _to_t(safe_leg_np),
-                            )
+                                _to_t(safe_arm), _to_t(safe_leg))
                             instinct_act = torch.cat([a_leg_s, a_arm_s], dim=-1)
                         else:
                             instinct_act = torch.zeros((1, n_joints), device=device)
-
                         if predictor is not None:
-                            risk = float(predictor.value(_to_t(ra_np)).item())
+                            risk = float(predictor.value(_to_t(ra_obs)).reshape(-1)[0])
                         else:
                             risk = 0.0
 
-                    # 4) Latched switching: once risk crosses threshold we stay on safe.
-                    cur_switch = bool(risk > args.switch_threshold)
-                    switch = cur_switch or switch_latch
-                    if switch != switch_latch:
-                        t = float(data.time)
-                        print(f"t = {t} !!Instinct Agent!!")
-                    switch_latch = switch
-                    actions_t = instinct_act if switch else nominal_act
+                    # 4) Latched switching — once switched to instinct, stay until reset.
+                    if risk > args.switch_threshold and not switch_latch:
+                        print(f"t={float(data.time):7.3f}s !!Instinct Agent!!")
+                        switch_latch = True
+                    action_t = instinct_act if switch_latch else nominal_act
 
-                    # 5) Move to numpy, with a defensive shape check.
-                    actions_np = actions_t.detach().cpu().numpy().reshape(-1)
-                    if actions_np.shape[0] != n_joints:
-                        actions_np = np.zeros(n_joints, dtype=np.float64)
+                    # 5) Action buffer + ctrl write.
+                    action_np = action_t.detach().cpu().numpy()[0]
+                    act_buf.update(action_np)
+                    scaled = np.empty(n_joints, dtype=np.float64)
+                    scaled[:leg_idx.n] = action_np[:leg_idx.n] * ACTION_SCALE_LEG
+                    scaled[leg_idx.n:] = action_np[leg_idx.n:] * ACTION_SCALE_ARM
+                    data.ctrl[ctrl_idx] = default_q_isaac + scaled
 
-                    # 6) Record the non-scaled action so the next obs sees prev_actions in [-1, 1].
-                    act_buf.update(actions_np)
-
-                    # 7) Scaling — write q_des into data.ctrl; latched for the next
-                    #    (POLICY_DECIMATION - 1) substeps.
-                    scaled = np.empty_like(actions_np)
-                    scaled[:leg_idx.n] = actions_np[:leg_idx.n] * ACTION_SCALE_LEG
-                    scaled[leg_idx.n:] = actions_np[leg_idx.n:] * ACTION_SCALE_ARM
-                    q_des = default_q_isaac + scaled
-                    data.ctrl[ctrl_idx] = q_des
-
-                # 8) Apply scheduled push (no-op if outside the active window).
+                # 6) Push + step + death/truncation check + reset.
                 pusher.apply(data, force=PUSH_FORCE_RANGE, torque=PUSH_TORQUE_RANGE)
-
-                # 9) Step physics.
                 mujoco.mj_step(model, data)
+                root_state.update(data)
+
+                # ---- Per-episode peak metrics (sampled every physics substep) ----
+                # Motor torque: actuator output (one position actuator per joint),
+                # viewed in joint order via ctrl_idx. Track the peak magnitude + joint.
+                tau = np.abs(data.actuator_force[ctrl_idx])           # (29,)
+                a_max = int(np.argmax(tau))
+                if tau[a_max] > ep_max_torque:
+                    ep_max_torque = float(tau[a_max])
+                    ep_max_torque_joint = joint_names_ordered[a_max]
+                # Contact force per link via the contact solver (cfrc_ext reads 0 here).
+                # mj_contactForce reports only geom-geom contact forces, so the applied
+                # push wrench (data.xfrc_applied) is excluded by construction — verified
+                # empirically that an applied force never appears here. Sum each contact's
+                # force magnitude onto both participating bodies. Computed once and shared
+                # by the per-episode metric AND the collision termination check below.
+                # Worldbody (ground, id 0) is excluded.
+                contact_per_body = np.zeros(model.nbody, dtype=np.float64)
+                f6 = np.zeros(6, dtype=np.float64)
+                for ci in range(data.ncon):
+                    con = data.contact[ci]
+                    mujoco.mj_contactForce(model, data, ci, f6)
+                    fmag = float(np.linalg.norm(f6[:3]))   # normal + 2 friction
+                    contact_per_body[model.geom_bodyid[con.geom1]] += fmag
+                    contact_per_body[model.geom_bodyid[con.geom2]] += fmag
+                contact_per_body[0] = 0.0   # ignore worldbody / ground
+
+                b_max = int(np.argmax(contact_per_body))
+                if contact_per_body[b_max] > ep_max_contact:
+                    ep_max_contact = float(contact_per_body[b_max])
+                    ep_max_contact_link = body_names[b_max]
+
+                checker.update(data, root_state, contact_per_body, skip_collision=pusher.is_pushing)
+
+                if checker.died:
+                    c = int(checker.cause)
+                    total_terminated += 1
+                    cause_counts[c] += 1
+                    total_episodes += 1
+                    episode_records.append((total_episodes, False, ep_max_torque,
+                                            ep_max_torque_joint, ep_max_contact, ep_max_contact_link))
+                    print(f"EP_END t_ep={float(data.time):6.3f}s  TERM   "
+                          f"cause={CAUSE_NAMES[c]}  "
+                          f"tau_max={ep_max_torque:7.2f}Nm@{ep_max_torque_joint}  "
+                          f"Fc_max={ep_max_contact:7.1f}N@{ep_max_contact_link}  "
+                          f"total={total_episodes}/{args.total_episodes}")
+                    reset_env()
+                elif data.time >= args.max_episode_sim_time:
+                    total_truncated += 1
+                    total_episodes += 1
+                    episode_records.append((total_episodes, True, ep_max_torque,
+                                            ep_max_torque_joint, ep_max_contact, ep_max_contact_link))
+                    print(f"EP_END t_ep={float(data.time):6.3f}s  TRUNC(success)  "
+                          f"tau_max={ep_max_torque:7.2f}Nm@{ep_max_torque_joint}  "
+                          f"Fc_max={ep_max_contact:7.1f}N@{ep_max_contact_link}  "
+                          f"total={total_episodes}/{args.total_episodes}")
+                    reset_env()
+
+                if args.total_episodes > 0 and total_episodes >= args.total_episodes:
+                    stopped = True
+
+                global_sim_t += dt
                 substeps += 1
                 decim_counter += 1
+                if stopped:
+                    break  # exit substep loop
 
-            # Render and yield a sliver of CPU.
-            viewer.sync()
-            time.sleep(max(0.0, tick_period * 0.5))
+            if stopped:
+                break  # exit outer loop
+
+            if viewer is not None:
+                viewer.sync()
+                time.sleep(max(0.0, tick_period * 0.5))
     except KeyboardInterrupt:
         print("[INFO] interrupted by user")
     finally:
-        viewer.close()
-        print("[INFO] viewer closed; exiting")
+        if viewer is not None:
+            viewer.close()
+        # ---- Final summary ----
+        M = total_episodes
+        target_M = args.total_episodes
+        denom = max(M, 1)
+        print(f"[INFO] === Final summary ===")
+        print(f"[INFO] total_episodes      = {M} (target {target_M})")
+        print(f"[INFO] success (truncated) = {total_truncated}  "
+              f"(success_rate {total_truncated / denom:.4f})")
+        print(f"[INFO] failed  (terminated)= {total_terminated}  "
+              f"(ratio {total_terminated / denom:.4f})")
+        print(f"[INFO] failure cause breakdown:")
+        for c, name in CAUSE_NAMES.items():
+            if c == CAUSE_ALIVE:
+                continue
+            cnt = cause_counts.get(c, 0)
+            print(f"[INFO]   {name:<18s} {cnt:>5d}  (ratio {cnt / denom:.4f})")
+        print(f"[INFO] sim_time(global)= {global_sim_t:.2f}s")
+        # ---- Per-episode metric table + aggregate ----
+        if episode_records:
+            taus = np.array([r[2] for r in episode_records])
+            fcs  = np.array([r[4] for r in episode_records])
+            print(f"[INFO] motor torque (Nm): peak={taus.max():.2f}  "
+                  f"mean_of_ep_peaks={taus.mean():.2f}")
+            print(f"[INFO] contact force (N):  peak={fcs.max():.1f}  "
+                  f"mean_of_ep_peaks={fcs.mean():.1f}")
+            print(f"[INFO] per-episode  idx  success  max_torque(joint)  max_contact(link)")
+            for idx, succ, tq, tj, fc, fl in episode_records:
+                print(f"[INFO]   {idx:>3d}   {'OK ' if succ else 'DIE'}   "
+                      f"{tq:7.2f}Nm @ {tj:<22s}  {fc:7.1f}N @ {fl}")
+        if args.metrics_csv:
+            _write_metrics_csv(args.metrics_csv, episode_records, args.seed)
+            print(f"[INFO] wrote {len(episode_records)} rows to {args.metrics_csv}")
 
 
 if __name__ == "__main__":
