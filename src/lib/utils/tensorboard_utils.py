@@ -61,11 +61,13 @@ def read_scalars_from_event_files(
     event_files: List[str | Path],
     *,
     only_common_tags: bool = True,
+    tags: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Read multiple event files and concatenate them. Adds a 'source_file'
     column. With only_common_tags=True, keeps only tags that exist in ALL
-    files (intersection).
+    files (intersection). When ``tags`` is given, only those tag names are
+    kept (applied in addition to the common-tag filter).
     """
     if len(event_files) == 0:
         return pd.DataFrame(columns=["source_file", "tag", "step", "wall_time", "value"])
@@ -76,6 +78,8 @@ def read_scalars_from_event_files(
         if len(common) == 0:
             return pd.DataFrame(columns=["source_file", "tag", "step", "wall_time", "value"])
 
+    tag_filter = set(tags) if tags else None
+
     dfs = []
     for f in event_files:
         df = read_scalars_from_event_file(f)
@@ -84,6 +88,8 @@ def read_scalars_from_event_files(
         df["source_file"] = str(Path(f))
         if common is not None:
             df = df[df["tag"].isin(common)]
+        if tag_filter is not None:
+            df = df[df["tag"].isin(tag_filter)]
         if not df.empty:
             dfs.append(df)
 
@@ -363,6 +369,110 @@ def plot_prefix_statistics(
 
 
 # -----------------------------
+# Plot (mean ± std) for an explicit tag list
+# -----------------------------
+def plot_selected_tags_statistics(
+    runs_by_group: Dict[str, List[str | Path]],
+    tags: List[str],
+    save_dir: str | Path,
+    *,
+    x_axis: str = "step",
+    smoothing: int = 1,
+    num_points: Optional[int] = None,
+    max_cols: int = 2,
+    figsize_per_subplot: Tuple[float, float] = (10.0, 3.0),
+    save_name: str = "selected_tags",
+    show: bool = True,
+    band_alpha: float = 0.2,
+) -> Path:
+    """
+    Mean±std plot for an explicit list of tag names (no prefix grouping).
+    Each requested tag becomes one subplot in a single output figure; with
+    multiple groups, each subplot draws one mean curve and shaded std band
+    per group sharing the same x-axis.
+    """
+    if x_axis not in ("step", "wall_time"):
+        raise ValueError("x_axis must be 'step' or 'wall_time'")
+    if not runs_by_group:
+        raise ValueError("runs_by_group is empty.")
+    if not tags:
+        raise ValueError("tags is empty.")
+
+    stats_by_group: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, int]]] = {}
+    for label, files in runs_by_group.items():
+        if not files:
+            raise ValueError(f"Group '{label}' has no event files.")
+        df = read_scalars_from_event_files(files, only_common_tags=False, tags=tags)
+        if df.empty:
+            raise ValueError(f"Group '{label}' yielded no scalar data for the requested tags.")
+        stats = aggregate_runs_by_tag(df, x_axis=x_axis, num_points=num_points)
+        if not stats:
+            raise ValueError(
+                f"Group '{label}' aggregation produced no tags. "
+                "Check that runs share overlapping ranges."
+            )
+        stats_by_group[label] = stats
+
+    tag_sets = [set(s.keys()) for s in stats_by_group.values()]
+    available = set.intersection(*tag_sets) if tag_sets else set()
+    plot_tags = [t for t in tags if t in available]
+    missing = [t for t in tags if t not in available]
+    if missing:
+        print(f"[WARN] Skipping tags not shared across all groups: {missing}")
+    if not plot_tags:
+        raise ValueError("None of the requested tags are available across all groups.")
+
+    save_dir_path = Path(save_dir)
+    save_dir_path.mkdir(parents=True, exist_ok=True)
+
+    multi = len(stats_by_group) > 1
+    n = len(plot_tags)
+    ncols = min(max_cols, n)
+    nrows = int(np.ceil(n / ncols))
+    fig_w = figsize_per_subplot[0] * ncols
+    fig_h = figsize_per_subplot[1] * nrows
+
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
+    ax_list = axes.ravel().tolist() if isinstance(axes, np.ndarray) else [axes]
+
+    for ax, tag in zip(ax_list, plot_tags):
+        for label, stats in stats_by_group.items():
+            x_grid, mean, std, _n_runs = stats[tag]
+            mean_s = _moving_average(mean, smoothing)
+            std_s = _moving_average(std, smoothing)
+
+            curve_label = label if multi else None
+            line, = ax.plot(x_grid, mean_s, label=curve_label)
+            ax.fill_between(
+                x_grid, mean_s - std_s, mean_s + std_s,
+                alpha=band_alpha, color=line.get_color(), linewidth=0,
+            )
+
+        ax.set_title(tag, fontsize=10)
+        ax.grid()
+        ax.set_xlabel(x_axis)
+        ax.set_ylabel("value")
+        if multi:
+            ax.legend(fontsize=8)
+
+    for ax in ax_list[len(plot_tags):]:
+        ax.axis("off")
+
+    fig.tight_layout()
+
+    safe_name = save_name.replace("/", "__").replace(" ", "_").replace(":", "_")
+    out_path = save_dir_path / f"{safe_name}.png"
+    fig.savefig(out_path, dpi=200, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+    return out_path
+
+
+# -----------------------------
 # CLI
 # -----------------------------
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -375,6 +485,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                              "treated as a separate group and drawn together for comparison.")
     parser.add_argument("--smoothing", type=int, default=1,
                         help="Moving-average window applied to mean and std (>=1).")
+    parser.add_argument("--tags", nargs="+", default=None,
+                        help="Explicit tag names to plot. When given, prefix-grouping is "
+                             "skipped and the selected tags are drawn in a single figure.")
     return parser
 
 
@@ -408,11 +521,19 @@ def main(argv: Optional[List[str]] = None) -> None:
         labels = list(runs_by_group.keys())
         save_dir = log_dirs[0].parent / f"figures_{'_vs_'.join(labels)}"
 
-    plot_prefix_statistics(
-        runs_by_group,
-        save_dir=save_dir,
-        smoothing=args.smoothing,
-    )
+    if args.tags:
+        plot_selected_tags_statistics(
+            runs_by_group,
+            tags=args.tags,
+            save_dir=save_dir,
+            smoothing=args.smoothing,
+        )
+    else:
+        plot_prefix_statistics(
+            runs_by_group,
+            save_dir=save_dir,
+            smoothing=args.smoothing,
+        )
 
 
 if __name__ == "__main__":
