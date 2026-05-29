@@ -261,7 +261,7 @@ def plot_prefix_statistics(
     x_axis: str = "step",
     smoothing: int = 1,
     num_points: Optional[int] = None,
-    max_cols: int = 2,
+    max_cols: int = 3,
     figsize_per_subplot: Tuple[float, float] = (10.0, 3.0),
     save_prefix: str = "tb",
     show: bool = True,
@@ -341,8 +341,8 @@ def plot_prefix_statistics(
             ax.grid()
             ax.set_xlabel(x_axis)
             ax.set_ylabel("value")
-            if multi:
-                ax.legend(fontsize=8)
+            # if multi:
+                # ax.legend(fontsize=8)
 
         for ax in ax_list[len(tags):]:
             ax.axis("off")
@@ -452,8 +452,8 @@ def plot_selected_tags_statistics(
         ax.grid()
         ax.set_xlabel(x_axis)
         ax.set_ylabel("value")
-        if multi:
-            ax.legend(fontsize=8)
+        # if multi:
+            # ax.legend(fontsize=8)
 
     for ax in ax_list[len(plot_tags):]:
         ax.axis("off")
