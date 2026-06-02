@@ -298,6 +298,4 @@ class reset_joint_state_from_buffer(ManagerTermBase):
         # Joint velocity is always zero because the buffer only contains joint positions
         joint_vel = torch.zeros((n, J), dtype=torch.float32, device=device)
 
-        # Only write joint state.
-        # Root pose and root velocity are intentionally left unchanged.
         self.asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
