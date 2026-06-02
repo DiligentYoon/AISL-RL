@@ -9,8 +9,9 @@ from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
-from lib.domain_randomizer import randomizer
 from lib.utils.plot_utils import PNGSavePlotter
+
+from lib.env.G1.safe.mdp.randomizer import reset_state_from_dataset
 
 
 @configclass
@@ -87,7 +88,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
         # Single dataset-driven reset event. dataset_dir is injected by the
         # train script before the first env.reset().
         self.events.reset_state_from_dataset = EventTerm(
-            func=randomizer.reset_state_from_dataset,
+            func=reset_state_from_dataset,
             mode="reset",
             params={
                 "dataset_dir": "",

@@ -10,12 +10,13 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import FRAME_MARKER_CFG
 
-from lib.domain_randomizer.randomizer import reset_robot_and_object_root_state_uniform
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.domain_randomizer.commander import UniformPositionCommandCfg
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG
+
+from lib.env.GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer
 
 @configclass
 class GOATStandEnvCfg(GOATBaseEnvCfg):
@@ -169,23 +170,12 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.GOAT_cfg.actuators["thigh"].max_delay = 4
         self.GOAT_cfg.actuators["knee"].max_delay = 4
         self.GOAT_cfg.actuators["wheel"].max_delay = 4
-        
-        # self.GOAT_cfg.actuators["hip"].stiffness = 0.0
-        # self.GOAT_cfg.actuators["hip"].damping = 0.0
-        # self.GOAT_cfg.actuators["thigh"].stiffness = 0.0
-        # self.GOAT_cfg.actuators["thigh"].damping = 0.0
-        # self.GOAT_cfg.actuators["knee"].stiffness = 0.0
-        # self.GOAT_cfg.actuators["knee"].damping = 0.0
-        # self.GOAT_cfg.actuators["wheel"].stiffness = 0.0
-        # self.GOAT_cfg.actuators["wheel"].damping = 0.0
 
         # event
         self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
         self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.3563, -0.3563, 0.4232, -0.4232, 0.0, 0.0)
-        self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
 
         self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.6, 1.2)
         self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.6, 1.2)
@@ -195,6 +185,16 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
+
+        # robot's joints should be reset by dataset
+        self.events.reset_robot_joints = EventTerm(
+            func=reset_joint_state_from_buffer,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "dataset_path":"",
+            }
+        )
 
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
@@ -220,13 +220,6 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                 "object_relative_yaw": 0.0,          
             }
         )
-
-        # self.events.add_base_mass = None
-        # self.events.robot_center_of_mass = None
-        # self.events.rigid_body_mass_inertia = None
-        # self.events.robot_leg_actuator_gain = None
-        # self.events.robot_wheel_actuator_gain = None
-        # self.events.robot_center_of_mass = None
 
         self.events.push_robot = None
 
