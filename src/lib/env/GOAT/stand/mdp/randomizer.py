@@ -1,28 +1,12 @@
 from __future__ import annotations
 
-import logging
-import math
 import os
-import re
-from typing import Literal
-
 import torch
 
-import carb
-import omni.physics.tensors.impl.api as physx
-from isaacsim.core.utils.extensions import enable_extension
-from pxr import Gf, Sdf, UsdGeom, Vt
-
-import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
-from isaaclab.actuators import ImplicitActuator
-from isaaclab.assets import Articulation, DeformableObject, RigidObject
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
-from isaaclab.sim.utils.stage import get_current_stage
-from isaaclab.terrains import TerrainImporter
-from isaaclab.utils.version import compare_versions, get_isaac_sim_version
 
-from lib.env.env import Env
 
 
 def reset_robot_and_object_root_state_uniform(
