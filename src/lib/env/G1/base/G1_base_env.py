@@ -97,8 +97,8 @@ class G1BaseEnv(Env):
         if self.cfg.num_agents > 1:
             # Multi Agent
             self.processed_actions = {
-                "arm": actions["arm"] * self.cfg.action_scale_factor["arm"],
-                "leg": actions["leg"] * self.cfg.action_scale_factor["leg"]
+                "arm": actions["arm"] * self.cfg.action_scale_factor["arm"][0],
+                "leg": actions["leg"] * self.cfg.action_scale_factor["leg"][0]
             }
         else:
             # Single Agent
