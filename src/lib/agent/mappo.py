@@ -84,8 +84,6 @@ class MAPPO(MultiAgent):
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
-        self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
-
         # Set up Adam optimizers
         self.optimizers = {}
         for uid in self.possible_agents:
@@ -151,32 +149,25 @@ class MAPPO(MultiAgent):
         if timestep < self.random_timesteps:
             # Random act
             for uid in self.possible_agents:
-                scale_factor = self.action_scale_factor[uid][0]
-                
-                nonscaled_action, log_prob, entropy = self.actors[uid].random_act(observations[uid])
-                action = nonscaled_action.clone() * scale_factor
+                raw_action, log_prob, entropy = self.actors[uid].random_act(observations[uid])
 
-                data.append((action, nonscaled_action, log_prob, entropy))
+                data.append((raw_action, log_prob, entropy))
         else:
             # Normal act list[(action, log_prob, entropy), (...), ()]
             for uid in self.possible_agents:
-                scale_factor = self.action_scale_factor[uid][0]
-
-                nonscaled_action, log_prob, entropy = self.actors[uid](observations=observations[uid],
+                raw_action, log_prob, entropy = self.actors[uid](observations=observations[uid],
                                                                        taken_actions=None,
                                                                        deterministic=deterministic, 
                                                                        update_rms=update_rms)
-                action = nonscaled_action.clone() * scale_factor
 
-                data.append((action, nonscaled_action, log_prob, entropy))
+                data.append((raw_action, log_prob, entropy))
 
         
-        actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
-        nonscaled_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
+        raw_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
         log_probs = torch.stack([d[2] for d in data], dim=-1) # [B, A]
         entropy  = torch.stack([d[3] for d in data], dim=-1) # [A]
         
-        return actions, nonscaled_actions, log_probs, entropy
+        return raw_actions, log_probs, entropy
     
 
     def insert_data(self,

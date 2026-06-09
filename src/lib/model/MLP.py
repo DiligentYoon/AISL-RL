@@ -401,8 +401,8 @@ class RA_Critic(Model):
 
 
 # ========================= Sim-to-Real Deployment Model ==========================
-class ActorInference(nn.Module):
-    def __init__(self, actor: nn.Module, squash: bool = True, action_scale_factor: Optional[torch.Tensor] = None):
+class ActorInference(nn.Module): # TODO: onnx exportable actor model for sim-to-real deployment
+    def __init__(self, actor: nn.Module, squash: bool = True):
         super().__init__()
         self.net = actor.net
         self.log_std_parameter = actor.log_std_parameter
@@ -410,11 +410,6 @@ class ActorInference(nn.Module):
         self.max_log_std = float(actor.max_log_std)
         self.squash = bool(squash)
         self.actor_standardizer = actor.actor_standardizer
-
-        # action_scale_factor: shape (num_actions,)
-        if action_scale_factor is None:
-            action_scale_factor = torch.ones_like(self.log_std_parameter)  # (num_actions,)
-        self.register_buffer("action_scale_factor", action_scale_factor)
 
     def forward(self, observations: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
         x = self.actor_standardizer.standardize(observations, update=False)
@@ -430,7 +425,6 @@ class ActorInference(nn.Module):
         if self.squash:
             a = torch.tanh(a)
 
-        a = a * self.action_scale_factor
         return a
 
 

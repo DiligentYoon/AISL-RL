@@ -202,8 +202,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
-    # Scale Factor
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -285,7 +283,7 @@ def main():
         # run everything in inference mode
         with torch.no_grad():
             # agent stepping
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number

@@ -89,11 +89,9 @@ class Agent:
             # Jit file save only policy network
             actor = self.model["actor"]
 
-            # export용 복사본
+            # export
             actor_export = copy.deepcopy(actor).to("cpu").eval()
-            action_scale_factor = self.mapped_action_scale_factor.detach().to("cpu")
-            
-            actor_jit = ActorInference(actor_export, squash=actor.squash, action_scale_factor=action_scale_factor).eval()
+            actor_jit = ActorInference(actor_export, squash=actor.squash).eval()
             scripted = torch.jit.script(actor_jit)
             torch.jit.save(scripted, path_jit)
     

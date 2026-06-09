@@ -219,8 +219,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
-    # Scale Factor
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -318,7 +316,7 @@ def main():
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
+            actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=False)
             # RA_value, _, _ = ra_agent.critic(infos["ra_states"])
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
@@ -328,7 +326,7 @@ def main():
             # Insert data to the buffer
             agent.insert_data(observations=obs,
                               states=states,
-                              actions=nonscaled_actions,
+                              actions=actions,
                               action_log_probs=action_log_probs.reshape(-1, 1),
                               rewards=rewards,
                               next_observations=next_obs,
@@ -484,18 +482,13 @@ def main():
                 test_agent.set_running_mode("eval")
                 with torch.no_grad():
                     agent.set_running_mode("eval")
-                    actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-                    test_actions, test_nonscaled_actions, test_action_log_probs, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    test_actions, _, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
                     agent.set_running_mode("train")
                 
                 if not torch.allclose(actions, test_actions):
                     max_err = (actions - test_actions).abs().max().item()
-                    raise RuntimeError(f"Model mismatch. Please check the save logic. [Max Error : {max_err}]")
-                
-                if not torch.allclose(nonscaled_actions, test_nonscaled_actions):
-                    max_err = (nonscaled_actions - test_nonscaled_actions).abs().max().item()
                     raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
-
 
         # update
         obs = next_obs

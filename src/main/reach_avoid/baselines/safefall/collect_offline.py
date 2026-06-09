@@ -98,7 +98,6 @@ def _build_policy_agent(env, cfg, multi_agent, possible_agents):
         possible_agents=possible_agents,
     )
 
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO

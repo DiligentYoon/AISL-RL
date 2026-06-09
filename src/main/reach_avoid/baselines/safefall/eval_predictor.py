@@ -185,7 +185,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn (nominal policy) ==========================
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO

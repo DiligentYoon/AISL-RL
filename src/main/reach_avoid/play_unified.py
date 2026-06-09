@@ -231,7 +231,6 @@ def main():
 
     # ====================== Agent Spawn  ==========================
     # Scale Factor
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -354,7 +353,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ======================= Safe Agent ============================
-    safe_cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if safe_multi_agent:
         if safe_model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -450,8 +448,8 @@ def main():
         t1_loop = time.time()
         with torch.no_grad():
             # agent stepping
-            nominal_actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            safe_actions, _, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
+            nominal_actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            safe_actions, _, _ = safe_agent.act(safe_obs, infos, timestep=timestep, deterministic=True)
 
             # Predictor forward
             if predictor == "ra":
