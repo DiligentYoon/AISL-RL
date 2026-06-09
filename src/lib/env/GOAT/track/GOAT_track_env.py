@@ -70,7 +70,6 @@ class GOATTrackEnv(GOATBaseEnv):
         # Index Mapping for external action scaling
         self.cfg.action_scale_factor["joint"][1] = self.joint_ids
         self.cfg.action_scale_factor["wheel"][1] = self.wheel_ids
-        self.action_scale_factor = torch.tensor(self.cfg.train_action_scale_factor, device=self.device).repeat((self.num_envs, 1))
         
         # Previous action
         self.previous_actions   = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
@@ -146,39 +145,6 @@ class GOATTrackEnv(GOATBaseEnv):
         if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
             global_prim_paths.append(self.cfg.terrain.prim_path)
         self.scene.filter_collisions(global_prim_paths=global_prim_paths)
-        
-    def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        """
-        Preprocessor that helps applying policy's action to simulation
-
-        Args:
-            actions (torch.Tensor): Joint pos command (angle), wheel's velocity for each legs in shape (num_envs, 2, 4)
-        """
-        self.actions = actions.clone()
-        self.processed_actions = actions.clone() * self.action_scale_factor
-        
-    def _apply_action(self):         
-        # Current state
-        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids]
-        cmd_wheel_vel = self.processed_actions[:, self.wheel_ids]
-        
-        # Apply command
-        self._robot.set_joint_position_target(cmd_joint_pos, joint_ids=self.joint_ids)
-        self._robot.set_joint_velocity_target(cmd_wheel_vel, joint_ids=self.wheel_ids)
-
-        # Combine torque perturbation
-        if self.cfg.erfi_enabled:
-            erfi_perturbation = torch.zeros_like(self.erfi_torque)
-            # RFI Env : Random torque purterbation at each step
-            erfi_perturbation[self.rfi_env_mask] = sample_rfi_torque(
-                self.rfi_env_mask.sum(), self._robot.num_joints,
-                self.cfg.rfi_torque_limit, self.device
-            )
-            # RAO Env : Random constant torque offset
-            erfi_perturbation[self.rao_env_mask] = self.rao_torque_offset[self.rao_env_mask]
-            self.erfi_torque = erfi_perturbation
-            # Load to sim buffer
-            self._robot.set_joint_effort_target(self.erfi_torque)
 
     def _get_observations(self) -> torch.Tensor:
         """

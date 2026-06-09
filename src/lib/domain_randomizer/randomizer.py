@@ -1367,114 +1367,114 @@ def reset_root_state_orientation_biased_uniform(
     asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
 
 
-def reset_robot_and_object_root_state_uniform(
-    env,
-    env_ids: torch.Tensor,
-    pose_range: dict[str, tuple[float, float]],
-    velocity_range: dict[str, tuple[float, float]],
-    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    object_cfg: SceneEntityCfg = SceneEntityCfg("jig"),
-    object_relative_pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    object_relative_yaw: float = 0.0,
-):
-    robot: Articulation = env.scene[robot_cfg.name]
-    obj: RigidObject = env.scene[object_cfg.name]
+# def reset_robot_and_object_root_state_uniform(
+#     env,
+#     env_ids: torch.Tensor,
+#     pose_range: dict[str, tuple[float, float]],
+#     velocity_range: dict[str, tuple[float, float]],
+#     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+#     object_cfg: SceneEntityCfg = SceneEntityCfg("jig"),
+#     object_relative_pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
+#     object_relative_yaw: float = 0.0,
+# ):
+#     robot: Articulation = env.scene[robot_cfg.name]
+#     obj: RigidObject = env.scene[object_cfg.name]
 
-    # default states
-    robot_root_states = robot.data.default_root_state[env_ids].clone()
-    obj_root_states = obj.data.default_root_state[env_ids].clone()
+#     # default states
+#     robot_root_states = robot.data.default_root_state[env_ids].clone()
+#     obj_root_states = obj.data.default_root_state[env_ids].clone()
 
-    # shared pose random sample
-    pose_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
-    pose_ranges = torch.tensor(
-        [pose_range.get(key, (0.0, 0.0)) for key in pose_keys],
-        device=robot.device,
-        dtype=torch.float32,
-    )
-    pose_samples = math_utils.sample_uniform(
-        pose_ranges[:, 0], pose_ranges[:, 1], (len(env_ids), 6), device=robot.device
-    )
+#     # shared pose random sample
+#     pose_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+#     pose_ranges = torch.tensor(
+#         [pose_range.get(key, (0.0, 0.0)) for key in pose_keys],
+#         device=robot.device,
+#         dtype=torch.float32,
+#     )
+#     pose_samples = math_utils.sample_uniform(
+#         pose_ranges[:, 0], pose_ranges[:, 1], (len(env_ids), 6), device=robot.device
+#     )
 
-    pos_delta = pose_samples[:, 0:3]      # shared sampled xyz
-    rpy_delta = pose_samples[:, 3:6]      # shared sampled rpy
+#     pos_delta = pose_samples[:, 0:3]      # shared sampled xyz
+#     rpy_delta = pose_samples[:, 3:6]      # shared sampled rpy
 
-    # robot pose
-    robot_positions = (
-        robot_root_states[:, 0:3]
-        + env.scene.env_origins[env_ids]
-        + pos_delta
-    )
+#     # robot pose
+#     robot_positions = (
+#         robot_root_states[:, 0:3]
+#         + env.scene.env_origins[env_ids]
+#         + pos_delta
+#     )
 
-    robot_orient_delta = math_utils.quat_from_euler_xyz(
-        rpy_delta[:, 0], rpy_delta[:, 1], rpy_delta[:, 2]
-    )
-    robot_orientations = math_utils.quat_mul(
-        robot_root_states[:, 3:7], robot_orient_delta
-    )
+#     robot_orient_delta = math_utils.quat_from_euler_xyz(
+#         rpy_delta[:, 0], rpy_delta[:, 1], rpy_delta[:, 2]
+#     )
+#     robot_orientations = math_utils.quat_mul(
+#         robot_root_states[:, 3:7], robot_orient_delta
+#     )
 
-    # robot velocity
-    vel_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
-    vel_ranges = torch.tensor(
-        [velocity_range.get(key, (0.0, 0.0)) for key in vel_keys],
-        device=robot.device,
-        dtype=torch.float32,
-    )
-    vel_samples = math_utils.sample_uniform(
-        vel_ranges[:, 0], vel_ranges[:, 1], (len(env_ids), 6), device=robot.device
-    )
-    robot_velocities = robot_root_states[:, 7:13] + vel_samples
+#     # robot velocity
+#     vel_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+#     vel_ranges = torch.tensor(
+#         [velocity_range.get(key, (0.0, 0.0)) for key in vel_keys],
+#         device=robot.device,
+#         dtype=torch.float32,
+#     )
+#     vel_samples = math_utils.sample_uniform(
+#         vel_ranges[:, 0], vel_ranges[:, 1], (len(env_ids), 6), device=robot.device
+#     )
+#     robot_velocities = robot_root_states[:, 7:13] + vel_samples
 
-    robot.write_root_pose_to_sim(
-        torch.cat([robot_positions, robot_orientations], dim=-1),
-        env_ids=env_ids,
-    )
-    robot.write_root_velocity_to_sim(robot_velocities, env_ids=env_ids)
+#     robot.write_root_pose_to_sim(
+#         torch.cat([robot_positions, robot_orientations], dim=-1),
+#         env_ids=env_ids,
+#     )
+#     robot.write_root_velocity_to_sim(robot_velocities, env_ids=env_ids)
 
-    # object pose: follow only shared x, y, yaw
-    rel_pos = torch.tensor(object_relative_pos, device=robot.device, dtype=torch.float32)
-    rel_pos = rel_pos.unsqueeze(0).repeat(len(env_ids), 1)
+#     # object pose: follow only shared x, y, yaw
+#     rel_pos = torch.tensor(object_relative_pos, device=robot.device, dtype=torch.float32)
+#     rel_pos = rel_pos.unsqueeze(0).repeat(len(env_ids), 1)
 
-    shared_yaw = rpy_delta[:, 2] + object_relative_yaw
-    yaw_quat = math_utils.quat_from_euler_xyz(
-        torch.zeros_like(shared_yaw),
-        torch.zeros_like(shared_yaw),
-        shared_yaw,
-    )
+#     shared_yaw = rpy_delta[:, 2] + object_relative_yaw
+#     yaw_quat = math_utils.quat_from_euler_xyz(
+#         torch.zeros_like(shared_yaw),
+#         torch.zeros_like(shared_yaw),
+#         shared_yaw,
+#     )
 
-    # rotate only the xy part of the relative offset
-    rel_xy = rel_pos[:, :2]
-    rel_xy_3d = torch.cat(
-        [rel_xy, torch.zeros((len(env_ids), 1), device=robot.device)], dim=-1
-    )
-    rel_xy_world = math_utils.quat_apply(yaw_quat, rel_xy_3d)[:, :2]
+#     # rotate only the xy part of the relative offset
+#     rel_xy = rel_pos[:, :2]
+#     rel_xy_3d = torch.cat(
+#         [rel_xy, torch.zeros((len(env_ids), 1), device=robot.device)], dim=-1
+#     )
+#     rel_xy_world = math_utils.quat_apply(yaw_quat, rel_xy_3d)[:, :2]
 
-    # start from object's own default root position
-    obj_positions = obj_root_states[:, 0:3].clone() + env.scene.env_origins[env_ids]
+#     # start from object's own default root position
+#     obj_positions = obj_root_states[:, 0:3].clone() + env.scene.env_origins[env_ids]
 
-    # shared translation only in x,y
-    obj_positions[:, 0] += pos_delta[:, 0]
-    obj_positions[:, 1] += pos_delta[:, 1]
+#     # shared translation only in x,y
+#     obj_positions[:, 0] += pos_delta[:, 0]
+#     obj_positions[:, 1] += pos_delta[:, 1]
 
-    # then add rotated relative xy offset
-    obj_positions[:, 0] += rel_xy_world[:, 0]
-    obj_positions[:, 1] += rel_xy_world[:, 1]
+#     # then add rotated relative xy offset
+#     obj_positions[:, 0] += rel_xy_world[:, 0]
+#     obj_positions[:, 1] += rel_xy_world[:, 1]
 
-    # z should NOT follow robot z
-    # keep object's default z and only add its own relative z
-    obj_positions[:, 2] += rel_pos[:, 2]
+#     # z should NOT follow robot z
+#     # keep object's default z and only add its own relative z
+#     obj_positions[:, 2] += rel_pos[:, 2]
 
-    # object orientation: default orientation followed only by shared yaw
-    obj_default_orientation = obj_root_states[:, 3:7]
-    obj_orientations = math_utils.quat_mul(obj_default_orientation, yaw_quat)
+#     # object orientation: default orientation followed only by shared yaw
+#     obj_default_orientation = obj_root_states[:, 3:7]
+#     obj_orientations = math_utils.quat_mul(obj_default_orientation, yaw_quat)
 
-    obj.write_root_pose_to_sim(
-        torch.cat([obj_positions, obj_orientations], dim=-1),
-        env_ids=env_ids,
-    )
+#     obj.write_root_pose_to_sim(
+#         torch.cat([obj_positions, obj_orientations], dim=-1),
+#         env_ids=env_ids,
+#     )
 
-    # object is kinematic/static support object
-    obj_velocities = torch.zeros((len(env_ids), 6), device=robot.device)
-    obj.write_root_velocity_to_sim(obj_velocities, env_ids=env_ids)
+#     # object is kinematic/static support object
+#     obj_velocities = torch.zeros((len(env_ids), 6), device=robot.device)
+#     obj.write_root_velocity_to_sim(obj_velocities, env_ids=env_ids)
 
 
 def reset_root_state_with_random_orientation(
@@ -1674,202 +1674,6 @@ def reset_joints_by_offset(
 
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
-
-def reset_joints_by_offset_and_bias(
-    env: Env,
-    env_ids: torch.Tensor,
-    bias: tuple[float, float, float],
-    position_range: tuple[float, float],
-    velocity_range: tuple[float, float],
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
-    """Reset the robot joints with offsets around the default position and velocity by the given ranges.
-
-    This function samples random values from the given ranges and biases the default joint positions and velocities
-    by these values. The biased values are then set into the physics simulation.
-    """
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    eps = 1e-10
-
-    # cast env_ids to allow broadcasting
-    if asset_cfg.joint_ids != slice(None):
-        iter_env_ids = env_ids[:, None]
-    else:
-        iter_env_ids = env_ids
-
-    # get default joint state
-    joint_pos = asset.data.default_joint_pos[iter_env_ids, asset_cfg.joint_ids].clone()
-    joint_vel = asset.data.default_joint_vel[iter_env_ids, asset_cfg.joint_ids].clone()
-    
-    # add constant bias
-    # signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-    joint_pos += torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-
-    # bias these values randomly
-    joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)
-    joint_vel += math_utils.sample_uniform(*velocity_range, joint_vel.shape, joint_vel.device)
-
-    # clamp joint pos to limits
-    joint_pos_limits = asset.data.soft_joint_pos_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
-    # clamp joint vel to limits
-    joint_vel_limits = asset.data.soft_joint_vel_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
-
-    # set into the physics simulation
-    asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
-
-
-class reset_state_from_dataset(ManagerTermBase):
-    """Reset both root state and joint state by sampling from a precomputed
-    risk-classified initial-condition dataset (saved by collect.py).
-
-    cfg.params:
-        dataset_dir (str)
-            Directory containing {low,mid,high}_risk.pt. Read on first
-            __call__; train script may inject any time before the first
-            env.reset().
-        bucket_weights (dict[str, float])
-            {"low": w_l, "mid": w_m, "high": w_h}. Re-normalized when the
-            dict identity changes; buckets with weight=0 or empty file are
-            dropped from the categorical sampler.
-        asset_cfg (SceneEntityCfg)
-            Default SceneEntityCfg("robot").
-    """
-
-    BUCKETS: tuple[str, ...] = ("low", "mid", "high")
-    REQUIRED_KEYS: tuple[str, ...] = (
-        "root_pos_offset_w", "root_quat_w",
-        "root_lin_vel_w", "root_ang_vel_w",
-        "joint_pos", "joint_vel",
-        "prev_action",
-    )
-
-    def __init__(self, cfg: EventTermCfg, env: Env):
-        super().__init__(cfg, env)
-        self.asset_cfg: SceneEntityCfg = cfg.params.get(
-            "asset_cfg", SceneEntityCfg("robot"))
-        self.asset: Articulation = env.scene[self.asset_cfg.name]
-        self._device = self.asset.device
-
-        # Lazy state populated on first __call__
-        self._loaded: bool = False
-        self._buckets: dict[str, dict[str, torch.Tensor]] = {}
-        self._bucket_caps: dict[str, int] = {}
-
-        # Probability cache rebuilt when bucket_weights identity changes
-        self._cached_weights_id: int | None = None
-        self._valid_buckets: list[str] = []
-        self._bucket_probs: torch.Tensor | None = None
-
-        # Staging tensor for prev_action — shared with env via setattr below.
-        # Filled on each __call__; env reads it in its _reset_idx.
-        num_envs = env.scene.num_envs
-        self.last_prev_action = torch.zeros(
-            (num_envs, self.asset.num_joints),
-            dtype=torch.float32, device=self._device,
-        )
-        setattr(env, "_dataset_reset_prev_action", self.last_prev_action)
-
-    def _load_dataset(self, dataset_dir: str) -> None:
-        for b in self.BUCKETS:
-            path = os.path.join(dataset_dir, f"{b}_risk.pt")
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"Missing dataset file: {path}")
-            payload = torch.load(path, map_location=self._device)
-            for k in self.REQUIRED_KEYS:
-                if k not in payload:
-                    raise KeyError(f"{path} missing key '{k}'")
-            cap = payload["root_pos_offset_w"].shape[0]
-            self._buckets[b] = {
-                k: payload[k].to(self._device) for k in self.REQUIRED_KEYS
-            }
-            self._bucket_caps[b] = cap
-
-        expected_J = self.asset.num_joints
-        for b in self.BUCKETS:
-            J = self._buckets[b]["joint_pos"].shape[-1]
-            if J != expected_J:
-                raise ValueError(
-                    f"bucket '{b}' joint_dim={J} != robot.num_joints={expected_J}"
-                )
-
-    def _build_probs(self, bucket_weights: dict[str, float]) -> None:
-        valid = [
-            b for b in self.BUCKETS
-            if self._bucket_caps[b] > 0 and bucket_weights.get(b, 0.0) > 0.0
-        ]
-        if not valid:
-            raise RuntimeError(
-                "All buckets are empty or have weight=0; nothing to sample."
-            )
-        w = torch.tensor(
-            [bucket_weights[b] for b in valid],
-            dtype=torch.float32, device=self._device,
-        )
-        self._valid_buckets = valid
-        self._bucket_probs = w / w.sum()
-
-    def __call__(
-        self,
-        env: Env,
-        env_ids: torch.Tensor,
-        dataset_dir: str,
-        bucket_weights: dict[str, float],
-        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    ):
-        if not self._loaded:
-            self._load_dataset(dataset_dir)
-            self._loaded = True
-
-        wid = id(bucket_weights)
-        if wid != self._cached_weights_id:
-            self._build_probs(bucket_weights)
-            self._cached_weights_id = wid
-
-        n = int(env_ids.numel())
-        bucket_idx = torch.multinomial(
-            self._bucket_probs, n, replacement=True
-        )
-
-        device = self._device
-        J = self.asset.num_joints
-        root_pos_offset = torch.empty((n, 3), device=device)
-        root_quat       = torch.empty((n, 4), device=device)
-        root_lin_vel    = torch.empty((n, 3), device=device)
-        root_ang_vel    = torch.empty((n, 3), device=device)
-        joint_pos       = torch.empty((n, J), device=device)
-        joint_vel       = torch.empty((n, J), device=device)
-        prev_action     = torch.empty((n, J), device=device)
-
-        for k, bname in enumerate(self._valid_buckets):
-            mask = (bucket_idx == k)
-            m = int(mask.sum().item())
-            if m == 0:
-                continue
-            cap = self._bucket_caps[bname]
-            row = torch.randint(0, cap, (m,), device=device)
-            store = self._buckets[bname]
-            root_pos_offset[mask] = store["root_pos_offset_w"][row]
-            root_quat[mask]       = store["root_quat_w"][row]
-            root_lin_vel[mask]    = store["root_lin_vel_w"][row]
-            root_ang_vel[mask]    = store["root_ang_vel_w"][row]
-            joint_pos[mask]       = store["joint_pos"][row]
-            joint_vel[mask]       = store["joint_vel"][row]
-            prev_action[mask]     = store["prev_action"][row]
-
-        root_pos = env.scene.env_origins[env_ids] + root_pos_offset
-
-        self.asset.write_root_pose_to_sim(
-            torch.cat([root_pos, root_quat], dim=-1), env_ids=env_ids)
-        self.asset.write_root_velocity_to_sim(
-            torch.cat([root_lin_vel, root_ang_vel], dim=-1), env_ids=env_ids)
-        self.asset.write_joint_state_to_sim(
-            joint_pos, joint_vel, env_ids=env_ids)
-
-        # Stage prev_action for env._reset_idx to consume (env-side state, not sim).
-        self.last_prev_action[env_ids] = prev_action
 
 
 def reset_nodal_state_uniform(

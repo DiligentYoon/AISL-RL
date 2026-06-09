@@ -235,7 +235,6 @@ def main():
     else:
         raise RuntimeError("Not supported class")
 
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -309,7 +308,7 @@ def main():
 
     while simulation_app.is_running() and timestep < max_timestep:
         with torch.no_grad():
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             risk_scores, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
             snapshot = extract_physical_snapshot(infos["collection"])
             next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)

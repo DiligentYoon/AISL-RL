@@ -70,7 +70,7 @@ class EventCfg:
 class G1BaseEnvCfg(EnvCfg):
     # env
     episode_length_s = 20.0
-    action_scale = 1.0
+    action_scale_factor = 1.0
     sim_dt = 0.005
     decimation = 4
     action_space = 0

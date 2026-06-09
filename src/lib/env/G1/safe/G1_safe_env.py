@@ -165,33 +165,6 @@ class G1SafeEnv(G1BaseEnv):
         self.cfg.commands.step_dt = self.step_dt
 
 
-    def _pre_physics_step(self, actions: dict[str, torch.Tensor] | torch.Tensor):
-        self.actions = actions
-
-
-    def _apply_action(self):
-        if self.cfg.num_agents > 1:
-            # Multi Agent
-            arm_actions = self.actions["arm"]
-            leg_actions = self.actions["leg"]
-
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
-                joint_ids=self.total_arm_joint_ids
-            )
-
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
-                joint_ids=self.total_leg_joint_ids
-            )
-        else:
-            # Single Agent
-            self._robot.set_joint_position_target(
-                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.actions,
-                joint_ids=self._joint_dof_ids
-            )
-
-
     def _get_observations(self) -> dict[str, torch.Tensor]:
         if self.cfg.num_agents > 1:
             # Multi Agent

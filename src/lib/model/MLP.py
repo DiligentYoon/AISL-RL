@@ -402,35 +402,29 @@ class RA_Critic(Model):
 
 # ========================= Sim-to-Real Deployment Model ==========================
 class ActorInference(nn.Module):
-    def __init__(self, actor: nn.Module, squash: bool = True, action_scale_factor: Optional[torch.Tensor] = None):
+    """Deterministic actor module for ONNX export.
+
+    Inlines RunningMeanStd standardization to keep the exported graph free of
+    device-string bookkeeping and to avoid the Python-level branching that
+    torch.onnx.export must otherwise resolve.
+    """
+    def __init__(self, actor: nn.Module, squash: bool = True):
         super().__init__()
         self.net = actor.net
-        self.log_std_parameter = actor.log_std_parameter
-        self.min_log_std = float(actor.min_log_std)
-        self.max_log_std = float(actor.max_log_std)
         self.squash = bool(squash)
-        self.actor_standardizer = actor.actor_standardizer
 
-        # action_scale_factor: shape (num_actions,)
-        if action_scale_factor is None:
-            action_scale_factor = torch.ones_like(self.log_std_parameter)  # (num_actions,)
-        self.register_buffer("action_scale_factor", action_scale_factor)
+        # Snapshot standardizer statistics into local buffers so the exported
+        # graph does not depend on the original RunningMeanStd object.
+        standardizer = actor.actor_standardizer
+        self.register_buffer("obs_mean", standardizer.mean.detach().clone())
+        self.register_buffer("obs_var", standardizer.var.detach().clone())
+        self.obs_epsilon = float(standardizer.epsilon)
 
-    def forward(self, observations: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
-        x = self.actor_standardizer.standardize(observations, update=False)
-        mean = self.net(x)
-
-        if deterministic:
-            a = mean
-        else:
-            log_std = torch.clamp(self.log_std_parameter, self.min_log_std, self.max_log_std)
-            std = torch.exp(log_std)
-            a = mean + std * torch.randn_like(mean)
-
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        x = (observations - self.obs_mean) / torch.sqrt(self.obs_var + self.obs_epsilon)
+        a = self.net(x)
         if self.squash:
             a = torch.tanh(a)
-
-        a = a * self.action_scale_factor
         return a
 
 

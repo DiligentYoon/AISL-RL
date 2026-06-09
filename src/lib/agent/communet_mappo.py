@@ -99,7 +99,7 @@ class CommunetMAPPO(MAPPO):
                                             "value_preds", "returns", "advantages"]
 
 
-    def save(self, path: str, path_jit: str | None = None):
+    def save(self, path: str, path_onnx: str | None = None):
         modules = {}
         
         shared_module = {}
@@ -162,22 +162,20 @@ class CommunetMAPPO(MAPPO):
         observations = unflatten_tensorized_space(self.observation_space, observations)
 
         # Action Processing
-        non_scaled_actions, log_probs, entropies = self.communet_actor(observations=observations,
-                                                                       taken_actions=None,
-                                                                       deterministic=deterministic,
-                                                                       update_rms=update_rms)
+        raw_actions, log_probs, entropies = self.communet_actor(observations=observations,
+                                                                taken_actions=None,
+                                                                deterministic=deterministic,
+                                                                update_rms=update_rms)
         # From Dict to Tensor
         data = []
         for uid in self.possible_agents:
-            actions = non_scaled_actions[uid].clone() * self.action_scale_factor[uid][0]
-            data.append((actions, non_scaled_actions[uid], log_probs[uid], entropies[uid]))
+            data.append((raw_actions[uid], log_probs[uid], entropies[uid]))
         
-        actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
-        nonscaled_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
-        log_probs = torch.stack([d[2] for d in data], dim=-1) # [B, A]
-        entropy  = torch.stack([d[3] for d in data], dim=-1) # [A]
+        raw_actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
+        log_probs = torch.stack([d[1] for d in data], dim=-1) # [B, A]
+        entropy  = torch.stack([d[2] for d in data], dim=-1) # [A]
 
-        return actions, nonscaled_actions, log_probs, entropy
+        return raw_actions, log_probs, entropy
     
 
     def insert_data(self,

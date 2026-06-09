@@ -22,12 +22,14 @@ class G1FallUnifiedEnv(G1FallEnv):
         # link id
         self.denied_link_ids, _ = self._robot.find_bodies([r"torso_link",
                                                            r"pelvis",
-                                                           r"waist_.*_link"])
+                                                           r"waist_.*_link",
+                                                           r".*_wrist_yaw_link"])
 
         # Collision link
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
-                                                                              r"waist_.*_link"])
+                                                                              r"waist_.*_link",
+                                                                              r".*_wrist_yaw_link"])
         
         # Foot collision link
         self.foot_collision_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_(pitch|roll)_link"])
@@ -54,14 +56,6 @@ class G1FallUnifiedEnv(G1FallEnv):
 
     # Overriding to add Safety policy information
     def _get_states(self) -> dict[str, torch.Tensor]:
-        # Action Processing
-        if isinstance(self.prev_actions, dict):
-            arm_actions = self.prev_actions["arm"]
-            leg_actions = self.prev_actions["leg"]
-        else:
-            arm_actions = self.prev_actions[:, self.total_arm_joint_ids]
-            leg_actions = self.prev_actions[:, self.total_leg_joint_ids]
-
         # Nominal Policy
         if self.cfg.num_agents > 1:
            # Multi Agent

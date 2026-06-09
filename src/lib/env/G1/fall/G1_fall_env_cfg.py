@@ -151,6 +151,7 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         self.events.push_robot.interval_range_s = (3.0, 3.0)
 
         # Safe Policy info (multi agent)
+        self.possible_agents = ["arm", "leg"]
         self.num_safe_agents = 2
         self.safe_action_space = self.action_space
         self.safe_observation_space = {"arm": 60, "leg": 45}

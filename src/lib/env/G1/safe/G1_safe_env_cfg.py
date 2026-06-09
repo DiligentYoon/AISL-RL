@@ -9,8 +9,9 @@ from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
-from lib.domain_randomizer import randomizer
 from lib.utils.plot_utils import PNGSavePlotter
+
+from lib.env.G1.safe.mdp.randomizer import reset_state_from_dataset
 
 
 @configclass
@@ -87,7 +88,7 @@ class G1SafeEnvCfg(G1BaseEnvCfg):
         # Single dataset-driven reset event. dataset_dir is injected by the
         # train script before the first env.reset().
         self.events.reset_state_from_dataset = EventTerm(
-            func=randomizer.reset_state_from_dataset,
+            func=reset_state_from_dataset,
             mode="reset",
             params={
                 "dataset_dir": "",
@@ -102,18 +103,18 @@ class G1SafePlayEnvCfg(G1SafeEnvCfg):
         super().__post_init__()
 
         # viewer
-        self.viewer = ViewerCfg(
-            origin_type="asset_root",
-            asset_name="robot",
-            env_index=0,
-            eye=(0.0, 3.0, 0.5),
-            lookat=(0.0, 0.0, 0.0)
-        )
+        # self.viewer = ViewerCfg(
+        #     origin_type="asset_root",
+        #     asset_name="robot",
+        #     env_index=0,
+        #     eye=(0.0, 3.0, 0.5),
+        #     lookat=(0.0, 0.0, 0.0)
+        # )
 
-        self.scene.num_envs = 1
+        # self.scene.num_envs = 1
 
         # plotter
-        self.plotter = PNGSavePlotter
+        # self.plotter = PNGSavePlotter
 
         self.viz_data = {
             "max_torque": 0.0,
