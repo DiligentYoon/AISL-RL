@@ -99,7 +99,7 @@ class CommunetMAPPO(MAPPO):
                                             "value_preds", "returns", "advantages"]
 
 
-    def save(self, path: str, path_jit: str | None = None):
+    def save(self, path: str, path_onnx: str | None = None):
         modules = {}
         
         shared_module = {}

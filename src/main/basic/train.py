@@ -15,13 +15,13 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-recovery", help="Name of the task.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, default="GOAT-stand", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
-                    default="MAPPO",
+                    default="PPO",
                     choices=["PPO", "SAC", "TD3", "MAPPO"],
                     help="The RL algorithm used for training the agent.")
 
@@ -443,8 +443,8 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
-            agent.save(checkpoint_path, checkpoint_path_jit)
+            checkpoint_path_onnx = os.path.join(log_dir, f"agent_{timestep}.onnx") if not multi_agent else None
+            agent.save(checkpoint_path, path_onnx=checkpoint_path_onnx)
 
             if verify_save_logic:
                 test_agent.load(checkpoint_path)
@@ -454,10 +454,20 @@ def main():
                     actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
                     test_actions, _, _ = test_agent.act(obs, infos, timestep=timestep, deterministic=True)
                     agent.set_running_mode("train")
-                
+
                 if not torch.allclose(actions, test_actions):
                     max_err = (actions - test_actions).abs().max().item()
                     raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
+
+                if checkpoint_path_onnx is not None:
+                    import onnxruntime as ort
+                    sess = ort.InferenceSession(checkpoint_path_onnx, providers=["CPUExecutionProvider"])
+                    obs_np = obs.detach().cpu().numpy().astype(np.float32)
+                    onnx_actions_np = sess.run(["actions"], {"observations": obs_np})[0]
+                    onnx_actions = torch.from_numpy(onnx_actions_np).to(actions.device)
+                    if not torch.allclose(actions, onnx_actions, atol=1e-5):
+                        max_err = (actions - onnx_actions).abs().max().item()
+                        raise RuntimeError(f"ONNX export mismatch. [Max Error : {max_err}]")
 
         # update
         obs = next_obs

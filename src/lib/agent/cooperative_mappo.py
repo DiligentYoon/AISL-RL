@@ -133,7 +133,7 @@ class CooperativeMAPPO(MAPPO):
                 self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
 
 
-    def save(self, path: str, path_jit: str | None = None):
+    def save(self, path: str, path_onnx: str | None = None):
         modules = {}
         # Shared module
         shared_module = {}

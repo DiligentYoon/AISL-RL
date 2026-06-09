@@ -727,13 +727,13 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval_nominal == 0:
             nominal_checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            nominal_checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
-            nominal_agent.save(nominal_checkpoint_path, nominal_checkpoint_path_jit)
-        
+            nominal_checkpoint_path_onnx = os.path.join(log_dir, f"agent_nominal_{timestep}.onnx") if not multi_agent else None
+            nominal_agent.save(nominal_checkpoint_path, path_onnx=nominal_checkpoint_path_onnx)
+
         if timestep % checkpoint_interval_adv == 0:
             adv_checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            adv_checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
-            adversarial_agent.save(adv_checkpoint_path, adv_checkpoint_path_jit)
+            adv_checkpoint_path_onnx = os.path.join(log_dir, f"agent_adv_{timestep}.onnx") if not multi_agent else None
+            adversarial_agent.save(adv_checkpoint_path, path_onnx=adv_checkpoint_path_onnx)
 
             # if verify_save_logic:
             #     test_agent.load(checkpoint_path)

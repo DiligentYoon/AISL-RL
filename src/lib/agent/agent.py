@@ -72,12 +72,13 @@ class Agent:
             raise ValueError("Not supported running mode. Please choose 'train' or 'eval'.")
 
 
-    def save(self, path: str, path_jit: str | None = None) -> None:
+    def save(self, path: str, path_onnx: str | None = None) -> None:
         """
         Save the agent to the specified path
 
         Args:
-            path: Path to save the model to
+            path: Path to save the full checkpoint (state_dicts) to
+            path_onnx: Path to save the deterministic ONNX actor for deployment. Skipped if None.
         """
         modules = {}
         for name, module in self.checkpoint_modules.items():
@@ -85,15 +86,28 @@ class Agent:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(modules, path)
 
-        if path_jit is not None:
-            # Jit file save only policy network
+        if path_onnx is not None:
             actor = self.model["actor"]
 
-            # export
+            # Build a CPU-resident deterministic wrapper for export.
             actor_export = copy.deepcopy(actor).to("cpu").eval()
-            actor_jit = ActorInference(actor_export, squash=actor.squash).eval()
-            scripted = torch.jit.script(actor_jit)
-            torch.jit.save(scripted, path_jit)
+            actor_onnx = ActorInference(actor_export, squash=actor.squash).eval()
+
+            dummy = torch.zeros(1, actor.num_observations, dtype=torch.float32)
+            os.makedirs(os.path.dirname(path_onnx), exist_ok=True)
+            torch.onnx.export(
+                actor_onnx,
+                (dummy,),
+                path_onnx,
+                input_names=["observations"],
+                output_names=["actions"],
+                dynamic_axes={
+                    "observations": {0: "batch"},
+                    "actions": {0: "batch"},
+                },
+                opset_version=17,
+                do_constant_folding=True,
+            )
     
 
     def load(self, path: str) -> None:

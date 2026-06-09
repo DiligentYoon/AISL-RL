@@ -474,8 +474,8 @@ def main():
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
             checkpoint_path = os.path.join(log_dir, f"agent_{timestep}.pt")
-            checkpoint_path_jit = os.path.join(log_dir, f"agent_jit_{timestep}.pt") if not multi_agent else None
-            agent.save(checkpoint_path, checkpoint_path_jit)
+            checkpoint_path_onnx = os.path.join(log_dir, f"agent_{timestep}.onnx") if not multi_agent else None
+            agent.save(checkpoint_path, path_onnx=checkpoint_path_onnx)
 
             if verify_save_logic:
                 test_agent.load(checkpoint_path)

@@ -182,14 +182,14 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
 
         # robot's joints should be reset by dataset
-        self.events.reset_robot_joints = EventTerm(
-            func=reset_joint_state_from_buffer,
-            mode="reset",
-            params={
-                "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
-            }
-        )
+        # self.events.reset_robot_joints = EventTerm(
+        #     func=reset_joint_state_from_buffer,
+        #     mode="reset",
+        #     params={
+        #         "asset_cfg": SceneEntityCfg("robot"),
+        #         "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
+        #     }
+        # )
 
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
