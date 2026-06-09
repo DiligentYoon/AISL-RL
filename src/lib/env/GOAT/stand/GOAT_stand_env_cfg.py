@@ -1,17 +1,13 @@
+
 import isaaclab.sim as sim_utils
-import gymnasium
-import torch
 
 from isaaclab.utils import configclass
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.domain_randomizer.noise_model import build_noise_std_vector
-from lib.domain_randomizer.commander import UniformPositionCommandCfg
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG

@@ -125,11 +125,10 @@ class EventCfg:
         },
     )
     reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_offset_and_bias,
+        func=randomizer.reset_joints_by_scale,
         mode="reset",
         params={
-            "bias": (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-            "position_range": (-0.03, 0.03),
+            "position_range": (1.0, 1.0),
             "velocity_range": (0.0, 0.0),
         },
     )
