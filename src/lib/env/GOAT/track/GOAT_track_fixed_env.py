@@ -49,9 +49,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.applied_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_deviation = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_acc = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-
-        # Index Mapping for external action scaling
-        self.action_scale_factor = torch.tensor(self.cfg.train_action_scale_factor, device=self.device).repeat((self.num_envs, 1))
         
         # Previous action
         self.previous_actions   = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
@@ -103,22 +100,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
             global_prim_paths.append(self.cfg.terrain.prim_path)
         self.scene.filter_collisions(global_prim_paths=global_prim_paths)
-        
-    def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        """
-        Preprocessor that helps applying policy's action to simulation
-
-        Args:
-            actions (torch.Tensor): Joint pos command (angle), wheel's velocity for each legs in shape (num_envs, 2, 4)
-        """
-        self.actions = actions.clone()
-        self.processed_actions = actions.clone() * self.action_scale_factor
-        
-    def _apply_action(self):         
-        # Current state
-        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids]
-        # Apply command
-        self._robot.set_joint_position_target(cmd_joint_pos, joint_ids=self.joint_ids)
 
     def _get_observations(self) -> torch.Tensor:
         """

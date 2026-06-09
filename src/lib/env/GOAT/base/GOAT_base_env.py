@@ -41,11 +41,7 @@ class GOATBaseEnv(Env):
     def _reset_idx(self, env_ids: torch.Tensor):
         super()._reset_idx(env_ids)
 
-
-    ## =============== RL main abstract methods ================ ##
-
-    @abstractmethod
-    def _pre_physics_step(self, actions: torch.Tensor):
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
         """Pre-process actions before stepping through the physics.
 
         This function is responsible for pre-processing the actions before stepping through the physics.
@@ -54,16 +50,28 @@ class GOATBaseEnv(Env):
         Args:
             actions: The actions to apply on the environment. Shape is (num_envs, action_dim).
         """
-        raise NotImplementedError(f"Please implement the '_pre_physics_step' method for {self.__class__.__name__}.")
-
-    @abstractmethod
-    def _apply_action(self):
+        self.actions = actions.clone()
+        self.processed_actions = actions.clone()
+        self.processed_actions[:, self.joint_ids] *= self.cfg.action_scale_factor["joint"][0]
+        self.processed_actions[:, self.wheel_ids] *= self.cfg.action_scale_factor["wheel"][0]
+        
+    def _apply_action(self):   
         """Apply actions to the simulator.
 
         This function is responsible for applying the actions to the simulator. It is called at each
         physics time-step.
-        """
-        raise NotImplementedError(f"Please implement the '_apply_action' method for {self.__class__.__name__}.")
+        """      
+        # Current state
+        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids]
+        cmd_wheel_vel = self.processed_actions[:, self.wheel_ids]
+        
+        # Apply command
+        self._robot.set_joint_position_target(cmd_joint_pos, joint_ids=self.joint_ids)
+        self._robot.set_joint_velocity_target(cmd_wheel_vel, joint_ids=self.wheel_ids)
+        
+        # self._robot.write_joint_state_to_sim(self._robot.data.default_joint_pos, self._robot.data.default_joint_vel)
+
+    ## =============== RL main abstract methods ================ ##
 
     @abstractmethod
     def _get_observations(self) -> dict[str, torch.Tensor]:

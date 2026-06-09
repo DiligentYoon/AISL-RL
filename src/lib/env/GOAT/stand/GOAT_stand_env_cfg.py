@@ -27,9 +27,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [1.0, ()],
-                           "wheel" : [1.0, ()]}
-    
-    train_action_scale_factor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0] # NOTE: Temporary
+                           "wheel" : [5.0, ()]}
+
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ==================== Terminal condition ===================== ##
