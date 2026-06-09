@@ -48,9 +48,9 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     r_height_weight = 3.0
 
     p_illegal_contact_weight = 0.3
-    p_joint_deviation_weight = 3.0
-    p_lin_vel_weight = 3.0
-    p_ang_vel_weight = 0.5
+    p_joint_deviation_weight = 2.0
+    p_lin_vel_weight = 2.0
+    p_ang_vel_weight = 1.0
     p_joint_limit_weight = 10.0
     p_all_torque_limit_weight = 2.0
     p_all_torque_weight = 0.008
@@ -84,7 +84,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.2},
         "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "joint_pos":         {"dim": 6,  "std": 0.01},
+        "joint_pos":         {"dim": 6,  "std": 0.03},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
     }
@@ -192,7 +192,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
             }
         )
 
@@ -246,7 +246,6 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.events.robot_wheel_actuator_gain = None
         self.events.robot_center_of_mass = None
         self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
-        self.events.reset_robot_joints.params["position_range"] = (-0.0, 0.0)
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None

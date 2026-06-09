@@ -22,12 +22,14 @@ class G1FallUnifiedEnv(G1FallEnv):
         # link id
         self.denied_link_ids, _ = self._robot.find_bodies([r"torso_link",
                                                            r"pelvis",
-                                                           r"waist_.*_link"])
+                                                           r"waist_.*_link",
+                                                           r".*_wrist_yaw_link"])
 
         # Collision link
         self.denied_collision_link_ids, _ = self.contact_sensors.find_bodies([r"torso_link",
                                                                               r"pelvis",
-                                                                              r"waist_.*_link"])
+                                                                              r"waist_.*_link",
+                                                                              r".*_wrist_yaw_link"])
         
         # Foot collision link
         self.foot_collision_link_ids, _ = self.contact_sensors.find_bodies([r".*_ankle_(pitch|roll)_link"])

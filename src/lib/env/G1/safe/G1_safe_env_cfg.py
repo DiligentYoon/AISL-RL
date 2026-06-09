@@ -103,18 +103,18 @@ class G1SafePlayEnvCfg(G1SafeEnvCfg):
         super().__post_init__()
 
         # viewer
-        self.viewer = ViewerCfg(
-            origin_type="asset_root",
-            asset_name="robot",
-            env_index=0,
-            eye=(0.0, 3.0, 0.5),
-            lookat=(0.0, 0.0, 0.0)
-        )
+        # self.viewer = ViewerCfg(
+        #     origin_type="asset_root",
+        #     asset_name="robot",
+        #     env_index=0,
+        #     eye=(0.0, 3.0, 0.5),
+        #     lookat=(0.0, 0.0, 0.0)
+        # )
 
-        self.scene.num_envs = 1
+        # self.scene.num_envs = 1
 
         # plotter
-        self.plotter = PNGSavePlotter
+        # self.plotter = PNGSavePlotter
 
         self.viz_data = {
             "max_torque": 0.0,

@@ -156,6 +156,7 @@ class reset_joint_state_from_buffer(ManagerTermBase):
         self._dst_indices: torch.Tensor | None = None
 
     def _load_buffer(self, path: str) -> None:
+        path = os.path.abspath(path)
         if not os.path.exists(path):
             raise FileNotFoundError(f"Joint position buffer file not found: {path}")
 
