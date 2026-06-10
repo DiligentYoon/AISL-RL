@@ -5,6 +5,17 @@ Script to train a RL agent.
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import gymnasium as gym
+import os
+import time
+import torch
+import onnxruntime as ort
+import copy
+import numpy as np
+import collections
+
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 
 from isaaclab.app import AppLauncher
 
@@ -44,19 +55,6 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
-
-import gymnasium as gym
-import os
-import time
-import torch
-import copy
-import numpy as np
-import collections
-
-from torch.utils.tensorboard import SummaryWriter
-
-
-from datetime import datetime
 
 import lib
 
@@ -460,7 +458,6 @@ def main():
                     raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
 
                 if checkpoint_path_onnx is not None:
-                    import onnxruntime as ort
                     sess = ort.InferenceSession(checkpoint_path_onnx, providers=["CPUExecutionProvider"])
                     obs_np = obs.detach().cpu().numpy().astype(np.float32)
                     onnx_actions_np = sess.run(["actions"], {"observations": obs_np})[0]

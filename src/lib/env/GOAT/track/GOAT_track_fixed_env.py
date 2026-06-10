@@ -7,8 +7,6 @@ from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from lib.env.GOAT.track.GOAT_track_fixed_env_cfg import GOATTrackFixedEnvCfg, GOATTrackFixedPlayEnvCfg
 from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
-from lib.domain_randomizer.commander import UniformNonHolonomicCommand
-from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
 class GOATTrackFixedEnv(GOATBaseEnv):
     cfg: GOATTrackFixedEnvCfg | GOATTrackFixedPlayEnvCfg
@@ -18,11 +16,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         
         # Config
         self.cfg = cfg
-        self._contact_sensor =  self.scene.sensors["contact_sensor"]
         self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
-
-        # Commands for reference generator
-        self.commands = UniformNonHolonomicCommand(self.cfg.commands, self._robot, self.device)
 
         # Robot data
         self.base_pos_w = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
@@ -32,15 +26,9 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.gravity_vector = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)                  
         self.joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.hist_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # Privileged data
         self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
-        self.friction_coefficient = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
-
-        # Command
-        self.command_inputs_b   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
-        self.command_inputs_w   = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
 
         # Action regularization
         self.out_of_limits_velocity = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
@@ -52,22 +40,15 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         
         # Previous action
         self.previous_actions   = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
-        self.previous_joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.joint_pos_history  = torch.zeros((self.num_envs, self.cfg.vel_hist_length, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.action_history     = torch.zeros((self.num_envs, self.cfg.vel_hist_length, self._robot.num_joints), dtype=torch.float32, device=self.device)
 
         # Plotting boolean
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
         self.is_plot = (self.num_envs == 1)
 
-        # Default config
-        self.default_joint_pos = self._robot.data.default_joint_pos
-
         # Contact sensor
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["base_Link"])
     
-
     def _set_debug_vis_impl(self, debug_vis: bool):
         if debug_vis:
             if not hasattr(self, "root_visualizer"):
@@ -85,21 +66,28 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         root_rot = self.base_rot_w
         self.root_visualizer.visualize(root_pos, root_rot)
     
-
     def _setup_scene(self):
         super()._setup_scene()
         # Terrain
         self.terrain = TerrainImporter(self.cfg.terrain)
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
-        # add commands cfg
-        self.cfg.commands.num_envs = self.scene.num_envs
-        self.cfg.commands.step_dt = self.step_dt
         # Collision filtering
         global_prim_paths = []
         if hasattr(self.cfg, "terrain") and hasattr(self.cfg.terrain, "prim_path"):
             global_prim_paths.append(self.cfg.terrain.prim_path)
         self.scene.filter_collisions(global_prim_paths=global_prim_paths)
+
+    def _pre_physics_step(self, actions: torch.Tensor) -> None:
+        self.actions = actions.clone()
+        self.processed_actions = actions.clone()
+        self.processed_actions[:, self.joint_ids] *= self.cfg.action_scale_factor["joint"][0]
+
+    def _apply_action(self):    
+        # Current state
+        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids]
+        # Apply command
+        self._robot.set_joint_position_target(cmd_joint_pos, joint_ids=self.joint_ids)
 
     def _get_observations(self) -> torch.Tensor:
         """
@@ -119,7 +107,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Command Tracking Reward
         joint_deviation   = torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
-        r_joint_deviation = torch.exp(-joint_deviation / 0.5**2)
+        r_joint_deviation = torch.exp(-joint_deviation / 0.7**2)
 
         # Regularization Penalty
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
@@ -176,11 +164,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _reset_idx(self, env_ids: torch.Tensor):
         super()._reset_idx(env_ids)
         # Reset previous action observation
-        self.hist_count[env_ids] = 0
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
-    
-        # Reset commands
-        self.commands.reset(env_ids)
             
         # Update planning state
         self._compute_intermediate_values(env_ids)
@@ -197,11 +181,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.joint_vel[i] = self._robot.data.joint_vel[i]
         # Privileged data
         self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
-        material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 
-        self.friction_coefficient[i] = torch.stack([material_property[:, -2, 0], material_property[:, -1, 1]], dim=-1) # Left, Right wheel
-        # Information related to Commands Tracking
-        self.command_inputs_b[i] = self.commands.command_b[i]
-        self.command_inputs_w[i] = self.commands.command_w[i]
         # Action regularization
         self.out_of_limits_velocity[i] = (torch.abs(self.joint_vel[i]) - self.cfg.joint_vel_limit).clip(min=0.0)
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
@@ -210,9 +189,6 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
         self.joint_acc[i] = self._robot.data.joint_acc[i]
-
-        # Update count
-        self.hist_count[i] += 1
 
     def _update_viz_data(self):
         applied_torque = self._robot.data.applied_torque
