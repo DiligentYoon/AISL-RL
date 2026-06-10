@@ -1,10 +1,13 @@
+import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 from isaaclab.managers import SceneEntityCfg
 
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.markers import VisualizationMarkersCfg
 
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.GOAT.track.mdp.commander import UniformJointPositionCommandCfg
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.domain_randomizer.randomizer import reset_joints_by_offset
 from lib.utils.plot_utils import PNGSavePlotter
@@ -13,12 +16,12 @@ from lib.utils.plot_utils import PNGSavePlotter
 @configclass
 class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 5.0
+    episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 100Hz policy
     action_space = 6                            # [L + R, joint pos]
-    observation_space = 18                      # Observation space
-    max_episode_length = episode_length_s / (sim_dt * decimation) 
+    observation_space = 24                      # Observation space
+    max_episode_length = episode_length_s / (sim_dt * decimation)
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [1.0, ()],
@@ -30,7 +33,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.7
     joint_vel_limit = 1.0 # rad/s
 
-    r_joint_deviation_weight = 1.0
+    r_joint_tracking_weight = 1.0
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.0
@@ -54,6 +57,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         "joint_pos":         {"dim": 6,  "std": 0.03},
         "joint_vel":         {"dim": 6,  "std": 1.5},
         "previous_actions":  {"dim": 6,  "std": 0.0},
+        "command":           {"dim": 6,  "std": 0.0},   # internal target command (no noise)
     }
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
 
@@ -65,6 +69,12 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         "std": obs_noise_end,
         "operation": "add",
     }
+
+    ## ======================== Command ========================== ##
+    commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(3.0, 4.0),
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -146,5 +156,16 @@ class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
         self.observation_noise_type = None
         self.observation_noise_params = None
 
+        # Target wheel-center markers 
+        self.target_wheel_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+            prim_path="/Visuals/Command/target_wheel",
+            markers={
+                "target": sim_utils.SphereCfg(
+                    radius=0.03,
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+                ),
+            },
+        )
+
         # plot
-        self.plotter = PNGSavePlotter
+        # self.plotter = PNGSavePlotter
