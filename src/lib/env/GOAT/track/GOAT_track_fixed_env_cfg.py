@@ -24,30 +24,24 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation)
 
     ## ======================== Controller gain ======================= ##
-    action_scale_factor = {"joint" : [1.0, ()],
+    action_scale_factor = {"joint" : [0.5, ()],
                            "wheel" : [5.0, ()]}
     
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 1.0 # rad/s
+    joint_vel_limit = 3.14 # rad/s
 
-    r_joint_tracking_weight = 1.0
+    r_joint_tracking_weight = 6.0
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.0
+    p_all_torque_weight = 0.05
     p_joint_vel_limit_weight = 0.0
-    p_joint_velocity_weight = 0.0
-    p_joint_accel_weight = 0.0
-    p_action_rate_weight = 0.0
-    # p_joint_limit_weight = 15.0
-    # p_all_torque_limit_weight = 2.0
-    # p_all_torque_weight = 0.005
-    # p_joint_vel_limit_weight = 1.0
-    # p_joint_velocity_weight = 0.05
-    # p_joint_accel_weight = 5.0e-6
-    # p_action_rate_weight = 0.2
+    p_joint_velocity_weight = 0.02
+    p_joint_accel_weight = 5.0e-6
+    p_action_rate_weight = 0.05
+    p_terminated_weight = 50.0
 
     ## ======================== Curriculum ======================= ##
 
@@ -73,7 +67,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     ## ======================== Command ========================== ##
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 4.0),
+        resampling_time_range=(3.0, 3.0),
     )
 
     def __post_init__(self):
@@ -103,7 +97,8 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.5, 1.3)
         self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.5, 1.3)
 
-        self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
+        # self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
+        self.events.reset_body = None
         self.events.reset_robot_joints = EventTerm(
             func=reset_joints_by_offset,
             mode="reset",
@@ -168,4 +163,4 @@ class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
         )
 
         # plot
-        # self.plotter = PNGSavePlotter
+        self.plotter = PNGSavePlotter

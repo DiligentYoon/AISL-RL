@@ -137,7 +137,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Command Tracking Reward (toward sampled target joint position)
         joint_tracking_error = torch.sum(torch.abs(self.joint_tracking_error[:, self.joint_ids]), dim=1) # wheel is not included
-        r_joint_tracking = torch.exp(-joint_tracking_error / 0.7**2)
+        r_joint_tracking = torch.exp(-joint_tracking_error)
 
         # Regularization Penalty
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
@@ -147,6 +147,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc[:, self.joint_ids]), dim=1) # wheel is not included
         p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
+        p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
         total_reward = (
@@ -157,7 +158,8 @@ class GOATTrackFixedEnv(GOATBaseEnv):
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
-            self.cfg.p_action_rate_weight * p_action_rate                   
+            self.cfg.p_action_rate_weight * p_action_rate                   +
+            self.cfg.p_terminated_weight  * p_terminated
         )
 
         self.extras["reward"] = {
@@ -184,9 +186,11 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _get_dones(self):
         self._compute_intermediate_values()
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.contact_base_link_id]
-        
-        terminated = torch.sum(torch.norm(critical_contact_forces, dim=-1), dim=-1) > 1.0
+        # critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.contact_base_link_id]
+        # exceed_torque = torch.any(self.out_of_limits_torque > 1e-3, dim=-1)
+        # terminated = torch.sum(torch.norm(critical_contact_forces, dim=-1), dim=-1) > 1.0
+        exceed_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.joint_vel_limit, dim=-1)
+        terminated = exceed_vel
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated
