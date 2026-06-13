@@ -38,10 +38,10 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.05
     p_joint_vel_limit_weight = 0.0
-    p_joint_velocity_weight = 0.02
+    p_joint_velocity_weight = 0.04
     p_joint_accel_weight = 5.0e-6
-    p_action_rate_weight = 0.05
-    p_terminated_weight = 50.0
+    p_action_rate_weight = 0.02
+    p_terminated_weight = 100.0
 
     ## ======================== Curriculum ======================= ##
 

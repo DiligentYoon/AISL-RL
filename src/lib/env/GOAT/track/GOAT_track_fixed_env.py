@@ -191,6 +191,8 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         # terminated = torch.sum(torch.norm(critical_contact_forces, dim=-1), dim=-1) > 1.0
         exceed_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.joint_vel_limit, dim=-1)
         terminated = exceed_vel
+        # if torch.any(terminated):
+        #     print(f"Excced velocity : {self.joint_vel[:, self.joint_ids]}")
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated

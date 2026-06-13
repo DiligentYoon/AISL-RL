@@ -306,8 +306,8 @@ class Env(gym.Env):
         self._reset_idx(indices)
 
         # update articulation kinematics
-        self.scene.write_data_to_sim()
-        self.sim.forward()
+        # self.scene.write_data_to_sim()
+        # self.sim.forward()
 
         # if sensors are added to the scene, make sure we render to reflect changes in reset
         if self.sim.has_rtx_sensors() and self.cfg.num_rerenders_on_reset > 0:
