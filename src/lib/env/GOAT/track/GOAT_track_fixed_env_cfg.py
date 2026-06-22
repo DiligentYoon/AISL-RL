@@ -9,7 +9,7 @@ from isaaclab.markers import VisualizationMarkersCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 from lib.env.GOAT.track.mdp.commander import UniformJointPositionCommandCfg
 from lib.domain_randomizer.noise_model import build_noise_std_vector
-from lib.domain_randomizer.randomizer import reset_joints_by_offset
+from lib.env.GOAT.track.mdp.randomizer import reset_joints_by_scale_and_bias
 from lib.utils.plot_utils import PNGSavePlotter
 
 
@@ -101,11 +101,12 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         # self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
         self.events.reset_body = None
         self.events.reset_robot_joints = EventTerm(
-            func=reset_joints_by_offset,
+            func=reset_joints_by_scale_and_bias,
             mode="reset",
             params={
-                "position_range": (-0.05, 0.05),
-                "velocity_range": (0.0, 0.0) 
+                "position_range": (0.0, 0.0),
+                "velocity_range": (0.0, 0.0),
+                "bias_range": (-0.05, 0.05),
             }
         )
 
