@@ -104,7 +104,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
             func=reset_joints_by_offset,
             mode="reset",
             params={
-                "position_range": (-0.3, 0.3),
+                "position_range": (-0.05, 0.05),
                 "velocity_range": (0.0, 0.0) 
             }
         )
