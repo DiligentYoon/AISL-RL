@@ -40,6 +40,10 @@ class UniformJointPositionCommandCfg():
     """Probability that an environment is commanded to hold the default pose (zero deviation).
     Defaults to 0.0 (disabled)."""
 
+    decay_factor: float = 1.0
+    """Decaying Factor for Stable Joint Tracking.
+    Defaults to 1.0 (disabled)."""
+
 
 class UniformJointPositionCommand():
     """Command generator that samples absolute target joint positions per leg joint.
@@ -60,6 +64,7 @@ class UniformJointPositionCommand():
         self.num_envs = self.cfg.num_envs
         self.step_dt = self.cfg.step_dt
         self.num_joints = self.robot.num_joints
+        self.decay_factor = self.cfg.decay_factor
         self.fk = GOATLegFK(self.device)
 
         # Resolve left/right leg joint indices explicitly (do not rely on even/odd ordering).
@@ -68,6 +73,9 @@ class UniformJointPositionCommand():
         right_ids, _ = self.robot.find_joints(["hip_R.*", "thigh_R.*", "knee_R.*"], preserve_order=True)
         self.left_ids = torch.as_tensor(left_ids, device=self.device, dtype=torch.long)
         self.right_ids = torch.as_tensor(right_ids, device=self.device, dtype=torch.long)
+
+        # Joint Specific ID
+        self.hip_ids = self.robot.find_joints(["hip_L.*"])
 
         # buffers
         # independent sample [hip, thigh, knee] of the left leg (observation-friendly view)
@@ -127,7 +135,10 @@ class UniformJointPositionCommand():
         self.time_left[env_ids] = torch.empty(n, device=self.device).uniform_(*self.cfg.resampling_time_range)
 
         # soft joint position limits for the selected envs: (n, num_joints, 2)
-        limits = self.robot.data.soft_joint_pos_limits[env_ids]
+        limits = self.robot.data.soft_joint_pos_limits[env_ids] * self.decay_factor
+        # NOTE: Hip joint is fixed to 0
+        limits[:, self.hip_ids, 0] = 0
+        limits[:, self.hip_ids, 1] = 0
         left_lo = limits[:, self.left_ids, 0]    # (n, 3)
         left_hi = limits[:, self.left_ids, 1]    # (n, 3)
         right_lo = limits[:, self.right_ids, 0]  # (n, 3)

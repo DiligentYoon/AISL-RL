@@ -68,6 +68,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 3.0),
+        decay_factor=0.3,
     )
 
     def __post_init__(self):
