@@ -75,7 +75,7 @@ class UniformJointPositionCommand():
         self.right_ids = torch.as_tensor(right_ids, device=self.device, dtype=torch.long)
 
         # Joint Specific ID
-        self.hip_ids = self.robot.find_joints(["hip_L.*"])
+        self.hip_ids, _ = self.robot.find_joints(["hip_L.*"])
 
         # buffers
         # independent sample [hip, thigh, knee] of the left leg (observation-friendly view)
