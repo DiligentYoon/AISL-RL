@@ -137,7 +137,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Command Tracking Reward (toward sampled target joint position)
         joint_tracking_error = torch.sum(torch.abs(self.joint_tracking_error[:, self.joint_ids]), dim=1) # wheel is not included
-        r_joint_tracking = torch.exp(-joint_tracking_error)
+        r_joint_tracking = torch.exp(-joint_tracking_error / 0.5**2)
 
         # Regularization Penalty
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included

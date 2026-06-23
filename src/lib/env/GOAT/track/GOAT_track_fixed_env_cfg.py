@@ -33,7 +33,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     soft_torque_limit = 0.7
     joint_vel_limit = 3.14 # rad/s
 
-    r_joint_tracking_weight = 6.0
+    r_joint_tracking_weight = 4.0
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.05
@@ -48,7 +48,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
     obs_noise_groups_end = {
-        "joint_pos":         {"dim": 6,  "std": 0.03},
+        "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 6,  "std": 1.5},
         "previous_actions":  {"dim": 6,  "std": 0.0},
         "command":           {"dim": 6,  "std": 0.0},   # internal target command (no noise)
@@ -68,7 +68,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 3.0),
-        decay_factor=0.3,
+        decay_factor=0.0,
     )
 
     def __post_init__(self):
@@ -95,8 +95,8 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass = None
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
-        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.5, 1.3)
-        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.5, 1.3)
+        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
+        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
 
         # self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
         self.events.reset_body = None
