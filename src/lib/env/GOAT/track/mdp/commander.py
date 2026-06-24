@@ -162,7 +162,7 @@ class UniformJointPositionCommand():
             is_default = torch.rand(n, device=self.device) <= self.cfg.prob_default_envs
             default_ids = env_ids[is_default]
             if default_ids.numel() > 0:
-                default_q = self.robot.data.default_joint_pos[default_ids]
+                default_q = self.robot.data.default_joint_pos[default_ids] * 0.0 # NOTE : Test for all zero target
                 self.joint_pos_target[default_ids] = default_q
                 self.joint_command[default_ids] = default_q[:, self.left_ids]
 

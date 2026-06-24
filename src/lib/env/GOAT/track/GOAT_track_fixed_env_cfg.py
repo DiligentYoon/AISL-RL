@@ -38,7 +38,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.05
     p_joint_vel_limit_weight = 0.0
-    p_joint_velocity_weight = 0.04
+    p_joint_velocity_weight = 0.02
     p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.02
     p_terminated_weight = 100.0
@@ -68,7 +68,8 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 3.0),
-        decay_factor=0.0,
+        prob_default_envs=0.2,
+        decay_factor=0.6,
     )
 
     def __post_init__(self):
@@ -95,8 +96,8 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass = None
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
-        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
-        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
+        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.2)
+        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.7, 1.2)
 
         # self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
         self.events.reset_body = None
