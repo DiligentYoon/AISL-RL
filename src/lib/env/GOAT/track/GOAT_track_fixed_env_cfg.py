@@ -31,14 +31,15 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 3.14 # rad/s
+    joint_vel_limit = 2.0 # rad/s
+    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
-    r_joint_tracking_weight = 4.0
+    r_joint_tracking_weight = 3.0 
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.05
-    p_joint_vel_limit_weight = 0.0
-    p_joint_velocity_weight = 0.02
+    p_all_torque_weight = 0.1
+    p_joint_vel_limit_weight = 0.5
+    p_joint_velocity_weight = 0.01
     p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.02
     p_terminated_weight = 100.0
@@ -67,7 +68,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     ## ======================== Command ========================== ##
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 3.0),
+        resampling_time_range=(4.0, 5.0),
         prob_default_envs=0.2,
         decay_factor=0.6,
     )

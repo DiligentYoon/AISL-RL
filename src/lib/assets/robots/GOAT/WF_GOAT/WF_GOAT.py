@@ -87,12 +87,12 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
             min_delay=0,
             max_delay=4,
             stiffness={
-                "hip_L_Joint": 5.0,
-                "hip_R_Joint": 5.0,
+                "hip_L_Joint": 3.0,
+                "hip_R_Joint": 3.0,
             },                                      
             damping={
-                "hip_L_Joint": 0.1,
-                "hip_R_Joint": 0.1,
+                "hip_L_Joint": 0.5,
+                "hip_R_Joint": 0.5,
             },
             friction={
                 "hip_L_Joint": 0.0,
@@ -136,12 +136,12 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
             min_delay=0,
             max_delay=4,
             stiffness={
-                "thigh_L_Joint": 5.0,
-                "thigh_R_Joint": 5.0,
+                "thigh_L_Joint": 3.0,
+                "thigh_R_Joint": 3.0,
             },                                      
             damping={
-                "thigh_L_Joint": 0.1,
-                "thigh_R_Joint": 0.1,
+                "thigh_L_Joint": 0.5,
+                "thigh_R_Joint": 0.5,
             },
             friction={
                 "thigh_L_Joint": 0.0,
@@ -178,21 +178,19 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
             }     
         ),
 
-        "knee": GearDelayedPDActuatorCfg(
+        "knee": DelayedPDActuatorCfg(
             joint_names_expr=["knee_.*",],
             effort_limit=9.0,
             velocity_limit=7.5,
-            gamma=1.0,
-            gear_ratio=2.0,
             min_delay=0,
             max_delay=4,
             stiffness={
-                "knee_L_Joint": 5.0,
-                "knee_R_Joint": 5.0,
+                "knee_L_Joint": 3.0,
+                "knee_R_Joint": 3.0,
             },                                      
             damping={
-                "knee_L_Joint": 0.1,
-                "knee_R_Joint": 0.1,
+                "knee_L_Joint": 0.5,
+                "knee_R_Joint": 0.5,
             },
             friction={
                 "knee_L_Joint": 0.0,
