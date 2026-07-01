@@ -137,7 +137,8 @@ class GOATTrackFixedEnv(GOATBaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Command Tracking Reward (toward sampled target joint position)
         joint_tracking_error = torch.sum(torch.abs(self.joint_tracking_error[:, self.joint_ids]), dim=1) # wheel is not included
-        r_joint_tracking = torch.exp(-joint_tracking_error / 0.5**2)
+        # r_joint_tracking = torch.exp(-joint_tracking_error * 0.8)
+        r_joint_tracking = torch.exp(-joint_tracking_error) / (1 + 1.25 * torch.max(torch.abs(self.joint_vel[:, self.joint_ids]), dim=-1).values)
 
         # Regularization Penalty
         p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
@@ -146,7 +147,7 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         p_all_torque        = -torch.sum(torch.square(self.applied_torque[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
         p_joint_accel       = -torch.sum(torch.square(self.joint_acc[:, self.joint_ids]), dim=1) # wheel is not included
-        p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
+        p_action_rate       = -torch.sum(torch.abs((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
@@ -249,5 +250,12 @@ class GOATTrackFixedEnv(GOATBaseEnv):
         extras["viz_data"]["right_thigh_velocity (deg/s)"] = joint_velocity[:, 3]
         extras["viz_data"]["left_knee_velocity (deg/s)"]   = joint_velocity[:, 4]
         extras["viz_data"]["right_knee_velocity (deg/s)"]  = joint_velocity[:, 5]
+
+        extras["viz_data"]["left_hip_action"]     = self.actions[:, 0]
+        extras["viz_data"]["right_hip_action"]    = self.actions[:, 1]
+        extras["viz_data"]["left_thigh_action"]   = self.actions[:, 2]
+        extras["viz_data"]["right_thigh_action"]  = self.actions[:, 3]
+        extras["viz_data"]["left_knee_action"]    = self.actions[:, 4]
+        extras["viz_data"]["right_knee_action"]   = self.actions[:, 5]
 
         return extras 

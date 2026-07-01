@@ -76,24 +76,46 @@ class EventCfg:
           "make_consistent": True,
         },
     )
-    robot_leg_actuator_gain = EventTerm(
+    robot_hip_actuator_gain = EventTerm(
         func=randomizer.randomize_actuator_gains,
-        mode="startup",
+        mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["^(?!wheel_).*$"]),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+    robot_thigh_actuator_gain = EventTerm(
+        func=randomizer.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+    robot_knee_actuator_gain = EventTerm(
+        func=randomizer.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
     )
     robot_wheel_actuator_gain = EventTerm(
         func=randomizer.randomize_actuator_gains,
-        mode="startup",
+        mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },

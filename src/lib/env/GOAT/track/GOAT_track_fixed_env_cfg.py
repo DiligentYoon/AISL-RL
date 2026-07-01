@@ -9,7 +9,9 @@ from isaaclab.markers import VisualizationMarkersCfg
 from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 from lib.env.GOAT.track.mdp.commander import UniformJointPositionCommandCfg
 from lib.domain_randomizer.noise_model import build_noise_std_vector
+from lib.domain_randomizer.randomizer import randomize_actuator_gains
 from lib.env.GOAT.track.mdp.randomizer import reset_joints_by_scale_and_bias
+from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.utils.plot_utils import PNGSavePlotter
 
 
@@ -34,17 +36,15 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     joint_vel_limit = 2.0 # rad/s
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
-    r_joint_tracking_weight = 3.0 
+    r_joint_tracking_weight = 5.0
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.1
-    p_joint_vel_limit_weight = 0.5
-    p_joint_velocity_weight = 0.01
-    p_joint_accel_weight = 5.0e-6
-    p_action_rate_weight = 0.02
+    p_all_torque_weight = 0.05
+    p_joint_vel_limit_weight = 2.0
+    p_joint_velocity_weight = 0.05
+    p_joint_accel_weight = 5.0e-5
+    p_action_rate_weight = 0.1
     p_terminated_weight = 100.0
-
-    ## ======================== Curriculum ======================= ##
 
     # Per-axis observation noise groups (must match _get_observations concat order)
     # std=0.0 for internal values that require no sensor noise injection
@@ -65,12 +65,32 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         "operation": "add",
     }
 
+
+    ## ======================== Curriculum ======================= ##
+
+    decay_factor_start = 0.3
+    decay_factor_end = 0.7
+
+    curriculum = CurriculumManagerCfg(
+        warmup=0.3,
+        endup=0.5,
+        params=[
+            CurriculumParamCfg(
+                name="decay_factor",
+                attr_path="cfg/commands/decay_factor",
+                start_value=decay_factor_start,
+                end_value=decay_factor_end,
+                schedule="linear",
+            ),
+        ]
+    )
+
     ## ======================== Command ========================== ##
     commands: UniformJointPositionCommandCfg = UniformJointPositionCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
         prob_default_envs=0.2,
-        decay_factor=0.6,
+        decay_factor=decay_factor_end,
     )
 
     def __post_init__(self):
@@ -84,31 +104,46 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
         # Initial condition
         self.GOAT_cfg.spawn.articulation_props.fix_root_link = True
         self.GOAT_cfg.init_state.pos = (0.0, 0.0, 1.0)
+        self.GOAT_cfg.init_state.joint_pos = {
+                "hip_L_Joint": 0.0,
+                "hip_R_Joint": 0.0,
+                "thigh_L_Joint": 0.0,
+                "thigh_R_Joint": 0.0,
+                "knee_L_Joint": 0.0,
+                "knee_R_Joint": 0.0,
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+        }
         
         # disable wheel controller
         self.GOAT_cfg.actuators["wheel"].stiffness = {"wheel_L_Joint": 0.0, "wheel_R_Joint": 0.0}
         self.GOAT_cfg.actuators["wheel"].damping = {"wheel_L_Joint": 0.0, "wheel_R_Joint": 0.0}
 
-        # event
-        self.events.push_robot = None
+        # disable event
         self.events.add_base_mass = None
         self.events.add_link_mass = None
         self.events.rigid_body_mass_inertia = None
-        self.events.robot_center_of_mass = None
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
-        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.2)
-        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.7, 1.2)
-
-        # self.events.reset_body.params["pose_range"] = {"yaw": (-3.14, 3.14)}
+        self.events.robot_wheel_actuator_gain = None
+        self.events.robot_center_of_mass = None
         self.events.reset_body = None
+        self.events.push_robot = None
+
+        # Change event parameters
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+
+        # Newly assigned event
         self.events.reset_robot_joints = EventTerm(
             func=reset_joints_by_scale_and_bias,
             mode="reset",
             params={
                 "position_range": (0.0, 0.0),
                 "velocity_range": (0.0, 0.0),
-                "bias_range": (-0.05, 0.05),
+                "bias_range": (-0.1, 0.1),
             }
         )
 
@@ -122,7 +157,7 @@ class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
             origin_type="asset_root",
             asset_name="robot",
             env_index=0,
-            eye=(0.0, 3.0, 0.5),
+            eye=(3.0, 0.0, 0.3),
             lookat=(0.0, 0.0, 0.0)
         )
 
@@ -142,15 +177,21 @@ class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
             "right_thigh_velocity (deg/s)": 0.0,
             "left_knee_velocity (deg/s)": 0.0,
             "right_knee_velocity (deg/s)": 0.0,
+            "left_hip_action": 0.0,
+            "right_hip_action": 0.0,
+            "left_thigh_action": 0.0,
+            "right_thigh_action": 0.0,
+            "left_knee_action": 0.0,
+            "right_knee_action": 0.0,
         }
 
+        # disable curriculum
+        self.curriculum = None
+
         # disable randomization
-        self.events.add_base_mass = None
-        self.events.add_link_mass = None
-        self.events.rigid_body_mass_inertia = None
-        self.events.robot_leg_actuator_gain = None
-        self.events.robot_wheel_actuator_gain = None
-        self.events.robot_center_of_mass = None
+        self.events.robot_hip_actuator_gain = None
+        self.events.robot_thigh_actuator_gain = None
+        self.events.robot_knee_actuator_gain = None
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None

@@ -136,8 +136,8 @@ class UniformJointPositionCommand():
 
         # soft joint position limits for the selected envs: (n, num_joints, 2)
         limits = self.robot.data.soft_joint_pos_limits[env_ids] * self.decay_factor
-        # NOTE: Hip joint is fixed to 0
-        limits[:, self.hip_ids, 0] = 0
+        # NOTE: Hip joint is allowed to only rotate toward outside directions
+        # limits[:, self.hip_ids, 0] = 0
         limits[:, self.hip_ids, 1] = 0
         left_lo = limits[:, self.left_ids, 0]    # (n, 3)
         left_hi = limits[:, self.left_ids, 1]    # (n, 3)
