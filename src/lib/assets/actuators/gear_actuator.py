@@ -26,4 +26,4 @@ class GearDelayedPDActuator(DelayedPDActuator):
             self.applied_effort = self._clip_effort(self.computed_effort)
             control_action.joint_efforts = self.applied_effort
 
-        return control_action
+        return control_action # 실제 Joint에 걸리는 Torque

@@ -228,10 +228,11 @@ class GOATStandEnv(GOATBaseEnv):
 
         critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.contact_base_link_id]
         illegal_contact = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=-1)
-
+        exceed_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.joint_vel_limit, dim=-1)
         base_fall = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
+
         
-        terminated = base_fall & illegal_contact
+        terminated = (base_fall & illegal_contact)
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated

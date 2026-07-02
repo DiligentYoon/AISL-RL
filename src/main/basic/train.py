@@ -5,6 +5,17 @@ Script to train a RL agent.
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import gymnasium as gym
+import os
+import time
+import torch
+import onnxruntime as ort
+import copy
+import numpy as np
+import collections
+
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 
 from isaaclab.app import AppLauncher
 
@@ -16,7 +27,7 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="GOAT-stand", help="Name of the task.")
+parser.add_argument("--task", type=str, default="GOAT-track-fixed", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 
 parser.add_argument("--algorithm",
@@ -44,19 +55,6 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
-
-import gymnasium as gym
-import os
-import time
-import torch
-import copy
-import numpy as np
-import collections
-
-from torch.utils.tensorboard import SummaryWriter
-
-
-from datetime import datetime
 
 import lib
 
@@ -460,7 +458,6 @@ def main():
                     raise RuntimeError(f"Model mistmatch. Please check the save logic. [Max Error : {max_err}]")
 
                 if checkpoint_path_onnx is not None:
-                    import onnxruntime as ort
                     sess = ort.InferenceSession(checkpoint_path_onnx, providers=["CPUExecutionProvider"])
                     obs_np = obs.detach().cpu().numpy().astype(np.float32)
                     onnx_actions_np = sess.run(["actions"], {"observations": obs_np})[0]

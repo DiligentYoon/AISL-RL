@@ -26,7 +26,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    action_scale_factor = {"joint" : [1.0, ()],
+    action_scale_factor = {"joint" : [0.5, ()],
                            "wheel" : [5.0, ()]}
 
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
@@ -36,24 +36,32 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 1.5 # rad/s
+    joint_vel_limit = 3.14 # rad/s
     target_height = 0.523
 
-    r_upright_weight = 1.0
+    r_upright_weight = 3.0
     r_height_weight = 3.0
 
     p_illegal_contact_weight = 0.3
     p_joint_deviation_weight = 2.0
-    p_lin_vel_weight = 2.0
+    p_lin_vel_weight = 3.0
     p_ang_vel_weight = 1.0
-    p_joint_limit_weight = 10.0
-    p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.008
-    p_joint_vel_limit_weight = 5.0
-    p_joint_velocity_weight = 0.035
-    p_joint_accel_weight = 5.0e-7
+
+    p_joint_limit_weight = 0.0
+    p_all_torque_limit_weight = 0.0
+    p_all_torque_weight = 0.1
+    p_joint_vel_limit_weight = 0.0
+    p_joint_velocity_weight = 0.02
+    p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.02
-    p_terminated_weight = 200.0
+    # p_joint_limit_weight = 10.0
+    # p_all_torque_limit_weight = 2.0
+    # p_all_torque_weight = 0.008
+    # p_joint_vel_limit_weight = 5.0
+    # p_joint_velocity_weight = 0.04
+    # p_joint_accel_weight = 5.0e-6
+    # p_action_rate_weight = 0.02
+    p_terminated_weight = 50.0
 
     ## ==================== ERFI Configuration ==================== ##
     erfi_enabled: bool = False
@@ -67,8 +75,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     dynamic_friction_start: tuple[float, float] = (0.6, 0.9)
     dynamic_friction_end: tuple[float, float] = (0.3, 0.9)
 
-    # Per-axis observation noise groups (must match _get_observations concat order)
-    # std=0.0 for internal values that require no sensor noise injection
+    # Per-axis observation noise groups
     obs_noise_groups_start = {
         "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
         "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
@@ -109,8 +116,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     rfi_torque_limit: list[float] = rfi_end    # N·m 
     rao_torque_limit: list[float] = rao_end    # N·m
 
-    # Noise Model — std is a list for per-axis control; initialized to max difficulty
-    # and overridden to start values by CurriculumManager on env init.
+    # Noise Model
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
         "mean": 0.0,
@@ -120,26 +126,6 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ===================== Jig Object ======================= ##
     jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
-
-    ## ==================== Plot variables ==================== ##
-    viz_data: dict = {
-        "left_hip_torque (Nm)": 0.0,
-        "right_hip_torque (Nm)": 0.0,
-        "left_thigh_torque (Nm)": 0.0,
-        "right_thigh_torque (Nm)": 0.0,
-        "left_knee_torque (Nm)": 0.0,
-        "right_knee_torque (Nm)": 0.0,
-        "left_wheel_torque (Nm)": 0.0,
-        "right_wheel_torque (Nm)": 0.0,
-        "left_hip_velocity (deg/s)": 0.0,
-        "right_hip_velocity (deg/s)": 0.0,
-        "left_thigh_velocity (deg/s)": 0.0,
-        "right_thigh_velocity (deg/s)": 0.0,
-        "left_knee_velocity (deg/s)": 0.0,
-        "right_knee_velocity (deg/s)": 0.0,
-        "left_wheel_velocity (deg/s)": 0.0,
-        "right_wheel_velocity (deg/s)": 0.0,
-        }
 
     def __post_init__(self):
         super().__post_init__()
@@ -182,14 +168,14 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
 
         # robot's joints should be reset by dataset
-        # self.events.reset_robot_joints = EventTerm(
-        #     func=reset_joint_state_from_buffer,
-        #     mode="reset",
-        #     params={
-        #         "asset_cfg": SceneEntityCfg("robot"),
-        #         "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
-        #     }
-        # )
+        self.events.reset_robot_joints = EventTerm(
+            func=reset_joint_state_from_buffer,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
+            }
+        )
 
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
@@ -250,6 +236,26 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.GOAT_cfg.actuators["thigh"].max_delay = 0
         self.GOAT_cfg.actuators["knee"].max_delay = 0
         self.GOAT_cfg.actuators["wheel"].max_delay = 0
+
+        ## ==================== Plot variables ==================== ##
+        self.viz_data: dict = {
+            "left_hip_torque (Nm)": 0.0,
+            "right_hip_torque (Nm)": 0.0,
+            "left_thigh_torque (Nm)": 0.0,
+            "right_thigh_torque (Nm)": 0.0,
+            "left_knee_torque (Nm)": 0.0,
+            "right_knee_torque (Nm)": 0.0,
+            "left_wheel_torque (Nm)": 0.0,
+            "right_wheel_torque (Nm)": 0.0,
+            "left_hip_velocity (deg/s)": 0.0,
+            "right_hip_velocity (deg/s)": 0.0,
+            "left_thigh_velocity (deg/s)": 0.0,
+            "right_thigh_velocity (deg/s)": 0.0,
+            "left_knee_velocity (deg/s)": 0.0,
+            "right_knee_velocity (deg/s)": 0.0,
+            "left_wheel_velocity (deg/s)": 0.0,
+            "right_wheel_velocity (deg/s)": 0.0,
+            }
 
         # plot
         self.plotter = PNGSavePlotter
