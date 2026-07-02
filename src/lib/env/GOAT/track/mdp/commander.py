@@ -64,7 +64,6 @@ class UniformJointPositionCommand():
         self.num_envs = self.cfg.num_envs
         self.step_dt = self.cfg.step_dt
         self.num_joints = self.robot.num_joints
-        self.decay_factor = self.cfg.decay_factor
         self.fk = GOATLegFK(self.device)
 
         # Resolve left/right leg joint indices explicitly (do not rely on even/odd ordering).
@@ -135,7 +134,7 @@ class UniformJointPositionCommand():
         self.time_left[env_ids] = torch.empty(n, device=self.device).uniform_(*self.cfg.resampling_time_range)
 
         # soft joint position limits for the selected envs: (n, num_joints, 2)
-        limits = self.robot.data.soft_joint_pos_limits[env_ids] * self.decay_factor
+        limits = self.robot.data.soft_joint_pos_limits[env_ids] * self.cfg.decay_factor
         # NOTE: Hip joint is allowed to only rotate toward outside directions
         # limits[:, self.hip_ids, 0] = 0
         limits[:, self.hip_ids, 1] = 0
