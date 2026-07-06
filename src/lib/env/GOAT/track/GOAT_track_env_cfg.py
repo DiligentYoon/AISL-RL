@@ -21,17 +21,17 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
-    action_scale_factor = {"joint" : [1.0, ()],
+    action_scale_factor = {"joint" : [0.5, ()],
                            "wheel" : [5.0, ()]}
     
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
-    ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.1                # meter (m)
-    termination_gravity = 0.6
-
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
+    height_reset_condition = 0.1 
+    termination_gravity = 0.6
+    joint_vel_limit = 2.0                               # rad/s
+    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     r_lin_vel_tracking_weight = 3.0
     r_ang_vel_tracking_weight = 1.0
@@ -160,10 +160,10 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
         self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.5)
         self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
                                               "hip_R_Joint": 0.0,
-                                              "thigh_L_Joint": 0.738,
-                                              "thigh_R_Joint": -0.738,
-                                              "knee_L_Joint": 1.462,
-                                              "knee_R_Joint": -1.462,
+                                              "thigh_L_Joint": 0.0,
+                                              "thigh_R_Joint": 0.0,
+                                              "knee_L_Joint": 0.0,
+                                              "knee_R_Joint": 0.0,
                                               "wheel_L_Joint": 0.0,
                                               "wheel_R_Joint": 0.0,}
 

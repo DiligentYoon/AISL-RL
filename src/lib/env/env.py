@@ -335,8 +335,8 @@ class Env(gym.Env):
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
 
         # update viz data
-        if (self.cfg.viz_data is not None) and (self.is_plot):
-            self.extras = self._update_viz_data()
+        # if (self.cfg.viz_data is not None) and (self.is_plot):
+        #     self.extras = self._update_viz_data()
 
         # return observations and extras with shallow copy
         return self.obs_buf, self.state_buf, dict(self.extras)

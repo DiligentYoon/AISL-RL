@@ -25,19 +25,6 @@ class GOATStandEnv(GOATBaseEnv):
         self._contact_sensor =  self.scene.sensors["contact_sensor"]
         self.env_indices = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
 
-        # REFI
-        self.erfi_torque = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        if self.cfg.erfi_enabled:
-            # RAO offset buffer
-            self.rao_torque_offset = torch.zeros(
-                self.num_envs, self._robot.num_joints, device=self.device
-            )
-            # Front 50% = RFI, Next 50% = RAO
-            n_rfi = self.num_envs // 2
-            self.rfi_env_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-            self.rfi_env_mask[:n_rfi] = True
-            self.rao_env_mask = ~self.rfi_env_mask
-
         # Robot data
         self.base_pos_w = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)
         self.base_rot_w = torch.zeros((self.num_envs, 4), dtype=torch.float32, device=self.device)
@@ -46,7 +33,6 @@ class GOATStandEnv(GOATBaseEnv):
         self.gravity_vector = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)                  
         self.joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.hist_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # Privileged data
         self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
@@ -66,24 +52,25 @@ class GOATStandEnv(GOATBaseEnv):
         
         # Previous action
         self.previous_actions   = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
-        self.previous_joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.joint_pos_history  = torch.zeros((self.num_envs, self.cfg.vel_hist_length, self._robot.num_joints), dtype=torch.float32, device=self.device)
-        self.action_history     = torch.zeros((self.num_envs, self.cfg.vel_hist_length, self._robot.num_joints), dtype=torch.float32, device=self.device)
 
         # Geometry vector
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
-
-        # Plotting boolean
-        debug_vis = self.num_envs <= 32
-        self.set_debug_vis(debug_vis)
-        self.is_plot = (self.num_envs == 1)
 
         # Default config
         self.default_joint_pos = self._robot.data.default_joint_pos
 
         # Contact sensor
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["^(?!wheel_).*$"]) # exclude wheel
+        self.link_id, _ = self._robot.find_bodies(["^(?!wheel_).*$"])
         self.illegal_force = torch.zeros((self.num_envs, len(self.contact_base_link_id)), dtype=torch.float32, device=self.device)
+        self.prev_illegal_force = torch.zeros((self.num_envs, len(self.contact_base_link_id)), dtype=torch.float32, device=self.device)
+        self.link_mass = self._robot.data.default_mass[:, self.link_id].to(self.device)
+        
+        # Plotting boolean
+        debug_vis = self.num_envs <= 32
+        self.set_debug_vis(debug_vis)
+        self.is_plot = (self.num_envs == 1)
+
     
 
     def _set_debug_vis_impl(self, debug_vis: bool):
@@ -127,7 +114,7 @@ class GOATStandEnv(GOATBaseEnv):
         """
         observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
-                                 self.joint_pos[:, self.joint_ids],                      # [E, 6]
+                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
                                  self.previous_actions,                                  # [E, 8]
                                 ), dim=1) 
@@ -143,7 +130,7 @@ class GOATStandEnv(GOATBaseEnv):
         """
         observation = torch.cat((self.base_ang_vel,                                      # [E, 3]
                                  self.base_rot_w,                                        # [E, 4]
-                                 self.joint_pos[:, self.joint_ids],                      # [E, 6]
+                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],                      # [E, 6]
                                  self.joint_vel,                                         # [E, 8]
                                  self.previous_actions,                                  # [E, 8]
                                  ), dim=1)                             
@@ -159,32 +146,39 @@ class GOATStandEnv(GOATBaseEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Orientation Reward (Projected Gravity Alignment)
         upright_error = torch.sum(torch.square(self.gravity_vector[:, :2]), dim=1)
-        r_upright = torch.exp(-upright_error / 0.5**2)
+        r_upright = torch.exp(-upright_error / 0.1)
         
+        # Joint tracking Reward
+        joint_tracking_error = torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) 
+        r_joint_tracking = torch.exp(-joint_tracking_error / 0.25)
+
         # Height tracking Reward
         height_error = torch.reshape(torch.abs(self.base_height - self.cfg.target_height), (-1,))
-        r_height = torch.exp(-height_error / 0.2**2)
+        r_height = torch.exp(-height_error / 0.005)
+
+        # Clipped Contact Force
+        # clipped_force = (self.illegal_force - self.prev_illegal_force).clip(min=0.0) # [E, N_B]
+        clipped_force = self.illegal_force # [E, N_B]
 
         # Regularization Penalty
-        p_illegal_contact   = -torch.sum(self.illegal_force, dim=1)
-        p_joint_deviation   = -torch.sum(torch.abs(self.joint_deviation[:, self.joint_ids]), dim=1) # wheel is not included
-        p_lin_vel           = -torch.sum(torch.square(self.base_lin_vel[:, :2]), dim=1)
-        p_ang_vel           = -torch.sum(torch.square(self.base_ang_vel[:, :3]), dim=1) # Rolling & Pitching & Yawing
-        p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1) # wheel is not included
+        p_lin_vel           = -torch.norm(self.base_lin_vel[:, :2], dim=-1)
+        p_ang_vel           = -torch.norm(self.base_ang_vel[:, :3], dim=-1)        
+        p_illegal_contact   = -torch.sum(clipped_force, dim=1)
+        p_joint_limit       = -torch.sum(self.out_of_limits_joint[:, self.joint_ids], dim=1)        # wheel is not included
+        p_velocity_limit    = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1)     # wheel is not included
         p_all_torque_limit  = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque        = -torch.sum(torch.square(self.applied_torque), dim=1)
-        p_velocity_limit    = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1) # wheel is not included
-        p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1) # wheel is not included
-        p_joint_accel       = -torch.sum(torch.square(self.joint_acc), dim=1) # NOTE: wheel is included
-        p_action_rate       = -torch.sum(torch.square((self.actions - self.previous_actions)), dim=1)
+        p_joint_velocity    = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1)    # wheel is not included
+        p_joint_accel       = -torch.sum(torch.abs(self.joint_acc), dim=1)                          # [NOTE] wheel is included
+        p_action_rate       = -torch.sum(torch.abs((self.actions - self.previous_actions)), dim=1)
         p_terminated        = -self.reset_terminated.float()
 
         # Total Reward Summation
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_height_weight * r_height                             +
+            self.cfg.r_joint_tracking_weight * r_joint_tracking             +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
-            self.cfg.p_joint_deviation_weight * p_joint_deviation           +
             self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_joint_limit_weight * p_joint_limit                   +
@@ -203,11 +197,11 @@ class GOATStandEnv(GOATBaseEnv):
             # ==========================================
             "Task Reward / Upright"             : self.cfg.r_upright_weight * r_upright,
             "Task Reward / Height"              : self.cfg.r_height_weight * r_height,
+            "Task Reward / Joint_Tracking"      : self.cfg.r_joint_tracking_weight * r_joint_tracking,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Contact"         : self.cfg.p_illegal_contact_weight * p_illegal_contact,
-            "Task Penalty / Joint_Deviation" : self.cfg.p_joint_deviation_weight * p_joint_deviation,
             "Task Penalty / Lin_Vel"         : self.cfg.p_lin_vel_weight * p_lin_vel,
             "Task Penalty / Ang_Vel"         : self.cfg.p_ang_vel_weight * p_ang_vel,
             "Task Penalty / Joint_Limit"     : self.cfg.p_joint_limit_weight * p_joint_limit,
@@ -220,19 +214,23 @@ class GOATStandEnv(GOATBaseEnv):
         }
 
         self.previous_actions = self.actions.clone()
+        self.prev_illegal_force = self.illegal_force.clone()
 
         return total_reward
     
     def _get_dones(self):
         self._compute_intermediate_values()
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.contact_base_link_id]
-        illegal_contact = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=-1)
-        exceed_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.joint_vel_limit, dim=-1)
         base_fall = (self.base_height <= self.cfg.height_reset_condition).squeeze(-1)
 
+        projected_gravity_x = self.gravity_vector[:, 0]
+        projected_gravity_y = self.gravity_vector[:, 1]
+        died_fall = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.terminated_tilt,
+                                     torch.abs(projected_gravity_y) >= self.cfg.terminated_tilt)
+        exceed_joint_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.terminated_joint_vel_limit, dim=-1)
+        exceed_base_vel = torch.any(torch.abs(self.base_lin_vel) > self.cfg.terminated_lin_vel_limit, dim=-1)
         
-        terminated = (base_fall & illegal_contact)
+        terminated = base_fall | died_fall | exceed_joint_vel | exceed_base_vel
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated
@@ -240,19 +238,8 @@ class GOATStandEnv(GOATBaseEnv):
     def _reset_idx(self, env_ids: torch.Tensor):
         super()._reset_idx(env_ids)
         # Reset previous action observation
-        self.hist_count[env_ids] = 0
         self.previous_actions[env_ids] = torch.zeros_like(self.actions[env_ids], device=self.device)
-        self.action_history[env_ids] = torch.zeros_like(self.action_history[env_ids], device=self.device)
-        self.joint_pos_history[env_ids] = torch.zeros_like(self.joint_pos_history[env_ids], device=self.device)
-
-        # ERFI
-        if self.cfg.erfi_enabled:
-            rao_reset_ids = env_ids[self.rao_env_mask[env_ids]]
-            if len(rao_reset_ids) > 0:
-                self.rao_torque_offset[rao_reset_ids] = sample_rao_torque(
-                    rao_reset_ids, self._robot.num_joints,
-                    self.cfg.rao_torque_limit, self.device
-                )
+        self.prev_illegal_force[env_ids] = torch.zeros_like(self.illegal_force[env_ids], device=self.device)
             
         # Update planning state
         self._compute_intermediate_values(env_ids)
@@ -280,8 +267,6 @@ class GOATStandEnv(GOATBaseEnv):
         self.applied_torque[i]       = self._robot.data.applied_torque[i]
         self.joint_deviation[i]      = self.joint_pos[i] - self._robot.data.default_joint_pos[i]
         self.joint_acc[i] = self._robot.data.joint_acc[i]
-        # Update count
-        self.hist_count[i] += 1
 
     def _update_viz_data(self):
         applied_torque = self._robot.data.applied_torque
@@ -305,5 +290,20 @@ class GOATStandEnv(GOATBaseEnv):
         extras["viz_data"]["right_knee_velocity (deg/s)"]  = joint_velocity[:, 5]
         extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 6]
         extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 7]
+
+        extras["viz_data"]["left_hip_action"]      = self.actions[:, 0]
+        extras["viz_data"]["right_hip_action"]     = self.actions[:, 1]
+        extras["viz_data"]["left_thigh_action"]    = self.actions[:, 2]
+        extras["viz_data"]["right_thigh_action"]   = self.actions[:, 3]
+        extras["viz_data"]["left_knee_action"]     = self.actions[:, 4]
+        extras["viz_data"]["right_knee_action"]    = self.actions[:, 5]
+        extras["viz_data"]["left_wheel_action"]    = self.actions[:, 6]
+        extras["viz_data"]["right_wheel_action"]   = self.actions[:, 7]
+
+        extras["viz_data"]["effective_contact_force (N)"] = torch.sum((self.illegal_force - self.prev_illegal_force).clip(min=0.0), dim=1)
+        extras["viz_data"]["base_lin_x_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 0])
+        extras["viz_data"]["base_lin_y_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 1])
+        extras["viz_data"]["base_lin_z_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 2])
+        extras["viz_data"]["base_ang_velocity (deg/s)"] = torch.rad2deg(torch.norm(self.base_ang_vel, dim=1))
 
         return extras 

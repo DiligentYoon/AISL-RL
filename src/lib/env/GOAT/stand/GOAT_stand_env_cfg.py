@@ -31,90 +31,48 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
-    ## ==================== Terminal condition ===================== ##
-    height_reset_condition = 0.2 # meter (m)
-
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
-    joint_vel_limit = 3.14 # rad/s
+    joint_vel_limit = 2.0 # rad/s
+    terminated_tilt = 0.6
+    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
+    
+    terminated_lin_vel_limit_start = 0.4
+    terminated_lin_vel_limit_end = 0.2
+    terminated_lin_vel_limit = terminated_lin_vel_limit_end
+
+    height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
 
-    r_upright_weight = 3.0
-    r_height_weight = 3.0
+    r_upright_weight = 2.0
+    r_height_weight = 4.0
+    r_joint_tracking_weight = 4.0
 
-    p_illegal_contact_weight = 0.3
-    p_joint_deviation_weight = 2.0
-    p_lin_vel_weight = 3.0
-    p_ang_vel_weight = 1.0
+    p_illegal_contact_weight_start = 0.0
+    p_illegal_contact_weight_end = 0.5
+    p_illegal_contact_weight = p_illegal_contact_weight_end
+
+    p_lin_vel_weight = 2.0
+    p_ang_vel_weight = 0.5
 
     p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.1
-    p_joint_vel_limit_weight = 0.0
-    p_joint_velocity_weight = 0.02
-    p_joint_accel_weight = 5.0e-6
-    p_action_rate_weight = 0.02
-    # p_joint_limit_weight = 10.0
-    # p_all_torque_limit_weight = 2.0
-    # p_all_torque_weight = 0.008
-    # p_joint_vel_limit_weight = 5.0
-    # p_joint_velocity_weight = 0.04
-    # p_joint_accel_weight = 5.0e-6
-    # p_action_rate_weight = 0.02
-    p_terminated_weight = 50.0
-
-    ## ==================== ERFI Configuration ==================== ##
-    erfi_enabled: bool = False
-    vel_hist_length: int = 4
-
-    ## ======================== Curriculum ======================= ##
-    warmup = 0.2
-    endup = 0.6
-    static_friction_start: tuple[float, float] = (0.6, 1.2)
-    static_friction_end: tuple[float, float] = (0.3, 1.2)
-    dynamic_friction_start: tuple[float, float] = (0.6, 0.9)
-    dynamic_friction_end: tuple[float, float] = (0.3, 0.9)
+    p_all_torque_weight = 0.03
+    p_joint_vel_limit_weight = 2.0
+    p_joint_velocity_weight = 0.01
+    p_joint_accel_weight = 5.0e-5
+    p_action_rate_weight = 0.5
+    p_terminated_weight = 100.0
 
     # Per-axis observation noise groups
-    obs_noise_groups_start = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
-        "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
-        "joint_pos":         {"dim": 6,  "std": 0.005}, # Joint encoder
-        "joint_vel":         {"dim": 8,  "std": 0.5},   # Encoder derivative (noisy)
-        "previous_actions":  {"dim": 8,  "std": 0.0},   # Internal action buffer (no noise)
-    }
     obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.2},
-        "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "joint_pos":         {"dim": 6,  "std": 0.03},
+        "base_ang_vel":      {"dim": 3,  "std": 0.1},
+        "base_rot_w":        {"dim": 4,  "std": 0.01},
+        "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
     }
-    obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
     obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
-
-    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.01, 0.01]
-    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
-    rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
-    rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
-
-    # curriculum = CurriculumManagerCfg(
-    #     warmup=warmup,
-    #     endup=endup,
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="observation_noise",
-    #             attr_path="cfg/observation_noise_params/std",
-    #             start_value=obs_noise_start,
-    #             end_value=obs_noise_end,
-    #             schedule="linear",
-    #         ),
-    #     ]
-    # )
-    
-    # ERFI
-    rfi_torque_limit: list[float] = rfi_end    # N·m 
-    rao_torque_limit: list[float] = rao_end    # N·m
 
     # Noise Model
     observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
@@ -123,6 +81,32 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         "std": obs_noise_end,
         "operation": "add",
     }
+    
+    ## ======================== Curriculum ======================= ##
+    warmup = 0.25
+    endup = 0.5
+
+    curriculum = CurriculumManagerCfg(
+        warmup=warmup,
+        endup=endup,
+        params=[
+            CurriculumParamCfg(
+                name="lin_vel_limit",
+                attr_path="cfg/terminated_lin_vel_limit",
+                start_value=terminated_lin_vel_limit_start,
+                end_value=terminated_lin_vel_limit_end,
+                schedule="linear",
+            ),
+            CurriculumParamCfg(
+                name="contact_force_weight",
+                attr_path="cfg/p_illegal_contact_weight",
+                start_value=p_illegal_contact_weight_start,
+                end_value=p_illegal_contact_weight_end,
+                schedule="linear",
+            ),
+        ]
+    )
+
 
     ## ===================== Jig Object ======================= ##
     jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
@@ -146,26 +130,22 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_L_Joint": 0.0,
                                               "wheel_R_Joint": 0.0,}
         
-        # robot
-        self.GOAT_cfg.actuators["hip"].max_delay = 4
-        self.GOAT_cfg.actuators["thigh"].max_delay = 4
-        self.GOAT_cfg.actuators["knee"].max_delay = 4
-        self.GOAT_cfg.actuators["wheel"].max_delay = 4
-
         # event
-        self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
+        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.5, 1.2)
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.5, 0.9)
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.5, 1.2)
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.5, 0.9)
 
-        self.events.robot_leg_actuator_gain.params["stiffness_distribution_params"] = (0.6, 1.2)
-        self.events.robot_leg_actuator_gain.params["damping_distribution_params"] = (0.6, 1.2)
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
         self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)
-        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
-        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
+        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
+        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05))
 
         # robot's joints should be reset by dataset
         self.events.reset_robot_joints = EventTerm(
@@ -223,19 +203,17 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.events.add_base_mass = None
         self.events.add_link_mass = None
         self.events.rigid_body_mass_inertia = None
-        self.events.robot_leg_actuator_gain = None
+        self.events.robot_leg_physics_material = None
+        self.events.robot_wheel_physics_material = None
+        self.events.robot_hip_actuator_gain = None
+        self.events.robot_thigh_actuator_gain = None
+        self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
         self.events.robot_center_of_mass = None
-        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
-
-        # robot
-        self.GOAT_cfg.actuators["hip"].max_delay = 0
-        self.GOAT_cfg.actuators["thigh"].max_delay = 0
-        self.GOAT_cfg.actuators["knee"].max_delay = 0
-        self.GOAT_cfg.actuators["wheel"].max_delay = 0
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
@@ -255,6 +233,19 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
             "right_knee_velocity (deg/s)": 0.0,
             "left_wheel_velocity (deg/s)": 0.0,
             "right_wheel_velocity (deg/s)": 0.0,
+            "left_hip_action": 0.0,
+            "right_hip_action": 0.0,
+            "left_thigh_action": 0.0,
+            "right_thigh_action": 0.0,
+            "left_knee_action": 0.0,
+            "right_knee_action": 0.0,
+            "left_wheel_action": 0.0,
+            "right_wheel_action": 0.0,
+            "base_lin_x_velocity (m/s)": 0.0,
+            "base_lin_y_velocity (m/s)": 0.0,
+            "base_lin_z_velocity (m/s)": 0.0,
+            "base_ang_velocity (deg/s)": 0.0,
+            "effective_contact_force (N)": 0.0
             }
 
         # plot
