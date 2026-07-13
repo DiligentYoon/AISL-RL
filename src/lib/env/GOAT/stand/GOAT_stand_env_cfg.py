@@ -6,11 +6,14 @@ from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.markers import VisualizationMarkersCfg
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG
+from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 
 from lib.env.GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer
 
@@ -21,8 +24,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 29                      # Observation space
-    state_space = 35                            # State space including privilege information
+    observation_space = 32                      # Observation space
+    state_space = 38                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
@@ -36,38 +39,36 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     joint_vel_limit = 2.0 # rad/s
     terminated_tilt = 0.6
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
-    
-    terminated_lin_vel_limit_start = 0.4
-    terminated_lin_vel_limit_end = 0.2
-    terminated_lin_vel_limit = terminated_lin_vel_limit_end
+
+    terminated_lin_vel_limit_z_start = 0.2
+    terminated_lin_vel_limit_z_end = 0.1
+    terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
 
-    r_upright_weight = 2.0
-    r_height_weight = 4.0
-    r_joint_tracking_weight = 4.0
+    r_height_weight = 3.0
+    r_upright_weight = 3.0
+    r_joint_tracking_weight = 2.0
+    r_velocity_tracking_weight = 4.0
 
-    p_illegal_contact_weight_start = 0.0
-    p_illegal_contact_weight_end = 0.5
-    p_illegal_contact_weight = p_illegal_contact_weight_end
+    p_illegal_contact_weight = 1.5
+    p_joint_deviation_lr = 0.02
+    p_ang_vel_weight = 0.1
 
-    p_lin_vel_weight = 2.0
-    p_ang_vel_weight = 0.5
-
-    p_joint_limit_weight = 0.0
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.03
+    p_all_torque_weight = 0.01
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
     p_joint_accel_weight = 5.0e-5
-    p_action_rate_weight = 0.5
-    p_terminated_weight = 100.0
+    p_action_rate_weight = 0.1
+    p_terminated_weight = 200.0
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "std": 0.1},
         "base_rot_w":        {"dim": 4,  "std": 0.01},
+        "command":           {"dim": 3,  "std": 0.0},
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
         "previous_actions":  {"dim": 8,  "std": 0.0},
@@ -92,21 +93,26 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         params=[
             CurriculumParamCfg(
                 name="lin_vel_limit",
-                attr_path="cfg/terminated_lin_vel_limit",
-                start_value=terminated_lin_vel_limit_start,
-                end_value=terminated_lin_vel_limit_end,
-                schedule="linear",
-            ),
-            CurriculumParamCfg(
-                name="contact_force_weight",
-                attr_path="cfg/p_illegal_contact_weight",
-                start_value=p_illegal_contact_weight_start,
-                end_value=p_illegal_contact_weight_end,
+                attr_path="cfg/terminated_lin_vel_limit_z",
+                start_value=terminated_lin_vel_limit_z_start,
+                end_value=terminated_lin_vel_limit_z_end,
                 schedule="linear",
             ),
         ]
     )
 
+    ## ======================== Command ======================= ##
+    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(3.0, 4.0),
+        prob_standing_envs=0.6,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.0, 0.2), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+        ),
+    )
 
     ## ===================== Jig Object ======================= ##
     jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
@@ -131,21 +137,22 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
         
         # event
-        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.5, 1.2)
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.5, 0.9)
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.5, 1.2)
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.5, 0.9)
+        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.3, 1.2)
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.3, 0.9)
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 1.2)
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.9)
 
         self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
         self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
+        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
 
-        self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
-        self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)
+        self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.1)
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
-        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05))
+        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
 
         # robot's joints should be reset by dataset
         self.events.reset_robot_joints = EventTerm(
@@ -153,7 +160,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_2.pt",
             }
         )
 
@@ -202,15 +209,14 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         # disable randomization
         self.events.add_base_mass = None
         self.events.add_link_mass = None
-        self.events.rigid_body_mass_inertia = None
+        self.events.robot_center_of_mass = None
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
         self.events.robot_hip_actuator_gain = None
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
-        self.events.robot_center_of_mass = None
-        # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
@@ -247,6 +253,17 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
             "base_ang_velocity (deg/s)": 0.0,
             "effective_contact_force (N)": 0.0
             }
+
+        # visualization
+        self.goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_goal"
+        )
+
+        self.current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
+            prim_path="/Visuals/Command/velocity_current"
+        )
+        self.goal_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
+        self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
 
         # plot
         self.plotter = PNGSavePlotter

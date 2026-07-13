@@ -30,8 +30,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg":SceneEntityCfg("robot", body_names="base_Link"),
-            "mass_distribution_params": (-1.0, 1.0),
-            "operation": "add",
+            "mass_distribution_params": (0.8, 1.2),
+            "operation": "scale",
         }
     )
     add_link_mass = EventTerm(
@@ -40,15 +40,6 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_[LR]_Link"),
             "mass_distribution_params": (0.8, 1.2),
-            "operation": "scale",
-        },
-    )
-    rigid_body_mass_inertia = EventTerm(
-        func=randomizer.randomize_rigid_body_mass_inertia,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "mass_inertia_distribution_params": (0.8, 1.2),
             "operation": "scale",
         },
     )
