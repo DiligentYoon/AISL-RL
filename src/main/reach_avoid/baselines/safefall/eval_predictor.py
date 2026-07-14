@@ -40,8 +40,8 @@ parser.add_argument("--model",
                     help="The NN model used for training the agent.")
 
 # evaluation control
-parser.add_argument("--num_eval_falls", type=int, default=300, help="Target number of fall episodes.")
-parser.add_argument("--num_eval_safe", type=int, default=300, help="Target number of safe episodes.")
+parser.add_argument("--num_eval_falls", type=int, default=2000, help="Target number of fall episodes.")
+parser.add_argument("--num_eval_safe", type=int, default=2000, help="Target number of safe episodes.")
 parser.add_argument("--sustain_k", type=int, default=1, help="Minimum consecutive steps for a valid alarm.")
 parser.add_argument("--gap_tol", type=int, default=5, help="Max gap (steps) merged into one alarm run.")
 
@@ -303,14 +303,14 @@ def main():
         or evaluator.count_safe < args_cli.num_eval_safe
     ):
         with torch.no_grad():
-            # nominal policy stepping (deterministic; predictor is passive)
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            # nominal policy stepping
+            actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
 
             # predictor step data — per-env scalar score (RA value or P(falling))
             if predictor == "ra":
                 score, _, _ = pred_agent.critic(infos["ra_states"])         # (N, 1)
                 step_data = score.reshape(-1)
-            else:  # safefall — online stateful GRU
+            else:
                 sf_obs = infos["safe_fall_obs"].unsqueeze(1)                # (N, 1, obs_dim)
                 logits, h_pred, _ = pred_agent.critic(sf_obs, h_pred)       # (N, 1, 2)
                 step_data = torch.softmax(logits[:, -1, :], dim=-1)[:, 1]   # (N,)
@@ -321,8 +321,6 @@ def main():
 
         evaluator.add_step(step_data, terminated, truncated)
 
-        # Reset per-env GRU hidden state for envs whose episode just ended;
-        # next iteration's obs for those envs is already from the new episode.
         if predictor == "safefall":
             done = torch.logical_or(terminated.bool(), truncated.bool()).reshape(-1)
             if done.any():

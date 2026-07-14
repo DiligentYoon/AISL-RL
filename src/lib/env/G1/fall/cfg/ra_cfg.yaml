@@ -1,7 +1,7 @@
 seed: 42
 
 train:
-  timesteps: 25600
+  timesteps: 19200
 
 collection:
   capacity_per_bucket: 100000

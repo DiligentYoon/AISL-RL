@@ -163,9 +163,9 @@ class MAPPO(MultiAgent):
                 data.append((raw_action, log_prob, entropy))
 
         
-        raw_actions  = torch.cat([d[1] for d in data], dim=-1) # [B, A]
-        log_probs = torch.stack([d[2] for d in data], dim=-1) # [B, A]
-        entropy  = torch.stack([d[3] for d in data], dim=-1) # [A]
+        raw_actions  = torch.cat([d[0] for d in data], dim=-1) # [B, A]
+        log_probs = torch.stack([d[1] for d in data], dim=-1) # [B, A]
+        entropy  = torch.stack([d[2] for d in data], dim=-1) # [A]
         
         return raw_actions, log_probs, entropy
     

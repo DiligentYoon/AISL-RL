@@ -53,7 +53,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     r_velocity_tracking_weight = 4.0
 
     p_illegal_contact_weight = 1.5
-    p_joint_deviation_lr = 0.02
+    p_joint_deviation_lr = 0.03
     p_ang_vel_weight = 0.1
 
     p_all_torque_limit_weight = 0.0
@@ -137,10 +137,10 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
         
         # event
-        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.3, 1.2)
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.3, 0.9)
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 1.2)
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.9)
+        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.4, 1.2)
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.4, 1.2)
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
 
         self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)

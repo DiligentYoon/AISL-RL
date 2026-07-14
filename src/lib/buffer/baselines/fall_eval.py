@@ -10,20 +10,6 @@ class FallPredictorEvaluator:
 
     Records per-environment rollouts, finalizes them at episode boundaries,
     and computes False Alarm Rate (FAR) and Lead Time (LT) metrics.
-
-    Design (see plan.md):
-        - FAR is measured only on safe (truncated-only) episodes. An early
-          alarm inside a fall episode is an "early warning", not a false
-          alarm, so it is excluded from FAR.
-        - Detection / LT are run-based. The predictor decision sequence is
-          split into alarm runs (noise filtered by ``sustain_k``, merged
-          across gaps up to ``gap_tol``). A fall is detected only if an
-          alarm run extends into the danger window ``[t_fall - W, t_fall]``.
-        - ``W`` is the predictor's training-time labelling window:
-          RA -> number of positive entries in the hindsight ramp;
-          SafeFall -> ``round(fall_lead_seconds / dt)``.
-        - Both predictors push a per-step scalar score (RA value or
-          ``P(falling)``); thresholding lives in ``compute_metrics``.
     """
 
     def __init__(
