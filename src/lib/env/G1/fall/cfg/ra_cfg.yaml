@@ -16,6 +16,8 @@ collection:
 ra:
   buffer:
     buffer_size: 1024
+  eval:
+    threshold: 0.0               # V(s) > 0 is the unsafe set by the RA formulation
   agent:
     learning_epochs: 1
     batch_size: 4096
