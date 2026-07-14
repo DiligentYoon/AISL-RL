@@ -11,13 +11,6 @@ rule in play_unified.py):
     DR  = alarmed fall episodes  / all fall episodes    (terminated = failure contact)
     FAR = alarmed safe episodes  / all safe episodes    (truncated  = timeout)
 
-Because the two predictors' scores live on different scales (Reach-Avoid values
-are unbounded reals, SafeFall outputs probabilities), a single fixed threshold
-is not a fair comparison. The threshold sweep therefore also reports the ROC
-curve, its AUC, and the detection rate at a matched false-alarm budget.
-
-Run once per predictor with the same seed; results are appended to
-``metrics_summary.csv`` so the two predictors can be compared side by side.
 """
 
 """Launch Isaac Sim Simulator first."""
