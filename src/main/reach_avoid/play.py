@@ -93,16 +93,10 @@ def main():
         return
 
     # specify directory for logging experiments (load checkpoint)
-    if args_cli.checkpoint is not None:
-        base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
-        if args_cli.predictor == "ra":
-            log_dir = os.path.join(base_dir, "Reach_Avoid")
-        elif args_cli.predictor == "safefall":
-            log_dir = os.path.join(base_dir, "Safe_Fall")
-        else:
-            raise ValueError(f"Unknown predictor: {args_cli.predictor}")
+    if args_cli.predictor_checkpoint is not None:
+        log_dir = os.path.dirname(args_cli.predictor_checkpoint)
     else:
-        raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
+        raise ValueError("Predictor checkpoint path must be assigned for policy-conditioned RA value function.")
 
     # ============================ Env & Wrapper Spawn ================================
 

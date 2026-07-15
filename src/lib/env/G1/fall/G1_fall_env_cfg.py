@@ -15,7 +15,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA agent config === #
-    ra_state_space = 40
+    ra_state_space = 10
     body_hist_length = 4
 
     # === SafeFall baseline config === #
@@ -26,10 +26,10 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     target_set_threshold = 0.1
 
     # === Curriculum === #
-    push_x_end = (-2.0, 2.0)
-    push_y_end = (-2.0, 2.0)
-    push_roll_end = (-5.0, 5.0)
-    push_pitch_end = (-5.0, 5.0)
+    push_x_end = (-1.5, 1.5)
+    push_y_end = (-1.5, 1.5)
+    push_roll_end = (-4.0, 4.0)
+    push_pitch_end = (-4.0, 4.0)
 
     def __post_init__(self):
         super().__post_init__()
@@ -37,9 +37,11 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         # self collision off for deleting fishy and chaotic collisions
         self.robot.spawn.articulation_props.enabled_self_collisions = False
 
+        self.termination_height = 0.2
+
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.6,
-            endup=1.0,
+            warmup=0.3,
+            endup=0.5,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
@@ -69,12 +71,6 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         )
 
         self.events.push_robot.interval_range_s = (2.0, 3.0)
-        # self.events.push_robot.params["velocity_range"] = {
-        #     "x": (-2.0, 2.0),
-        #     "y": (-2.0, 2.0),
-        #     "roll": (-5.0, 5.0)
-        #     "pitch": (-5.0, 5.0),
-        # }
 
 @configclass
 class G1FallPlayEnvCfg(G1FallEnvCfg):
@@ -101,20 +97,13 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
 
         # ==== Viz data ==== #
         self.viz_data = {
-            "com_pos": 0,                  # (3,)
-            "left_foot_pos": 0,            # (3,)
-            "right_foot_pos": 0,           # (3,)
-            "icp_pos": 0,                  # (2,)
-            "capture_region_center": 0,    # (2,)
-            "capture_region_radius": 0,    # scalar
-            "time_hist": 0,                # scalar
             "risk_value": 0,               # scalar
             "icp_ankle_dist_hist": 0,      # scalar
         }
 
         self.scene.num_envs = 1
 
-        self.plotter: CapturabilityPlotter = CapturabilityPlotter
+        self.plotter: PNGSavePlotter = PNGSavePlotter
 
 
 # Initial Data Collection Environment

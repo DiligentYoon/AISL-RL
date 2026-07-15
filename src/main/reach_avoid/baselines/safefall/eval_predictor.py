@@ -48,8 +48,8 @@ parser.add_argument("--model",
                     help="The NN model used for training the agent.")
 
 # evaluation control
-parser.add_argument("--num_eval_falls", type=int, default=1000, help="Target number of fall episodes.")
-parser.add_argument("--num_eval_safe", type=int, default=1000, help="Target number of safe episodes.")
+parser.add_argument("--num_eval_falls", type=int, default=2000, help="Target number of fall episodes.")
+parser.add_argument("--num_eval_safe", type=int, default=2000, help="Target number of safe episodes.")
 parser.add_argument("--sustain_k", type=int, default=1,
                     help="Consecutive steps above the threshold required for an alarm (1 = deployment latch rule).")
 parser.add_argument("--threshold", type=float, default=None,
@@ -140,11 +140,7 @@ def main():
     if args_cli.predictor_checkpoint is None:
         raise ValueError("--predictor_checkpoint must be provided.")
 
-    base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
-    if args_cli.predictor == "ra":
-        log_dir = os.path.join(base_dir, "Reach_Avoid")
-    else:
-        log_dir = os.path.join(base_dir, "Safe_Fall")
+    log_dir = os.path.dirname(args_cli.predictor_checkpoint)
     os.makedirs(log_dir, exist_ok=True)
 
     # ============================ Env & Wrapper Spawn ================================
