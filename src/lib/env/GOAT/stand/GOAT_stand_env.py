@@ -188,7 +188,7 @@ class GOATStandEnv(GOATBaseEnv):
 
         # Command Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.05)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.01)
 
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :3], dim=-1)        

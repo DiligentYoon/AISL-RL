@@ -20,7 +20,7 @@ from lib.env.GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_
 @configclass
 class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 5.0
+    episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -53,7 +53,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     r_velocity_tracking_weight = 4.0
 
     p_illegal_contact_weight = 1.5
-    p_joint_deviation_lr = 0.03
+    p_joint_deviation_lr = 0.01
     p_ang_vel_weight = 0.1
 
     p_all_torque_limit_weight = 0.0
@@ -84,7 +84,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     }
     
     ## ======================== Curriculum ======================= ##
-    warmup = 0.25
+    warmup = 0.2
     endup = 0.5
 
     curriculum = CurriculumManagerCfg(
@@ -104,13 +104,13 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     ## ======================== Command ======================= ##
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 4.0),
-        prob_standing_envs=0.6,
+        resampling_time_range=(4.0, 5.0),
+        prob_standing_envs=0.8,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.2), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 0.1), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 

@@ -99,7 +99,7 @@ def main():
         log_dir = os.path.join(base_dir, "Reach_Avoid")
     else:
         log_dir = os.path.join(os.getcwd(), "Reach_Avoid")
-    log_dir = os.path.joint(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), log_dir)
+    log_dir = os.path.join(log_dir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
 
     # ============================ Env & Wrapper Spawn ================================
 
