@@ -2,15 +2,16 @@
 Evaluate a fall predictor (Reach-Avoid / SafeFall) and report False Alarm Rate
 (FAR) and Detection Rate (DR).
 
-The predictor runs alongside the nominal policy without intervening, so every
-fall actually happens and the predictor is scored on what it would have warned
-about. An episode counts as alarmed if its danger score stays above the
-threshold for `--sustain_k` consecutive steps (k=1 matches the latching switch
-rule in play_unified.py):
+Confusion matrix (Positive = alarm raised, ground truth = episode outcome):
+    TP : fall episode that DID alarm      FP : safe episode that DID alarm (false alarm)
+    FN : fall episode that did NOT alarm  TN : safe episode that did NOT alarm
+    n_fall = TP + FN (terminated = failure contact)   n_safe = FP + TN (truncated = timeout)
 
-    DR  = alarmed fall episodes  / all fall episodes    (terminated = failure contact)
-    FAR = alarmed safe episodes  / all safe episodes    (truncated  = timeout)
+    DR  = TP / n_fall = alarmed fall episodes / all fall episodes   (a.k.a. Recall / TPR)
+    FAR = FP / n_safe = alarmed safe episodes / all safe episodes   (a.k.a. FPR)
 
+Both metrics are reported at a single decision threshold tau (the predictor's cfg
+value, overridable with --threshold).
 """
 
 """Launch Isaac Sim Simulator first."""
@@ -53,9 +54,6 @@ parser.add_argument("--sustain_k", type=int, default=1,
                     help="Consecutive steps above the threshold required for an alarm (1 = deployment latch rule).")
 parser.add_argument("--threshold", type=float, default=None,
                     help="Decision threshold. Defaults to the predictor's cfg value (ra.eval / safe_fall.eval).")
-parser.add_argument("--no_sweep", action="store_true", help="Skip the threshold sweep (ROC / AUC).")
-parser.add_argument("--target_far", type=float, default=0.05,
-                    help="False-alarm budget at which detection rate is reported.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -358,17 +356,6 @@ def main():
     metrics = evaluator.compute_metrics(threshold)
     elapsed = time.time() - start_time
 
-    if args_cli.no_sweep:
-        auc = float("nan")
-        det_at_far = {"detection_rate": float("nan"), "threshold": float("nan"), "FAR": float("nan")}
-        sweep_rows = []
-    else:
-        thresholds = evaluator.default_thresholds(include=[threshold])
-        curve = evaluator.roc(thresholds)
-        auc = curve["AUC"]
-        sweep_rows = curve["rows"]
-        det_at_far = evaluator.detection_at_far(args_cli.target_far, thresholds)
-
     print("\n" + "=" * 72)
     print(f" Fall Predictor Evaluation : {predictor}  (tau = {threshold}, sustain_k = {evaluator.sustain_k})")
     print("=" * 72)
@@ -377,10 +364,6 @@ def main():
           f"| FP {metrics['FP']} | TN {metrics['TN']}")
     print(f"  Detection Rate  : {metrics['detection_rate']:.4f}")
     print(f"  False Alarm Rate: {metrics['FAR']:.4f}")
-    if not args_cli.no_sweep:
-        print(f"  ROC AUC         : {auc:.4f}")
-        print(f"  DR @ FAR<={args_cli.target_far:<5.2f}: {det_at_far['detection_rate']:.4f} "
-              f"(tau = {det_at_far['threshold']:.4f}, FAR = {det_at_far['FAR']:.4f})")
     print(f"  Elapsed         : {elapsed:.1f} s ({timestep} steps)")
     print("=" * 72 + "\n")
 
@@ -389,25 +372,13 @@ def main():
     evaluator.save_raw(raw_path, threshold)
     print(f"[INFO] Raw records saved to {raw_path}")
 
-    # full FAR/DR curve for plotting the two predictors on one axis
-    if sweep_rows:
-        roc_path = os.path.join(log_dir, f"roc_{predictor}.csv")
-        with open(roc_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["threshold", "FAR", "detection_rate", "TP", "FN", "FP", "TN"])
-            for row in sweep_rows:
-                writer.writerow([row["threshold"], row["FAR"], row["detection_rate"],
-                                 row["TP"], row["FN"], row["FP"], row["TN"]])
-        print(f"[INFO] ROC curve saved to {roc_path}")
-
     # append one row to the shared comparison CSV
     csv_path = os.path.join(log_dir, "metrics_summary.csv")
     header = ["predictor", "threshold", "sustain_k", "TP", "FN", "FP", "TN",
-              "detection_rate", "FAR", "AUC", "det_at_far", "target_far", "n_fall", "n_safe"]
+              "detection_rate", "FAR", "n_fall", "n_safe"]
     row = [predictor, threshold, evaluator.sustain_k,
            metrics["TP"], metrics["FN"], metrics["FP"], metrics["TN"],
-           metrics["detection_rate"], metrics["FAR"], auc,
-           det_at_far["detection_rate"], args_cli.target_far,
+           metrics["detection_rate"], metrics["FAR"],
            metrics["n_fall"], metrics["n_safe"]]
     write_header = not os.path.exists(csv_path)
     with open(csv_path, "a", newline="", encoding="utf-8") as f:

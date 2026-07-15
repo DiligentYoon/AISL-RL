@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 
@@ -150,79 +150,6 @@ class FallPredictorEvaluator:
             "TN": tn,
             "detection_rate": _safe_div(tp, n_fall),
             "FAR": _safe_div(fp, n_safe),
-        }
-
-    def default_thresholds(self, num: int = 200, include: Sequence[float] = ()) -> List[float]:
-        """Threshold grid drawn from the quantiles of every collected score.
-
-        Quantiles (rather than a uniform grid) keep the sweep meaningful for both
-        predictors, whose scores live on different scales — Reach-Avoid values are
-        unbounded reals, SafeFall outputs are probabilities in [0, 1].
-        """
-        if not self.records:
-            return sorted(set(float(t) for t in include))
-
-        all_scores = torch.cat([rec["score"] for rec in self.records])
-        qs = torch.linspace(0.0, 1.0, num)
-        grid = torch.quantile(all_scores.double(), qs.double()).tolist()
-
-        # A threshold below the minimum score alarms everywhere; one at/above the
-        # maximum alarms nowhere. Both anchor the ROC curve at its endpoints.
-        lo = float(all_scores.min()) - 1.0
-        hi = float(all_scores.max())
-        return sorted(set([lo, hi] + [float(g) for g in grid] + [float(t) for t in include]))
-
-    def sweep(self, thresholds: Optional[Sequence[float]] = None) -> List[Dict]:
-        """Compute metrics across a threshold grid (ascending by threshold)."""
-        if thresholds is None:
-            thresholds = self.default_thresholds()
-        return [self.compute_metrics(t) for t in sorted(thresholds)]
-
-    def roc(self, thresholds: Optional[Sequence[float]] = None) -> Dict:
-        """FAR-vs-DR curve and its area, from the same episode records.
-
-        Comparing the two predictors at their own fixed operating points is not
-        apples-to-apples because their scores are on different scales; the curve
-        is what makes the comparison fair.
-        """
-        rows = self.sweep(thresholds)
-
-        # Anchor the curve at (0, 0) and (1, 1) so the area is well defined even
-        # if the grid does not reach the extremes.
-        points = {(0.0, 0.0), (1.0, 1.0)}
-        for row in rows:
-            far, dr = row["FAR"], row["detection_rate"]
-            if far == far and dr == dr:  # skip NaN (empty category)
-                points.add((far, dr))
-
-        curve = sorted(points)
-        far = [p[0] for p in curve]
-        dr = [p[1] for p in curve]
-        auc = sum((far[i + 1] - far[i]) * (dr[i + 1] + dr[i]) / 2.0 for i in range(len(curve) - 1))
-
-        return {"FAR": far, "detection_rate": dr, "AUC": auc, "rows": rows}
-
-    def detection_at_far(
-        self,
-        target_far: float,
-        thresholds: Optional[Sequence[float]] = None,
-    ) -> Dict:
-        """Best detection rate reachable without exceeding ``target_far``.
-
-        This is the fair head-to-head number: both predictors are compared at a
-        matched false-alarm budget rather than at arbitrary thresholds.
-        """
-        feasible = [row for row in self.sweep(thresholds) if row["FAR"] <= target_far]
-        if not feasible:
-            return {"target_far": target_far, "threshold": float("nan"),
-                    "detection_rate": float("nan"), "FAR": float("nan")}
-
-        best = max(feasible, key=lambda row: row["detection_rate"])
-        return {
-            "target_far": target_far,
-            "threshold": best["threshold"],
-            "detection_rate": best["detection_rate"],
-            "FAR": best["FAR"],
         }
 
     # ------------------------------------------------------------------ #
