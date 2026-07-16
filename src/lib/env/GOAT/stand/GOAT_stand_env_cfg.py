@@ -41,18 +41,18 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     terminated_lin_vel_limit_z_start = 0.2
-    terminated_lin_vel_limit_z_end = 0.1
+    terminated_lin_vel_limit_z_end = 0.15
     terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
 
-    r_height_weight = 3.0
-    r_upright_weight = 3.0
-    r_joint_tracking_weight = 2.0
+    r_height_weight = 2.0
+    r_upright_weight = 2.0
+    r_joint_tracking_weight = 4.0
     r_velocity_tracking_weight = 4.0
 
-    p_illegal_contact_weight = 1.5
+    p_illegal_contact_weight = 1.0
     p_joint_deviation_lr = 0.01
     p_ang_vel_weight = 0.1
 
@@ -105,12 +105,12 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.8,
+        prob_standing_envs=0.0,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.1), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(-0.1, 0.1), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
