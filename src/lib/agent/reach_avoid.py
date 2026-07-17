@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from lib.agent.agent import Agent
-from lib.buffer.replaybuffer import HindSightReplayBuffer
+from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
 
 class ReachAvoid(Agent):

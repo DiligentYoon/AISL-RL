@@ -11,6 +11,7 @@ from lib.domain_randomizer import randomizer
 from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 
+# Environment for training Reach-avoid network
 @configclass
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
@@ -72,6 +73,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
 
         self.events.push_robot.interval_range_s = (2.0, 3.0)
 
+# Environment for eveluating Reach-avoid network
 @configclass
 class G1FallPlayEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
@@ -106,18 +108,26 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         self.plotter: PNGSavePlotter = PNGSavePlotter
 
 
-# Initial Data Collection Environment
+# Data Collection Environment for Initial dataset construction or region analysis
 @configclass
 class G1FallCollectEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+        # Episode
+        self.episode_length_s = 5.0
 
         # curriculum
         self.curriculum = None
+
+        # events
+        self.events.reset_base         = None
+        self.events.reset_robot_joints = None
+
+        self.events.push_robot.interval_range_s = (2.0, 2.0) # 2s fixed
         self.events.push_robot.params["velocity_range"] = {
             "x": self.push_x_end,
             "y": self.push_y_end,
-            "roll": self.push_roll_end,
+            "roll" : self.push_roll_end,
             "pitch": self.push_pitch_end,
         }
 
@@ -151,10 +161,6 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         # self.safe_action_space = 29
         # self.safe_observation_space = 96
         # self.safe_state_space = 96
-
-        # visualization
-        # self.plotter = None
-        # self.viz_data = None
 
         # plotter
         self.plotter = PNGSavePlotter

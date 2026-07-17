@@ -248,7 +248,7 @@ def main():
 
     # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
     if predictor == "ra":
-        from lib.buffer.replaybuffer import HindSightReplayBuffer
+        from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
         from lib.model.MLP import RA_Critic
         from lib.agent.reach_avoid import ReachAvoid
 
