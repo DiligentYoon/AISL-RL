@@ -16,6 +16,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
+parser.add_argument("--num_scenarios", type=int, default=1, help="Number of sequential scenario sweeps to collect, one file each.")
 parser.add_argument("--task", type=str, default="G1-fall-region-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/agent_32000.pt", help="Path to nominal policy checkpoint.")
 parser.add_argument("--predictor_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
@@ -48,6 +49,7 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import os
 import time
+import datetime
 import torch
 
 import lib
@@ -108,6 +110,23 @@ def print_progress(region_buffer: RegionBuffer, timestep, max_timestep, elapsed_
           f"disturbed {pushed:>5d}/{total} | finished {finished:>5d}/{total} | fallen {fallen:>5d}")
 
 
+def print_scenario_summary(region_buffer: RegionBuffer) -> None:
+    total = region_buffer.num_envs
+    pushed = int((region_buffer.metadata["disturbance_apply_idx"] >= 0).sum().item())
+    fallen = int(region_buffer.metadata["terminated"].sum().item())
+    timed_out = int(region_buffer.metadata["truncated"].sum().item())
+    print("[SUMMARY]")
+    print(f"  envs       : {total}")
+    print(f"  disturbed  : {pushed}")
+    print(f"  fallen     : {fallen}")
+    print(f"  timed out  : {timed_out}")
+    if pushed < total:
+        print(f"[WARN] {total - pushed} envs ended before the disturbance was applied "
+              f"(filter on disturbance_apply_idx >= 0).")
+    if fallen == 0 or fallen == total:
+        print("[WARN] no fall/no-fall split; the disturbance range may be badly scaled.")
+
+
 # ============================ Main ============================
 
 
@@ -129,10 +148,13 @@ def main():
     
     C = ra_cfg["region_collection"]
 
-    # save_dir = next to predictor_checkpoint
+    # save_dir = <predictor_checkpoint dir>/<save_subdir>/<timestamp>/
+    # One run gets its own timestamp folder so re-runs never mix files.
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     save_dir = os.path.join(
         os.path.dirname(os.path.abspath(args_cli.predictor_checkpoint)),
-        C.get("save_subdir", "region"),)
+        C.get("save_subdir", "region"),
+        timestamp,)
 
     # ============================ Env & Wrapper Spawn ================================
     seed = args_cli.seed if args_cli.seed is not None else ra_cfg.get("seed", 42)
@@ -266,62 +288,64 @@ def main():
                                  disturbance_dim=4,
                                  device=env.device)
 
-    # ============= Collection loop ===============
+    # ============= Collection loops ===============
     # Every env terminates or truncates within one episode, so is_complete always
     # fires; num_steps is only a safety bound.
     max_timestep = num_steps
     log_interval = 50
+    num_scenarios = args_cli.num_scenarios
 
-    obs, states, infos = env.reset()
-    timestep = 0
-    t_start = time.time()
-
-    while simulation_app.is_running() and timestep < max_timestep:
-        with torch.no_grad():
-            actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
-            snapshot = extract_snapshot(infos["ra_states"], ra_value)
-
-            next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
-
-            # Captured before the env auto-reset, so this is the state that ended the episode.
-            terminal_value, _, _ = ra_agent.critic(next_infos["terminal_ra_state"], update_rms=False)
-            terminal_snapshot = extract_snapshot(next_infos["terminal_ra_state"], terminal_value)
-
-        # Order matters: record_disturbance reads write_idx as advanced by add().
-        region_buffer.add(snapshot)
-        record_disturbance(region_buffer, next_infos)
-        region_buffer.add_terminal(terminal_snapshot, terminated, truncated)
-
-        timestep += 1
-
-        if timestep % log_interval == 0:
-            print_progress(region_buffer, timestep, max_timestep, time.time() - t_start)
-
-        if region_buffer.is_complete:
-            print("[INFO] All environments finished. Stopping.")
+    for scenario in range(num_scenarios):
+        if not simulation_app.is_running():
             break
 
-        obs = next_obs
-        infos = next_infos
+        print(f"\n[SCENARIO {scenario + 1}/{num_scenarios}]")
 
-    # ============= Save & summary ===============
-    region_buffer.save(save_dir)
-    print(f"[INFO] Saved region buffer to {save_dir}")
+        # Scenario init. The seed is set once at startup and the global RNG stream
+        # keeps advancing, so each scenario draws different disturbances without any
+        # per-scenario reseeding. env._reset_once reopens the wrapper's one-shot reset
+        # guard so this env.reset() actually re-resets the simulation.
+        region_buffer.reset()
+        env._reset_once = True
+        obs, states, infos = env.reset()
 
-    total = region_buffer.num_envs
-    pushed = int((region_buffer.metadata["disturbance_apply_idx"] >= 0).sum().item())
-    fallen = int(region_buffer.metadata["terminated"].sum().item())
-    timed_out = int(region_buffer.metadata["truncated"].sum().item())
-    print("[SUMMARY]")
-    print(f"  envs       : {total}")
-    print(f"  disturbed  : {pushed}")
-    print(f"  fallen     : {fallen}")
-    print(f"  timed out  : {timed_out}")
-    if pushed < total:
-        print(f"[WARN] {total - pushed} envs never received a disturbance.")
-    if fallen == 0 or fallen == total:
-        print("[WARN] no fall/no-fall split; the disturbance range may be badly scaled.")
+        timestep = 0
+        t_start = time.time()
+
+        while simulation_app.is_running() and timestep < max_timestep:
+            with torch.no_grad():
+                actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+                ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
+                snapshot = extract_snapshot(infos["ra_states"], ra_value)
+
+                next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
+
+                # Captured before the env auto-reset, so this is the state that ended the episode.
+                terminal_value, _, _ = ra_agent.critic(next_infos["terminal_ra_state"], update_rms=False)
+                terminal_snapshot = extract_snapshot(next_infos["terminal_ra_state"], terminal_value)
+
+            # Order matters: record_disturbance reads write_idx as advanced by add().
+            region_buffer.add(snapshot)
+            record_disturbance(region_buffer, next_infos)
+            region_buffer.add_terminal(terminal_snapshot, terminated, truncated)
+
+            timestep += 1
+
+            if timestep % log_interval == 0:
+                print_progress(region_buffer, timestep, max_timestep, time.time() - t_start)
+
+            if region_buffer.is_complete:
+                print("[INFO] All environments finished. Stopping.")
+                break
+
+            obs = next_obs
+            infos = next_infos
+
+        # ============= Save & summary (per scenario) ===============
+        filename = f"region_buffer_{scenario:04d}.pt"
+        region_buffer.save(save_dir, filename=filename)
+        print(f"[INFO] scenario {scenario}: saved {os.path.join(save_dir, filename)}")
+        print_scenario_summary(region_buffer)
 
     env.close()
 
