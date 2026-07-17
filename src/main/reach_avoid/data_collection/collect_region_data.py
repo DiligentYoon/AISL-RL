@@ -18,7 +18,7 @@ parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable 
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
 parser.add_argument("--task", type=str, default="G1-fall-region-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/agent_32000.pt", help="Path to nominal policy checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -129,9 +129,9 @@ def main():
     
     C = ra_cfg["region_collection"]
 
-    # save_dir = next to ra_checkpoint
+    # save_dir = next to predictor_checkpoint
     save_dir = os.path.join(
-        os.path.dirname(os.path.abspath(args_cli.ra_checkpoint)),
+        os.path.dirname(os.path.abspath(args_cli.predictor_checkpoint)),
         C.get("save_subdir", "region"),)
 
     # ============================ Env & Wrapper Spawn ================================
@@ -252,8 +252,8 @@ def main():
     # Load checkpoints (both required)
     agent.load(os.path.abspath(args_cli.checkpoint))
     print(f"[INFO] Loaded nominal policy from {args_cli.checkpoint}")
-    ra_agent.load(os.path.abspath(args_cli.ra_checkpoint))
-    print(f"[INFO] Loaded RA critic from {args_cli.ra_checkpoint}")
+    ra_agent.load(os.path.abspath(args_cli.predictor_checkpoint))
+    print(f"[INFO] Loaded RA critic from {args_cli.predictor_checkpoint}")
 
     agent.set_running_mode("eval")
     ra_agent.set_running_mode("eval")

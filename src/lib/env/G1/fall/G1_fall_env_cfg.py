@@ -121,10 +121,7 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
         self.curriculum = None
 
         # events
-        self.events.reset_base         = None
-        self.events.reset_robot_joints = None
-
-        self.events.push_robot.interval_range_s = (2.0, 2.0) # 2s fixed
+        self.events.push_robot.interval_range_s = (2.0, 3.0) 
         self.events.push_robot.params["velocity_range"] = {
             "x": self.push_x_end,
             "y": self.push_y_end,
@@ -141,11 +138,15 @@ class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        # Log the realized disturbance so the collection script can read it back.
-        self.events.push_robot.func = push_and_log
+        # commands
+        self.commands.resampling_time_range = (3.0, 3.0)
+        self.commands.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.ranges.lin_vel_y = (0.0, 0.0)
 
-        # One push per episode: the second would land at 6.0s, past the 5.0s time-out.
-        # Leaves ~2.0s of post-disturbance observation.
+        # events
+        self.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
+
+        self.events.push_robot.func = push_and_log
         self.events.push_robot.interval_range_s = (3.0, 3.0)
         self.events.push_robot.params["velocity_range"] = {
             "x": self.push_x_end,
