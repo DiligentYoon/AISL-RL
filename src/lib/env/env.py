@@ -655,6 +655,9 @@ class Env(gym.Env):
 
         # apply events such as randomization for environments that need a reset
         if self.cfg.events:
+            # Manager reset
+            self.event_manager.reset(env_ids)
+            # Reset mode apply
             if "reset" in self.event_manager.available_modes:
                 env_step_count = self._sim_step_counter // self.cfg.decimation
                 self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
