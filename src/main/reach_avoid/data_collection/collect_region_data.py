@@ -17,8 +17,8 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
 parser.add_argument("--task", type=str, default="G1-fall-collect", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, required=True, help="Path to nominal policy checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, required=True, help="Path to trained Reach-Avoid value checkpoint.")
+parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/agent_32000.pt", help="Path to nominal policy checkpoint.")
+parser.add_argument("--ra_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -56,7 +56,7 @@ from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
-from lib.buffer.reach_avoid.riskbuffer import RiskClassifiedBuffer
+from lib.buffer.reach_avoid.regionbuffer import RegionBuffer
 from lib.model.model_factory import ModelFactory
 
 
@@ -67,16 +67,11 @@ model = args_cli.model.lower() if args_cli.model is not None else None
 # ============================ Helpers ============================
 
 
-def extract_physical_snapshot(info) -> dict[str, torch.Tensor]:
-    """Read root + joint state"""
+def extract_snapshot(ra_state, ra_value) -> dict[str, torch.Tensor]:
+    """Reach-avoid information"""
     return {
-        "root_pos_offset_w": info["root_pos_offset_w"].clone(),
-        "root_quat_w":       info["root_quat_w"].clone(),
-        "root_lin_vel_w":    info["root_lin_vel_w"].clone(),
-        "root_ang_vel_w":    info["root_ang_vel_w"].clone(),
-        "joint_pos":         info["joint_pos"].clone(),
-        "joint_vel":         info["joint_vel"].clone(),
-        "prev_action":       info["prev_action"].clone(),
+        "reach_avoid_state": ra_state,
+        "reach_avoid_value": ra_value.clone()
     }
 
 
@@ -283,24 +278,12 @@ def main():
     ra_agent.set_running_mode("eval")
 
     # ============= Risk-classified buffer ===============
-    joint_dim = env._unwrapped._robot.data.joint_pos.shape[-1]
-    risk_buffer = RiskClassifiedBuffer(
-        capacity_per_bucket=int(C["capacity_per_bucket"]),
-        thresholds=(float(C["thresholds"]["low_high"]),
-                    float(C["thresholds"]["mid_high"])),
-        joint_dim=joint_dim,
-        device=env.device,
-    )
+    num_steps = int(env._unwrapped.cfg.episode_length_s / env._unwrapped.step_dt)
+    region_buffer = RegionBuffer(env.num_envs, num_steps, env.device)
 
     # ============= Collection loop ===============
-    warmup_skip = int(C.get("warmup_skip_steps", 4))
-    subsample_stride = max(1, int(C.get("subsample_stride", 1)))
     max_timestep = int(C["max_timestep"])
     log_interval = 500
-
-    skip_remaining = torch.full((env.num_envs,), warmup_skip,
-                                dtype=torch.long, device=env.device)
-    stride_counter = torch.zeros((env.num_envs,), dtype=torch.long, device=env.device)
 
     obs, states, infos = env.reset()
     timestep = 0
@@ -309,26 +292,20 @@ def main():
     while simulation_app.is_running() and timestep < max_timestep:
         with torch.no_grad():
             actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            risk_scores, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
-            snapshot = extract_physical_snapshot(infos["collection"])
+            ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
+            snapshot = extract_snapshot(infos["ra_states"], ra_value)
             next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
 
-        valid_mask = build_valid_mask(skip_remaining, terminated,
-                                      stride_counter, subsample_stride)
-        risk_buffer.add(snapshot=snapshot, risk_scores=risk_scores, valid_mask=valid_mask)
-
-        update_counters(skip_remaining, stride_counter,
-                        done=(terminated | truncated),
-                        reset_value=warmup_skip)
+        region_buffer.add(snapshot, terminated, truncated)
 
         timestep += 1
 
         if timestep % log_interval == 0:
             elapsed = time.time() - t_start
             eta = elapsed / max(timestep, 1) * max(max_timestep - timestep, 0)
-            print_progress_box(risk_buffer.fill_status(), timestep, max_timestep, elapsed, eta)
+            # print_progress_box(region_buffer.fill_status(), timestep, max_timestep, elapsed, eta)
 
-        if risk_buffer.is_full():
+        if region_buffer.is_full():
             print("[INFO] All buckets reached capacity. Stopping.")
             break
 
@@ -337,17 +314,8 @@ def main():
         infos = next_infos
 
     # ============= Save & summary ===============
-    risk_buffer.save(save_dir)
-    print(f"[INFO] Saved risk-classified buckets to {save_dir}")
-
-    final = risk_buffer.fill_status()
-    underfilled = risk_buffer.underfilled_buckets()
-    print("[SUMMARY]")
-    for b in ("low", "mid", "high"):
-        cur, cap = final[b]
-        print(f"  {b:4s} : {cur} / {cap}")
-    if underfilled:
-        print(f"[WARN] underfilled buckets: {underfilled}")
+    region_buffer.save(save_dir)
+    print(f"[INFO] Saved region buffer to {save_dir}")
 
     env.close()
 

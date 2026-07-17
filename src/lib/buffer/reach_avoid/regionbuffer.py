@@ -6,179 +6,244 @@ from typing import Optional, Union
 import torch
 
 
-class RiskClassifiedBuffer:
-    """Risk-classified replay buffer for initial-condition collection.
+class RegionBuffer:
+    """Buffer for fall-predictor region analysis.
 
-    Stores per-step physical-state snapshots into one of three capacity-bounded
-    buckets (low / mid / high) by Reach-Avoid risk score. When a bucket reaches
-    its capacity, further insertions to that bucket are dropped (not FIFO).
+    One buffer stores one synchronized parallel sweep.
 
-    Stored keys per bucket (all float32, shape ``(capacity, dim)``):
-        root_pos_offset_w     (3)
-        root_quat_w    (4)
-        root_lin_vel_w (3)
-        root_ang_vel_w (3)
-        joint_pos      (joint_dim)
-        joint_vel      (joint_dim)
-        prev_action    (joint dim)
-        risk_score     (1)
+    - One environment corresponds to one disturbance condition.
+    - Time-varying data are written at every collection step.
+    - Disturbance metadata are written when the disturbance is applied.
+    - Done metadata are finalized once when each environment terminates
+      or truncates.
     """
 
-    BUCKETS = ("low", "mid", "high")
-
-    _ROOT_KEYS = {
-        "root_pos_offset_w": 3,
-        "root_quat_w": 4,
-        "root_lin_vel_w": 3,
-        "root_ang_vel_w": 3,
+    _TIME_VARYING_KEYS = {
+        "reach_avoid_state": 10,
+        "reach_avoid_value": 1,
     }
 
     def __init__(
         self,
-        capacity_per_bucket: int,
-        thresholds: tuple[float, float],
-        joint_dim: int,
+        num_envs: int,
+        num_steps: int,
+        disturbance_dim: int = 4,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        self.capacity = int(capacity_per_bucket)
-        low_high, mid_high = thresholds
-        if not (low_high < mid_high):
-            raise ValueError(
-                f"thresholds must satisfy low_high < mid_high, got ({low_high}, {mid_high})"
-            )
-        self.low_high = float(low_high)
-        self.mid_high = float(mid_high)
-        self.joint_dim = int(joint_dim)
+
+        self.num_envs = int(num_envs)
+        self.num_steps = int(num_steps)
+        self.disturbance_dim = int(disturbance_dim)
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
-        # Schema: key -> last-dim size
-        self._key_dims: dict[str, int] = dict(self._ROOT_KEYS)
-        self._key_dims["joint_pos"] = self.joint_dim
-        self._key_dims["joint_vel"] = self.joint_dim
-        self._key_dims["prev_action"] = self.joint_dim
-        self._key_dims["risk_score"] = 1
+        # ============================================================
+        # Time-varying trajectory data
+        # ============================================================
 
-        # Per-bucket flat storage tensors
-        self.tensors: dict[str, dict[str, torch.Tensor]] = {b: {} for b in self.BUCKETS}
-        for b in self.BUCKETS:
-            for k, d in self._key_dims.items():
-                self.tensors[b][k] = torch.zeros(
-                    (self.capacity, d), dtype=torch.float32, device=self.device
-                )
+        self.tensors: dict[str, torch.Tensor] = {
+            "reach_avoid_state": torch.zeros((self.num_envs, self.num_steps, 10), dtype=torch.float32, device=self.device),
+            "reach_avoid_value": torch.full((self.num_envs, self.num_steps, 1), torch.nan, dtype=torch.float32, device=self.device),
+        }
 
-        # Per-bucket write head
-        self.write_idx: dict[str, int] = {b: 0 for b in self.BUCKETS}
+        # ============================================================
+        # Per-environment metadata
+        # ============================================================
 
-    # -------- classification --------
+        self.metadata: dict[str, torch.Tensor] = {
+            # Applied disturbance:
+            "disturbance": torch.zeros((self.num_envs, self.disturbance_dim), dtype=torch.float32, device=self.device),
 
-    def classify(self, risk_scores: torch.Tensor) -> torch.Tensor:
-        """Map risk scores to bucket ids.
+            # Whether the environment ended through each condition.
+            "terminated": torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device),
+            "truncated": torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device),
 
-        Boundary convention:
-            score <= low_high            -> 0 (low)
-            low_high < score <= mid_high -> 1 (mid)
-            score > mid_high             -> 2 (high)
+            # -1 means that the event did not occur.
+            "disturbance_apply_idx": torch.full((self.num_envs, 1), -1, dtype=torch.long, device=self.device),
+            "falling_idx": torch.full((self.num_envs, 1), -1, dtype=torch.long, device=self.device),
+            "done_idx": torch.full((self.num_envs, 1), -1, dtype=torch.long, device=self.device),
+        }
+
+        # Number of valid trajectory samples stored per environment.
+        self.write_idx = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+        # False after an environment terminates, truncates, or fills capacity.
+        self.active_mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+
+    # ================================================================
+    # Disturbance metadata
+    # ================================================================
+
+    @torch.no_grad()
+    def set_disturbance(
+        self,
+        disturbance: torch.Tensor,
+        apply_idx: int,
+        env_ids: Optional[torch.Tensor] = None,
+    ) -> None:
+        """Record the disturbance applied to each environment.
 
         Args:
-            risk_scores: shape (num_envs,) or (num_envs, 1)
-
-        Returns:
-            (num_envs,) long tensor in {0, 1, 2}
+            disturbance:
+                Shape [N, disturbance_dim], where N is len(env_ids), or
+                num_envs when env_ids is None.
+            apply_idx:
+                Buffer index corresponding to the post-disturbance sample.
+            env_ids:
+                Environments receiving the disturbance. Defaults to all.
         """
-        scores = risk_scores.flatten()
-        return (scores > self.low_high).long() + (scores > self.mid_high).long()
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, dtype=torch.long, device=self.device)
+        else:
+            env_ids = env_ids.to(device=self.device, dtype=torch.long)
 
-    # -------- writes --------
+        self.metadata["disturbance"][env_ids] = disturbance.to(device=self.device, dtype=torch.float32)
+        self.metadata["disturbance_apply_idx"][env_ids, 0] = apply_idx
+
+    # ================================================================
+    # Per-step writes
+    # ================================================================
 
     def add(
         self,
         snapshot: dict[str, torch.Tensor],
-        risk_scores: torch.Tensor,
-        valid_mask: Optional[torch.Tensor] = None,
+        terminated: torch.Tensor,
+        truncated: torch.Tensor,
     ) -> dict[str, int]:
-        """Insert one multi-env step. Returns per-bucket inserted count.
+        """Insert one synchronized multi-environment sample.
 
-        Args:
-            snapshot: dict with keys
-                root_pos_offset_w, root_quat_w, root_lin_vel_w, root_ang_vel_w, prev_action
-                joint_pos, joint_vel
-                — each tensor of shape (num_envs, dim).
-            risk_scores: (num_envs,) or (num_envs, 1).
-            valid_mask: optional (num_envs,) bool. Envs with False are skipped
-                (used for warmup / terminated / subsample filtering).
-
-        Returns:
-            {bucket_name: num_inserted}
+        The terminal sample is stored before the corresponding environment
+        is marked inactive.
         """
-        scores = risk_scores.flatten()
-        num_envs = scores.shape[0]
+        # Only active environments with remaining capacity are inserted.
+        has_capacity = self.write_idx < self.num_steps
+        insert_mask = self.active_mask & has_capacity
 
-        if valid_mask is None:
-            mask_v = torch.ones(num_envs, dtype=torch.bool, device=scores.device)
-        else:
-            mask_v = valid_mask.flatten().bool()
+        env_ids = torch.nonzero(insert_mask, as_tuple=False).squeeze(-1)
 
-        bucket_ids = self.classify(scores)
-        added = {b: 0 for b in self.BUCKETS}
+        # Each environment can have its own write index.
+        step_ids = self.write_idx[env_ids]
 
-        for bid, bname in enumerate(self.BUCKETS):
-            free = self.capacity - self.write_idx[bname]
-            if free <= 0:
-                continue
+        # Correct per-environment advanced indexing.
+        self.tensors["reach_avoid_state"][env_ids, step_ids] = snapshot["reach_avoid_state"][env_ids]
+        self.tensors["reach_avoid_value"][env_ids, step_ids] = snapshot["reach_avoid_value"][env_ids]
 
-            mask = mask_v & (bucket_ids == bid)
-            count = int(mask.sum().item())
-            if count == 0:
-                continue
+        # The current sample is now valid.
+        self.write_idx[env_ids] += 1
 
-            n = min(count, free)
-            env_idx = torch.nonzero(mask, as_tuple=False).flatten()[:n]
+        terminated_now = terminated[env_ids]
+        truncated_now = truncated[env_ids]
+        done_now = terminated_now | truncated_now
 
-            start = self.write_idx[bname]
-            end = start + n
-            store = self.tensors[bname]
+        done_env_ids = env_ids[done_now]
+        done_step_ids = step_ids[done_now]
 
-            store["root_pos_offset_w"][start:end].copy_(snapshot["root_pos_offset_w"][env_idx])
-            store["root_quat_w"][start:end].copy_(snapshot["root_quat_w"][env_idx])
-            store["root_lin_vel_w"][start:end].copy_(snapshot["root_lin_vel_w"][env_idx])
-            store["root_ang_vel_w"][start:end].copy_(snapshot["root_ang_vel_w"][env_idx])
-            store["joint_pos"][start:end].copy_(snapshot["joint_pos"][env_idx])
-            store["joint_vel"][start:end].copy_(snapshot["joint_vel"][env_idx])
-            store["prev_action"][start:end].copy_(snapshot["prev_action"][env_idx])
-            store["risk_score"][start:end, 0].copy_(scores[env_idx])
+        if done_env_ids.numel() > 0:
+            self.finalize_buffer(env_ids=done_env_ids, 
+                                 step_ids=done_step_ids, 
+                                 terminated=terminated[done_env_ids], 
+                                 truncated=truncated[done_env_ids])
 
-            self.write_idx[bname] = end
-            added[bname] = n
+        # Stop collection when capacity has been reached.
+        capacity_done = self.write_idx >= self.num_steps
+        self.active_mask[capacity_done] = False
 
-        return added
+        return {}
 
-    # -------- status --------
+    # ================================================================
+    # Done finalization
+    # ================================================================
 
-    def is_full(self) -> bool:
-        """True if every bucket has reached capacity."""
-        return all(self.write_idx[b] >= self.capacity for b in self.BUCKETS)
+    def finalize_buffer(
+        self,
+        env_ids: torch.Tensor,
+        step_ids: torch.Tensor,
+        terminated: torch.Tensor,
+        truncated: torch.Tensor,
+    ) -> None:
+        """Finalize metadata for environments that have just ended."""
 
-    def fill_status(self) -> dict[str, tuple[int, int]]:
-        """Return ``{bucket: (current, capacity)}`` for each bucket."""
-        return {b: (self.write_idx[b], self.capacity) for b in self.BUCKETS}
+        self.metadata["terminated"][env_ids, 0] = terminated
+        self.metadata["truncated"][env_ids, 0] = truncated
+        self.metadata["done_idx"][env_ids, 0] = step_ids
 
-    def underfilled_buckets(self) -> list[str]:
-        """Return bucket names that did not reach capacity."""
-        return [b for b in self.BUCKETS if self.write_idx[b] < self.capacity]
+        # In the current environment, terminated represents an actual fall.
+        fall_env_ids = env_ids[terminated]
+        fall_step_ids = step_ids[terminated]
 
-    # -------- save --------
+        self.metadata["falling_idx"][fall_env_ids, 0] = fall_step_ids
 
-    def save(self, save_dir: str) -> None:
-        """Persist each bucket as ``<save_dir>/<bucket>_risk.pt``.
+        # Latch these environments as inactive.
+        self.active_mask[env_ids] = False
 
-        Tensors are truncated to the bucket's current write index and moved to
-        CPU before saving. No metadata file is written.
-        """
+    # ================================================================
+    # Status
+    # ================================================================
+
+    @property
+    def is_complete(self) -> bool:
+        return not bool(self.active_mask.any().item())
+
+    def get_valid_time_mask(self) -> torch.Tensor:
+        """Return a [num_envs, num_steps] valid-data mask."""
+        time_idx = torch.arange(
+            self.num_steps,
+            device=self.device,
+        ).unsqueeze(0)
+
+        return time_idx < self.write_idx.unsqueeze(1)
+
+    # ================================================================
+    # Reset
+    # ================================================================
+
+    def reset(self) -> None:
+        self.tensors["reach_avoid_state"].zero_()
+        self.tensors["reach_avoid_value"].fill_(torch.nan)
+
+        self.metadata["disturbance"].zero_()
+        self.metadata["terminated"].zero_()
+        self.metadata["truncated"].zero_()
+        self.metadata["disturbance_apply_idx"].fill_(-1)
+        self.metadata["falling_idx"].fill_(-1)
+        self.metadata["done_idx"].fill_(-1)
+
+        self.write_idx.zero_()
+        self.active_mask.fill_(True)
+
+    # ================================================================
+    # Save
+    # ================================================================
+
+    def save(
+        self,
+        save_dir: str,
+        filename: str = "region_buffer.pt",
+    ) -> str:
+        """Save trajectory tensors and metadata in one payload."""
         os.makedirs(save_dir, exist_ok=True)
-        for b in self.BUCKETS:
-            n = self.write_idx[b]
-            payload = {
-                k: v[:n].detach().cpu().contiguous()
-                for k, v in self.tensors[b].items()
-            }
-            torch.save(payload, os.path.join(save_dir, f"{b}_risk.pt"))
+
+        max_steps = int(self.write_idx.max().item())
+        valid_time_mask = self.get_valid_time_mask()[:, :max_steps]
+
+        payload = {
+            "trajectory": {
+                key: value[:, :max_steps].detach().cpu().contiguous()
+                for key, value in self.tensors.items()
+            },
+            "metadata": {
+                key: value.detach().cpu().contiguous()
+                for key, value in self.metadata.items()
+            },
+            "write_idx": self.write_idx.detach().cpu().contiguous(),
+            "valid_time_mask": valid_time_mask.detach().cpu().contiguous(),
+            "config": {
+                "num_envs": self.num_envs,
+                "num_steps": self.num_steps,
+                "disturbance_dim": self.disturbance_dim,
+            },
+        }
+
+        save_path = os.path.join(save_dir, filename)
+        torch.save(payload, save_path)
+
+        return save_path
