@@ -16,7 +16,7 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
-parser.add_argument("--task", type=str, default="G1-fall-collect", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-fall-region-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/agent_32000.pt", help="Path to nominal policy checkpoint.")
 parser.add_argument("--ra_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
 
@@ -70,61 +70,42 @@ model = args_cli.model.lower() if args_cli.model is not None else None
 def extract_snapshot(ra_state, ra_value) -> dict[str, torch.Tensor]:
     """Reach-avoid information"""
     return {
-        "reach_avoid_state": ra_state,
+        "reach_avoid_state": ra_state.clone(),
         "reach_avoid_value": ra_value.clone()
     }
 
 
-def build_valid_mask(skip_remaining: torch.Tensor,
-                     terminated: torch.Tensor,
-                     stride_counter: torch.Tensor,
-                     stride: int) -> torch.Tensor:
-    """Per-env mask combining warmup-skip, terminated exclusion, subsample stride."""
-    not_warmup = (skip_remaining == 0)
-    not_terminated = ~terminated.flatten().bool()
-    on_stride = (stride_counter % stride == 0)
-    return not_warmup & not_terminated & on_stride
+def record_disturbance(region_buffer: RegionBuffer, infos: dict) -> None:
+    """Record each environment's disturbance once, the first time the push fires.
 
+    ``disturbance_apply_idx`` starts at -1, so it doubles as the "not recorded yet"
+    marker and no extra flag has to be consumed.
 
-def update_counters(skip_remaining: torch.Tensor,
-                    stride_counter: torch.Tensor,
-                    done: torch.Tensor,
-                    reset_value: int) -> None:
-    """Advance per-env counters for next step.
-
-    - Decrement warmup-skip while > 0.
-    - Reset both counters for envs that just finished an episode.
-    - Increment stride counter for next step.
+    Must be called after :meth:`RegionBuffer.add`: the RA state cache is filled before
+    the push event runs, so ra_states lag the push by one step and the first
+    post-disturbance sample lands at ``write_idx + 1``.
     """
-    pos = skip_remaining > 0
-    skip_remaining[pos] -= 1
+    applied = infos["disturbance_applied"].flatten()
+    pending = (applied
+               & (region_buffer.metadata["disturbance_apply_idx"].squeeze(-1) < 0)
+               & region_buffer.active_mask)
+    if not pending.any():
+        return
 
-    done_flat = done.flatten().bool()
-    skip_remaining[done_flat] = reset_value
-    stride_counter[done_flat] = 0
+    env_ids = pending.nonzero().flatten()
+    delta = infos["disturbance"][env_ids][:, [0, 1, 3, 4]]        # (vx, vy, roll, pitch)
+    region_buffer.set_disturbance(delta,
+                                  apply_idx=region_buffer.write_idx[env_ids] + 1,
+                                  env_ids=env_ids)
 
-    stride_counter += 1
 
-
-def print_progress_box(fill_status, timestep, max_timestep, elapsed_sec, eta_sec):
-    content_width = 64
-    e_h = int(elapsed_sec // 3600); e_m = int((elapsed_sec % 3600) // 60); e_s = int(elapsed_sec % 60)
-    c_h = int(eta_sec // 3600); c_m = int((eta_sec % 3600) // 60); c_s = int(eta_sec % 60)
-    line_step = f"Step Progress {timestep} / {max_timestep}"
-    line_time = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
-    print(" ________________________________________________________________")
-    print("|                                                                |")
-    print(f"|{line_step.center(content_width)}|")
-    print(f"|{line_time.center(content_width)}|")
-    print("|________________________________________________________________|")
-    print("|                                                                |")
-    for b in ("low", "mid", "high"):
-        cur, cap = fill_status[b]
-        ratio = 100.0 * cur / max(cap, 1)
-        tag = "FULL" if cur >= cap else f"{ratio:5.1f}%"
-        line = f"{b.capitalize():4s} : {cur:>7d} / {cap:<7d}  ({tag})"
-        print(f"| {line:<{content_width-1}}|")
-    print("|________________________________________________________________|")
+def print_progress(region_buffer: RegionBuffer, timestep, max_timestep, elapsed_sec):
+    total = region_buffer.num_envs
+    pushed = int((region_buffer.metadata["disturbance_apply_idx"] >= 0).sum().item())
+    finished = int((~region_buffer.active_mask).sum().item())
+    fallen = int((region_buffer.metadata["falling_idx"] >= 0).sum().item())
+    print(f"[{timestep:4d}/{max_timestep}] elapsed {elapsed_sec:6.1f}s | "
+          f"disturbed {pushed:>5d}/{total} | finished {finished:>5d}/{total} | fallen {fallen:>5d}")
 
 
 # ============================ Main ============================
@@ -146,12 +127,12 @@ def main():
         print(e)
         return
     
-    C = ra_cfg["collection"]
+    C = ra_cfg["region_collection"]
 
     # save_dir = next to ra_checkpoint
     save_dir = os.path.join(
         os.path.dirname(os.path.abspath(args_cli.ra_checkpoint)),
-        C.get("save_subdir", "collected"),)
+        C.get("save_subdir", "region"),)
 
     # ============================ Env & Wrapper Spawn ================================
     seed = args_cli.seed if args_cli.seed is not None else ra_cfg.get("seed", 42)
@@ -277,13 +258,19 @@ def main():
     agent.set_running_mode("eval")
     ra_agent.set_running_mode("eval")
 
-    # ============= Risk-classified buffer ===============
-    num_steps = int(env._unwrapped.cfg.episode_length_s / env._unwrapped.step_dt)
-    region_buffer = RegionBuffer(env.num_envs, num_steps, env.device)
+    # ============= Region buffer ===============
+    # One extra slot for the terminal sample appended when an episode ends.
+    num_steps = env._unwrapped.max_episode_length + 1
+    region_buffer = RegionBuffer(env.num_envs, num_steps,
+                                 ra_state_dim=env._unwrapped.cfg.ra_state_space,
+                                 disturbance_dim=4,
+                                 device=env.device)
 
     # ============= Collection loop ===============
-    max_timestep = int(C["max_timestep"])
-    log_interval = 500
+    # Every env terminates or truncates within one episode, so is_complete always
+    # fires; num_steps is only a safety bound.
+    max_timestep = num_steps
+    log_interval = 50
 
     obs, states, infos = env.reset()
     timestep = 0
@@ -294,28 +281,47 @@ def main():
             actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
             snapshot = extract_snapshot(infos["ra_states"], ra_value)
+
             next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
 
-        region_buffer.add(snapshot, terminated, truncated)
+            # Captured before the env auto-reset, so this is the state that ended the episode.
+            terminal_value, _, _ = ra_agent.critic(next_infos["terminal_ra_state"], update_rms=False)
+            terminal_snapshot = extract_snapshot(next_infos["terminal_ra_state"], terminal_value)
+
+        # Order matters: record_disturbance reads write_idx as advanced by add().
+        region_buffer.add(snapshot)
+        record_disturbance(region_buffer, next_infos)
+        region_buffer.add_terminal(terminal_snapshot, terminated, truncated)
 
         timestep += 1
 
         if timestep % log_interval == 0:
-            elapsed = time.time() - t_start
-            eta = elapsed / max(timestep, 1) * max(max_timestep - timestep, 0)
-            # print_progress_box(region_buffer.fill_status(), timestep, max_timestep, elapsed, eta)
+            print_progress(region_buffer, timestep, max_timestep, time.time() - t_start)
 
-        if region_buffer.is_full():
-            print("[INFO] All buckets reached capacity. Stopping.")
+        if region_buffer.is_complete:
+            print("[INFO] All environments finished. Stopping.")
             break
 
         obs = next_obs
-        states = next_states
         infos = next_infos
 
     # ============= Save & summary ===============
     region_buffer.save(save_dir)
     print(f"[INFO] Saved region buffer to {save_dir}")
+
+    total = region_buffer.num_envs
+    pushed = int((region_buffer.metadata["disturbance_apply_idx"] >= 0).sum().item())
+    fallen = int(region_buffer.metadata["terminated"].sum().item())
+    timed_out = int(region_buffer.metadata["truncated"].sum().item())
+    print("[SUMMARY]")
+    print(f"  envs       : {total}")
+    print(f"  disturbed  : {pushed}")
+    print(f"  fallen     : {fallen}")
+    print(f"  timed out  : {timed_out}")
+    if pushed < total:
+        print(f"[WARN] {total - pushed} envs never received a disturbance.")
+    if fallen == 0 or fallen == total:
+        print("[WARN] no fall/no-fall split; the disturbance range may be badly scaled.")
 
     env.close()
 

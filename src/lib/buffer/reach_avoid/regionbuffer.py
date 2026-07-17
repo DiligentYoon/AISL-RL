@@ -14,25 +14,22 @@ class RegionBuffer:
     - One environment corresponds to one disturbance condition.
     - Time-varying data are written at every collection step.
     - Disturbance metadata are written when the disturbance is applied.
-    - Done metadata are finalized once when each environment terminates
-      or truncates.
+    - The terminal sample is appended and the done metadata finalized once,
+      when each environment terminates or truncates.
     """
-
-    _TIME_VARYING_KEYS = {
-        "reach_avoid_state": 10,
-        "reach_avoid_value": 1,
-    }
 
     def __init__(
         self,
         num_envs: int,
         num_steps: int,
+        ra_state_dim: int = 10,
         disturbance_dim: int = 4,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
 
         self.num_envs = int(num_envs)
         self.num_steps = int(num_steps)
+        self.ra_state_dim = int(ra_state_dim)
         self.disturbance_dim = int(disturbance_dim)
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
@@ -41,7 +38,7 @@ class RegionBuffer:
         # ============================================================
 
         self.tensors: dict[str, torch.Tensor] = {
-            "reach_avoid_state": torch.zeros((self.num_envs, self.num_steps, 10), dtype=torch.float32, device=self.device),
+            "reach_avoid_state": torch.zeros((self.num_envs, self.num_steps, self.ra_state_dim), dtype=torch.float32, device=self.device),
             "reach_avoid_value": torch.full((self.num_envs, self.num_steps, 1), torch.nan, dtype=torch.float32, device=self.device),
         }
 
@@ -77,7 +74,7 @@ class RegionBuffer:
     def set_disturbance(
         self,
         disturbance: torch.Tensor,
-        apply_idx: int,
+        apply_idx: Union[int, torch.Tensor],
         env_ids: Optional[torch.Tensor] = None,
     ) -> None:
         """Record the disturbance applied to each environment.
@@ -88,6 +85,8 @@ class RegionBuffer:
                 num_envs when env_ids is None.
             apply_idx:
                 Buffer index corresponding to the post-disturbance sample.
+                Either a scalar shared by all environments, or a [N] tensor when
+                environments are at different write positions.
             env_ids:
                 Environments receiving the disturbance. Defaults to all.
         """
@@ -103,23 +102,16 @@ class RegionBuffer:
     # Per-step writes
     # ================================================================
 
-    def add(
-        self,
-        snapshot: dict[str, torch.Tensor],
-        terminated: torch.Tensor,
-        truncated: torch.Tensor,
-    ) -> dict[str, int]:
-        """Insert one synchronized multi-environment sample.
+    def _writable_env_ids(self) -> torch.Tensor:
+        """Active environments that still have capacity left."""
+        insert_mask = self.active_mask & (self.write_idx < self.num_steps)
+        return torch.nonzero(insert_mask, as_tuple=False).squeeze(-1)
 
-        The terminal sample is stored before the corresponding environment
-        is marked inactive.
+    def _write(self, env_ids: torch.Tensor, snapshot: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Write one sample per environment and advance its write index.
+
+        Returns the indices the samples were written to.
         """
-        # Only active environments with remaining capacity are inserted.
-        has_capacity = self.write_idx < self.num_steps
-        insert_mask = self.active_mask & has_capacity
-
-        env_ids = torch.nonzero(insert_mask, as_tuple=False).squeeze(-1)
-
         # Each environment can have its own write index.
         step_ids = self.write_idx[env_ids]
 
@@ -130,24 +122,46 @@ class RegionBuffer:
         # The current sample is now valid.
         self.write_idx[env_ids] += 1
 
-        terminated_now = terminated[env_ids]
-        truncated_now = truncated[env_ids]
-        done_now = terminated_now | truncated_now
-
-        done_env_ids = env_ids[done_now]
-        done_step_ids = step_ids[done_now]
-
-        if done_env_ids.numel() > 0:
-            self.finalize_buffer(env_ids=done_env_ids, 
-                                 step_ids=done_step_ids, 
-                                 terminated=terminated[done_env_ids], 
-                                 truncated=truncated[done_env_ids])
-
         # Stop collection when capacity has been reached.
-        capacity_done = self.write_idx >= self.num_steps
-        self.active_mask[capacity_done] = False
+        self.active_mask[self.write_idx >= self.num_steps] = False
 
-        return {}
+        return step_ids
+
+    def add(self, snapshot: dict[str, torch.Tensor]) -> None:
+        """Insert one synchronized multi-environment sample."""
+        env_ids = self._writable_env_ids()
+        if env_ids.numel() == 0:
+            return
+
+        self._write(env_ids, snapshot)
+
+    def add_terminal(
+        self,
+        snapshot: dict[str, torch.Tensor],
+        terminated: torch.Tensor,
+        truncated: torch.Tensor,
+    ) -> None:
+        """Insert the terminal sample for environments that just ended, then finalize.
+
+        ``snapshot`` carries the pre-reset terminal state for every environment; only
+        the entries of environments that actually ended are consumed. Call this after
+        :meth:`add` so the terminal sample lands after the last regular one.
+        """
+        # The environment wrapper reports these as [E, 1]; this buffer indexes flat.
+        terminated = terminated.flatten().bool()
+        truncated = truncated.flatten().bool()
+
+        env_ids = self._writable_env_ids()
+        env_ids = env_ids[terminated[env_ids] | truncated[env_ids]]
+        if env_ids.numel() == 0:
+            return
+
+        step_ids = self._write(env_ids, snapshot)
+
+        self.finalize_buffer(env_ids=env_ids,
+                             step_ids=step_ids,
+                             terminated=terminated[env_ids],
+                             truncated=truncated[env_ids])
 
     # ================================================================
     # Done finalization
@@ -239,6 +253,7 @@ class RegionBuffer:
             "config": {
                 "num_envs": self.num_envs,
                 "num_steps": self.num_steps,
+                "ra_state_dim": self.ra_state_dim,
                 "disturbance_dim": self.disturbance_dim,
             },
         }

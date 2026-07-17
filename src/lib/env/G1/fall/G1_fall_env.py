@@ -26,18 +26,23 @@ class G1FallEnv(G1RecoveryEnv):
         self.capturable_boundary = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.dist_from_icp_to_stance = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
 
+    # Single definition of the RA state layout, shared by _get_states and any caller
+    # that needs the RA state at a different point in the step (e.g. before auto-reset).
+    def _build_ra_state(self) -> torch.Tensor:
+        return torch.cat([self.root_lin_vel_b,                                  # [E, 3]
+                          self.root_ang_vel_b,                                  # [E, 3]
+                          self.projected_gravity,                               # [E, 3]
+                          self.phase.unsqueeze(-1),                             # [E, 1]
+                        #   self.dist_from_icp_to_stance,                       # [E, 1]
+                        #   self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
+                        ], dim=-1)
+
     # Overriding to add RA states
     def _get_states(self) -> dict[str, torch.Tensor]:
         states = super()._get_states()
 
         # Reach-Avoid information
-        self.extras["ra_states"] = torch.cat([self.root_lin_vel_b,                                  # [E, 3]
-                                              self.root_ang_vel_b,                                  # [E, 3]
-                                              self.projected_gravity,                               # [E, 3]
-                                              self.phase.unsqueeze(-1),                             # [E, 1]
-                                            #   self.dist_from_icp_to_stance,                       # [E, 1]
-                                            #   self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
-                                            ], dim=-1)
+        self.extras["ra_states"] = self._build_ra_state()
 
         base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
         # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)

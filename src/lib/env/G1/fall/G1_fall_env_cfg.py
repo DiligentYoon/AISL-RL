@@ -8,6 +8,7 @@ from isaaclab.managers import SceneEntityCfg
 
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 from lib.domain_randomizer import randomizer
+from lib.env.G1.fall.mdp.randomizer import push_and_log
 from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 
@@ -108,7 +109,7 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         self.plotter: PNGSavePlotter = PNGSavePlotter
 
 
-# Data Collection Environment for Initial dataset construction or region analysis
+# Data Collection Environment for Initial dataset construction
 @configclass
 class G1FallCollectEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
@@ -129,6 +130,28 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
             "y": self.push_y_end,
             "roll" : self.push_roll_end,
             "pitch": self.push_pitch_end,
+        }
+
+
+# Data Collection Environment for disturbance region analysis.
+# One env carries one disturbance condition, so the push must be logged and must
+# fire exactly once per episode.
+@configclass
+class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # Log the realized disturbance so the collection script can read it back.
+        self.events.push_robot.func = push_and_log
+
+        # One push per episode: the second would land at 6.0s, past the 5.0s time-out.
+        # Leaves ~2.0s of post-disturbance observation.
+        self.events.push_robot.interval_range_s = (3.0, 3.0)
+        self.events.push_robot.params["velocity_range"] = {
+            "x": self.push_x_end,
+            "y": self.push_y_end,
+            "roll" : (0.0, 0.0),    # disabled for the (vx, vy) sweep
+            "pitch": (0.0, 0.0),
         }
 
 

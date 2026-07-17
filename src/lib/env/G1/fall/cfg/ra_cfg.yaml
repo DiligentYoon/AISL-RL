@@ -3,6 +3,7 @@ seed: 42
 train:
   timesteps: 25600
 
+# Initial-condition dataset (collect_init_data.py)
 collection:
   capacity_per_bucket: 100000
   thresholds:
@@ -12,6 +13,12 @@ collection:
   warmup_skip_steps: 4
   subsample_stride: 4
   save_subdir: "collected"
+
+# Disturbance region sweep (collect_region_data.py).
+# One env carries one disturbance condition, so the run length is bounded by the
+# episode itself; there is nothing to size here beyond the output location.
+region_collection:
+  save_subdir: "region"
 
 ra:
   buffer:
