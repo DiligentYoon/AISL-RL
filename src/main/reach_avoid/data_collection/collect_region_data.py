@@ -16,10 +16,10 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
-parser.add_argument("--num_scenarios", type=int, default=1, help="Number of sequential scenario sweeps to collect, one file each.")
+parser.add_argument("--num_scenarios", type=int, default=10, help="Number of sequential scenario sweeps to collect, one file each.")
 parser.add_argument("--task", type=str, default="G1-fall-region-collect", help="Name of the task.")
-parser.add_argument("--checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/agent_32000.pt", help="Path to nominal policy checkpoint.")
-parser.add_argument("--predictor_checkpoint", type=str, default="logs/g1_recovery/2026-07-13_20-12-05_mappo/Reach_Avoid/0715_best/ra_agent_25600.pt", help="Path to trained Reach-Avoid value checkpoint.")
+parser.add_argument("--checkpoint", type=str, default=None, help="Path to nominal policy checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to trained Reach-Avoid value checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -283,69 +283,91 @@ def main():
     # ============= Region buffer ===============
     # One extra slot for the terminal sample appended when an episode ends.
     num_steps = env._unwrapped.max_episode_length + 1
-    region_buffer = RegionBuffer(env.num_envs, num_steps,
-                                 ra_state_dim=env._unwrapped.cfg.ra_state_space,
+    region_buffer = RegionBuffer(env.num_envs, 
+                                 num_steps,
                                  disturbance_dim=4,
                                  device=env.device)
 
     # ============= Collection loops ===============
     # Every env terminates or truncates within one episode, so is_complete always
     # fires; num_steps is only a safety bound.
+    t_anchor = 2.1
+    t_phi_delta = [0.07, 0.175, 0.28, 0.42, 0.525, 0.63]
+    t_phi = [t_anchor + x for x in t_phi_delta]
+    video_end = False
     max_timestep = num_steps
     log_interval = 50
     num_scenarios = args_cli.num_scenarios
 
-    for scenario in range(num_scenarios):
-        if not simulation_app.is_running():
-            break
-
-        print(f"\n[SCENARIO {scenario + 1}/{num_scenarios}]")
-
-        # Scenario init. The seed is set once at startup and the global RNG stream
-        # keeps advancing, so each scenario draws different disturbances without any
-        # per-scenario reseeding. env._reset_once reopens the wrapper's one-shot reset
-        # guard so this env.reset() actually re-resets the simulation.
-        region_buffer.reset()
-        env._reset_once = True
-        obs, states, infos = env.reset()
-
-        timestep = 0
-        t_start = time.time()
-
-        while simulation_app.is_running() and timestep < max_timestep:
-            with torch.no_grad():
-                actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-                ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
-                snapshot = extract_snapshot(infos["ra_states"], ra_value)
-
-                next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
-
-                # Captured before the env auto-reset, so this is the state that ended the episode.
-                terminal_value, _, _ = ra_agent.critic(next_infos["terminal_ra_state"], update_rms=False)
-                terminal_snapshot = extract_snapshot(next_infos["terminal_ra_state"], terminal_value)
-
-            # Order matters: record_disturbance reads write_idx as advanced by add().
-            region_buffer.add(snapshot)
-            record_disturbance(region_buffer, next_infos)
-            region_buffer.add_terminal(terminal_snapshot, terminated, truncated)
-
-            timestep += 1
-
-            if timestep % log_interval == 0:
-                print_progress(region_buffer, timestep, max_timestep, time.time() - t_start)
-
-            if region_buffer.is_complete:
-                print("[INFO] All environments finished. Stopping.")
+    for t_i_phi in t_phi:
+        print(f"\n[DISTURBANCE PHASE] : {t_i_phi}")
+        env._unwrapped.event_manager._mode_term_cfgs["interval"][0].interval_range_s = (t_i_phi, t_i_phi)
+        for scenario in range(num_scenarios):
+            if not simulation_app.is_running():
                 break
 
-            obs = next_obs
-            infos = next_infos
+            print(f"\n[SCENARIO {scenario + 1}/{num_scenarios}]")
 
-        # ============= Save & summary (per scenario) ===============
-        filename = f"region_buffer_{scenario:04d}.pt"
-        region_buffer.save(save_dir, filename=filename)
-        print(f"[INFO] scenario {scenario}: saved {os.path.join(save_dir, filename)}")
-        print_scenario_summary(region_buffer)
+            # Scenario init. The seed is set once at startup and the global RNG stream
+            # keeps advancing, so each scenario draws different disturbances without any
+            # per-scenario reseeding. env._reset_once reopens the wrapper's one-shot reset
+            # guard so this env.reset() actually re-resets the simulation.
+            region_buffer.reset()
+            env._reset_once = True
+            obs, states, infos = env.reset()
+
+            timestep = 0
+            t_start = time.time()
+
+            while simulation_app.is_running() and timestep < max_timestep:
+                with torch.no_grad():
+                    actions,  _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+                    ra_value, _, _ = ra_agent.critic(infos["ra_states"], update_rms=False)
+                    snapshot = extract_snapshot(infos["ra_states"], ra_value)
+
+                    next_obs, next_states, _, terminated, truncated, next_infos = env.step(actions)
+
+                    # Captured before the env auto-reset, so this is the state that ended the episode.
+                    terminal_value, _, _ = ra_agent.critic(next_infos["terminal_ra_state"], update_rms=False)
+                    terminal_snapshot = extract_snapshot(next_infos["terminal_ra_state"], terminal_value)
+
+                # Order matters: record_disturbance reads write_idx as advanced by add().
+                region_buffer.add(snapshot)
+                record_disturbance(region_buffer, next_infos)
+                region_buffer.add_terminal(terminal_snapshot, terminated, truncated)
+
+                timestep += 1
+
+                if timestep % log_interval == 0:
+                    print_progress(region_buffer, timestep, max_timestep, time.time() - t_start)
+                
+                if region_buffer.is_complete:
+                    video_end = True
+                    print("[INFO] All environments finished. Stopping.")
+                    break
+                else:
+                    if (args_cli.video and timestep == (args_cli.video_length-1)):
+                        print("[INFO] Video recording end. Stopping")
+                        video_end = True   
+                        break
+                
+                obs = next_obs
+                infos = next_infos
+
+            # =============== Summary (per scenario) ===============
+            print_scenario_summary(region_buffer)
+            
+            if args_cli.video and video_end:
+                break
+
+            # ============= Save (per scenario) ===============
+            phase_dir = os.path.join(save_dir, f"phase_{t_i_phi:.3f}")
+            filename = f"region_buffer_{scenario:03d}.pt"
+            region_buffer.save(phase_dir, filename=filename)
+            print(f"[INFO] scenario {scenario}: saved {os.path.join(phase_dir, filename)}")
+        
+        if args_cli.video and video_end:
+            break
 
     env.close()
 

@@ -22,14 +22,12 @@ class RegionBuffer:
         self,
         num_envs: int,
         num_steps: int,
-        ra_state_dim: int = 10,
         disturbance_dim: int = 4,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
 
         self.num_envs = int(num_envs)
         self.num_steps = int(num_steps)
-        self.ra_state_dim = int(ra_state_dim)
         self.disturbance_dim = int(disturbance_dim)
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
@@ -38,7 +36,6 @@ class RegionBuffer:
         # ============================================================
 
         self.tensors: dict[str, torch.Tensor] = {
-            "reach_avoid_state": torch.zeros((self.num_envs, self.num_steps, self.ra_state_dim), dtype=torch.float32, device=self.device),
             "reach_avoid_value": torch.full((self.num_envs, self.num_steps, 1), torch.nan, dtype=torch.float32, device=self.device),
         }
 
@@ -116,7 +113,6 @@ class RegionBuffer:
         step_ids = self.write_idx[env_ids]
 
         # Correct per-environment advanced indexing.
-        self.tensors["reach_avoid_state"][env_ids, step_ids] = snapshot["reach_avoid_state"][env_ids]
         self.tensors["reach_avoid_value"][env_ids, step_ids] = snapshot["reach_avoid_value"][env_ids]
 
         # The current sample is now valid.
@@ -211,7 +207,6 @@ class RegionBuffer:
     # ================================================================
 
     def reset(self) -> None:
-        self.tensors["reach_avoid_state"].zero_()
         self.tensors["reach_avoid_value"].fill_(torch.nan)
 
         self.metadata["disturbance"].zero_()
@@ -253,7 +248,6 @@ class RegionBuffer:
             "config": {
                 "num_envs": self.num_envs,
                 "num_steps": self.num_steps,
-                "ra_state_dim": self.ra_state_dim,
                 "disturbance_dim": self.disturbance_dim,
             },
         }

@@ -80,7 +80,7 @@ from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.model.model_factory import ModelFactory
 
-from .fall_eval import FallPredictorEvaluator
+from main.reach_avoid.baselines.fall_eval import FallPredictorEvaluator
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()

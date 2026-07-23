@@ -28,8 +28,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     target_set_threshold = 0.1
 
     # === Curriculum === #
-    push_x_end = (-1.5, 1.5)
-    push_y_end = (-1.5, 1.5)
+    push_x_end = (-2.0, 2.0)
+    push_y_end = (-2.0, 2.0)
     push_roll_end = (-4.0, 4.0)
     push_pitch_end = (-4.0, 4.0)
 
@@ -42,8 +42,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.termination_height = 0.2
 
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.3,
-            endup=0.5,
+            warmup=0.2,
+            endup=0.4,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
@@ -72,7 +72,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
             ]
         )
 
-        self.events.push_robot.interval_range_s = (2.0, 3.0)
+        self.events.push_robot.interval_range_s = (2.0, 4.0)
 
 # Environment for eveluating Reach-avoid network
 @configclass
@@ -138,10 +138,22 @@ class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        # Episode
+        self.episode_length_s = 7.0
+
         # commands
         self.commands.resampling_time_range = (3.0, 3.0)
         self.commands.ranges.lin_vel_x = (1.0, 1.0)
         self.commands.ranges.lin_vel_y = (0.0, 0.0)
+
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
 
         # events
         self.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
@@ -149,9 +161,9 @@ class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
         self.events.push_robot.func = push_and_log
         self.events.push_robot.interval_range_s = (3.0, 3.0)
         self.events.push_robot.params["velocity_range"] = {
-            "x": self.push_x_end,
+            "x": (0.0, 0.0),
             "y": self.push_y_end,
-            "roll" : (0.0, 0.0),    # disabled for the (vx, vy) sweep
+            "roll" : self.push_roll_end,    # disabled for the (vx, vy) sweep
             "pitch": (0.0, 0.0),
         }
 

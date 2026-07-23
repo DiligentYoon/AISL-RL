@@ -26,6 +26,15 @@ class G1FallEnv(G1RecoveryEnv):
         self.capturable_boundary = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         self.dist_from_icp_to_stance = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
 
+        # Collision link
+        self.arm_collision_link_ids, _ = self.contact_sensors.find_bodies([
+            r"waist_.*_link",
+            r"torso_link",
+            r".*_shoulder_.*_link",
+            r".*_elbow_link",
+            r".*_wrist_(roll|pitch)_link",
+        ])
+
     # Single definition of the RA state layout, shared by _get_states and any caller
     # that needs the RA state at a different point in the step (e.g. before auto-reset).
     def _build_ra_state(self) -> torch.Tensor:
@@ -69,9 +78,11 @@ class G1FallEnv(G1RecoveryEnv):
 
         base_fall = self.CoM[:, 2] <= self.cfg.termination_height
         critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
+        critical_contact_forces_2 = self.contact_sensors.data.net_forces_w[:, self.arm_collision_link_ids]
         
         died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
-        died = died_collision & base_fall
+        died_collision_2 = torch.any(torch.norm(critical_contact_forces_2, dim=-1) > 1.0, dim=1)
+        died = (died_collision & base_fall) | died_collision_2
 
         return died, time_out
 
