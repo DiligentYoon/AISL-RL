@@ -147,13 +147,13 @@ class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
         self.commands.ranges.lin_vel_y = (0.0, 0.0)
 
         # viewer
-        self.viewer = ViewerCfg(
-            origin_type="asset_root",
-            asset_name="robot",
-            env_index=0,
-            eye=(0.0, 3.0, 0.5),
-            lookat=(0.0, 0.0, 0.0)
-        )
+        # self.viewer = ViewerCfg(
+        #     origin_type="asset_root",
+        #     asset_name="robot",
+        #     env_index=0,
+        #     eye=(0.0, 3.0, 0.5),
+        #     lookat=(0.0, 0.0, 0.0)
+        # )
 
         # events
         self.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
@@ -161,10 +161,10 @@ class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
         self.events.push_robot.func = push_and_log
         self.events.push_robot.interval_range_s = (3.0, 3.0)
         self.events.push_robot.params["velocity_range"] = {
-            "x": (0.0, 0.0),
-            "y": self.push_y_end,
-            "roll" : self.push_roll_end,    # disabled for the (vx, vy) sweep
-            "pitch": (0.0, 0.0),
+            "x": self.push_x_end,
+            "y": (0.0, 0.0),
+            "roll" : (0.0, 0.0),    # disabled for the (vx, vy) sweep
+            "pitch": self.push_pitch_end,
         }
 
 

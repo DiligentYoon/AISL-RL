@@ -293,7 +293,8 @@ def main():
     # fires; num_steps is only a safety bound.
     t_anchor = 2.1
     t_phi_delta = [0.07, 0.175, 0.28, 0.42, 0.525, 0.63]
-    t_phi = [t_anchor + x for x in t_phi_delta]
+    # t_phi = [t_anchor + x for x in t_phi_delta]
+    t_phi = [2.73]
     video_end = False
     max_timestep = num_steps
     log_interval = 50
