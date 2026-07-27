@@ -57,6 +57,10 @@ class GOATStandEnv(GOATBaseEnv):
         # Default config
         self.default_joint_pos = self._robot.data.default_joint_pos
 
+        # Joint ids
+        self.left_joint_ids, _ = self._robot.find_joints(".*_L_.*")
+        self.right_joint_ids, _ = self._robot.find_joints(".*_R_.*")
+
         # Contact sensor
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["^(?!wheel_).*$"]) # exclude wheel
         self.link_id, _ = self._robot.find_bodies(["^(?!wheel_).*$"])
@@ -215,7 +219,7 @@ class GOATStandEnv(GOATBaseEnv):
             self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
-            self.cfg.p_joint_deviation_lr * p_joint_deviation_lr            +
+            self.cfg.p_joint_deviation_lr_weight * p_joint_deviation_lr     +
             self.cfg.p_action_rate_weight * p_action_rate                   +
             self.cfg.p_terminated_weight * p_terminated
         )
@@ -238,7 +242,7 @@ class GOATStandEnv(GOATBaseEnv):
             "Task Penalty / Vel_Limit"          : self.cfg.p_joint_vel_limit_weight * p_velocity_limit, 
             "Task Penalty / Joint_Vel"          : self.cfg.p_joint_velocity_weight * p_joint_velocity,
             "Task Penalty / Joint_Acc"          : self.cfg.p_joint_accel_weight * p_joint_accel,
-            "Task Penalty / Joint_Deviation_LR" : self.cfg.p_joint_deviation_lr * p_joint_deviation_lr,
+            "Task Penalty / Joint_Deviation_LR" : self.cfg.p_joint_deviation_lr_weight * p_joint_deviation_lr,
             "Task Penalty / Action_Rate"        : self.cfg.p_action_rate_weight * p_action_rate,
         }
 
@@ -290,7 +294,7 @@ class GOATStandEnv(GOATBaseEnv):
         # Information related to Commands Tracking
         self.command_inputs_b[i] = self.commands.command_b[i]
         # Action regularization
-        self.joint_deviation_lr[i] = (self.joint_pos[i][:, 0:self._robot.num_joints-2:2]) + (self.joint_pos[i][:, 1:self._robot.num_joints-1:2])
+        self.joint_deviation_lr[i] = (self.joint_pos[i][:, self.left_joint_ids[:3]]) + (self.joint_pos[i][:, self.right_joint_ids[:3]])
         self.illegal_force[i] = torch.norm(self.contact_sensors.data.net_forces_w[i][:, self.contact_base_link_id], dim=-1)
         self.out_of_limits_joint[i]  = -(self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 0]).clip(max=0.0) + \
                                         (self.joint_pos[i] - self._robot.data.soft_joint_pos_limits[i, :, 1]).clip(min=0.0)

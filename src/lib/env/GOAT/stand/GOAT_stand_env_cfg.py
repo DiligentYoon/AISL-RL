@@ -47,17 +47,17 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
 
-    r_height_weight = 2.0
-    r_upright_weight = 2.0
-    r_joint_tracking_weight = 4.0
-    r_velocity_tracking_weight = 4.0
+    r_height_weight = 4.0
+    r_upright_weight = 3.0
+    r_joint_tracking_weight = 3.0
+    r_velocity_tracking_weight = 3.0
 
     p_illegal_contact_weight = 1.0
-    p_joint_deviation_lr = 0.01
+    p_joint_deviation_lr_weight = 1.0
     p_ang_vel_weight = 0.1
 
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.01
+    p_all_torque_weight = 0.001
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
     p_joint_accel_weight = 5.0e-5
@@ -84,22 +84,22 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     }
     
     ## ======================== Curriculum ======================= ##
-    warmup = 0.2
-    endup = 0.5
+    # warmup = 0.1
+    # endup = 0.25
 
-    curriculum = CurriculumManagerCfg(
-        warmup=warmup,
-        endup=endup,
-        params=[
-            CurriculumParamCfg(
-                name="lin_vel_limit",
-                attr_path="cfg/terminated_lin_vel_limit_z",
-                start_value=terminated_lin_vel_limit_z_start,
-                end_value=terminated_lin_vel_limit_z_end,
-                schedule="linear",
-            ),
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     warmup=warmup,
+    #     endup=endup,
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="lin_vel_limit",
+    #             attr_path="cfg/terminated_lin_vel_limit_z",
+    #             start_value=terminated_lin_vel_limit_z_start,
+    #             end_value=terminated_lin_vel_limit_z_end,
+    #             schedule="linear",
+    #         ),
+    #     ]
+    # )
 
     ## ======================== Command ======================= ##
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
@@ -137,20 +137,22 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
         
         # event
-        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.4, 1.2)
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.4, 1.2)
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.4, 0.9)
+        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.3, 0.9)
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.3, 0.7)
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.9)
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.7)
 
         self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
         self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.1)
+        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.7, 1.1)
         self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
 
-        self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.1)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
+        self.events.add_base_mass.params["mass_distribution_params"] = (0.95, 1.05)
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.95, 1.05)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
 
@@ -197,15 +199,6 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         super().__post_init__()
         self.curriculum = None
 
-        # viewer
-        self.viewer = ViewerCfg(
-            origin_type="asset_root",
-            asset_name="robot",
-            env_index=0,
-            eye=(0.0, 3.0, 0.5),
-            lookat=(0.0, 0.0, 0.0)
-        )
-
         # disable randomization
         self.events.add_base_mass = None
         self.events.add_link_mass = None
@@ -217,6 +210,7 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
         self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+
         # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
@@ -265,5 +259,14 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.goal_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
         self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
 
+        # viewer
+        # self.viewer = ViewerCfg(
+        #     origin_type="asset_root",
+        #     asset_name="robot",
+        #     env_index=0,
+        #     eye=(0.0, 3.0, 0.5),
+        #     lookat=(0.0, 0.0, 0.0)
+        # )
+
         # plot
-        self.plotter = PNGSavePlotter
+        self.plotter = None

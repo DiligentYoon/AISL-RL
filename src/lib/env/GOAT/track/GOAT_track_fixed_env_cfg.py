@@ -34,7 +34,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
-    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
+    terminated_joint_vel_limit = 1.5 * joint_vel_limit  # rad/s
 
     r_joint_tracking_weight = 5.0
     p_joint_limit_weight = 0.0
@@ -121,16 +121,16 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
 
         # disable event
         self.events.add_base_mass = None
-        self.events.add_link_mass = None
-        self.events.rigid_body_mass_inertia = None
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
         self.events.robot_wheel_actuator_gain = None
-        self.events.robot_center_of_mass = None
         self.events.reset_body = None
         self.events.push_robot = None
-
+        
         # Change event parameters
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
+        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
+        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
         self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
         self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
         self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
@@ -189,6 +189,8 @@ class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
         self.curriculum = None
 
         # disable randomization
+        self.events.add_link_mass = None
+        self.events.robot_center_of_mass = None
         self.events.robot_hip_actuator_gain = None
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
