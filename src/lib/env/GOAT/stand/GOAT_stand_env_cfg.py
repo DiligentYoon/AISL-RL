@@ -42,15 +42,15 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     terminated_lin_vel_limit_z_start = 0.2
     terminated_lin_vel_limit_z_end = 0.15
-    terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
+    terminated_lin_vel_limit_z = 0.2
 
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
 
-    r_height_weight = 4.0
-    r_upright_weight = 3.0
-    r_joint_tracking_weight = 3.0
-    r_velocity_tracking_weight = 3.0
+    r_height_weight = 6.0
+    r_upright_weight = 4.0
+    r_joint_tracking_weight = 5.0
+    r_velocity_tracking_weight = 4.0
 
     p_illegal_contact_weight = 1.0
     p_joint_deviation_lr_weight = 1.0
@@ -142,17 +142,17 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.9)
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.7)
 
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
-        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.1)
-        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.7, 1.1)
-        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
+        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
+        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
+        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
+        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
 
-        self.events.add_base_mass.params["mass_distribution_params"] = (0.95, 1.05)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.95, 1.05)
+        self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.05)
+        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.05)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
 
@@ -162,7 +162,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_2.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_3.pt",
             }
         )
 
@@ -209,7 +209,7 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
-        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
         self.observation_noise_type = None
@@ -260,13 +260,13 @@ class GOATStandPlayEnvCfg(GOATStandEnvCfg):
         self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.3, 0.3, 0.3)
 
         # viewer
-        # self.viewer = ViewerCfg(
-        #     origin_type="asset_root",
-        #     asset_name="robot",
-        #     env_index=0,
-        #     eye=(0.0, 3.0, 0.5),
-        #     lookat=(0.0, 0.0, 0.0)
-        # )
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
 
         # plot
-        self.plotter = None
+        self.plotter = PNGSavePlotter
