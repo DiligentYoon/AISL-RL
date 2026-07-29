@@ -57,8 +57,8 @@ POLICY_DECIMATION = 4
 # Missing keys default to (0, 0). Layout matches
 # randomizer.apply_external_force_torque's contract.
 PUSH_FORCE_RANGE: dict[str, tuple[float, float]] = {
-    "x": (-450.0, -350.0),
-    "y": (50.0, 100.0),
+    "x": (50.0, 100.0),
+    "y": (350.0, 450.0),
     "z": (-1.0, 1.0),
 }
 PUSH_TORQUE_RANGE: dict[str, tuple[float, float]] = {
