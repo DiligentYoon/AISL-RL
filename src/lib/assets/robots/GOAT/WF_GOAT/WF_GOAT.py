@@ -238,8 +238,8 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "wheel_R_Joint": 0.0,
             },                                      
             damping={
-                "wheel_L_Joint": 0.02,
-                "wheel_R_Joint": 0.02,
+                "wheel_L_Joint": 0.05,
+                "wheel_R_Joint": 0.05,
             },
             friction={
                 "wheel_L_Joint": 0.0,

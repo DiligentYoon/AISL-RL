@@ -99,6 +99,7 @@ def main():
         log_dir = os.path.join(base_dir, "Reach_Avoid")
     else:
         log_dir = os.path.join(os.getcwd(), "Reach_Avoid")
+    log_dir = os.path.join(log_dir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
 
     # ============================ Env & Wrapper Spawn ================================
 
@@ -144,7 +145,7 @@ def main():
     if cfg["agent"]["experiment"]["write_interval"] == "auto":
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
-        checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
+        checkpoint_interval = int(cfg["train"]["timesteps"] / 5)
 
     # ======================= Buffer =========================
     multi_agent = algorithm == "mappo"
@@ -257,7 +258,7 @@ def main():
         
 
     # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
+    from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
     from lib.model.MLP import RA_Critic
     from lib.agent.reach_avoid import ReachAvoid
 

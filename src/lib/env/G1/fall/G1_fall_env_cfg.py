@@ -8,14 +8,16 @@ from isaaclab.managers import SceneEntityCfg
 
 from lib.env.G1.recovery.G1_recovery_env_cfg import G1RecoveryEnvCfg
 from lib.domain_randomizer import randomizer
+from lib.env.G1.fall.mdp.randomizer import push_and_log
 from lib.utils.plot_utils import CapturabilityPlotter, PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 
+# Environment for training Reach-avoid network
 @configclass
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA agent config === #
-    ra_state_space = 40
+    ra_state_space = 10
     body_hist_length = 4
 
     # === SafeFall baseline config === #
@@ -28,8 +30,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     # === Curriculum === #
     push_x_end = (-2.0, 2.0)
     push_y_end = (-2.0, 2.0)
-    push_roll_end = (-5.0, 5.0)
-    push_pitch_end = (-5.0, 5.0)
+    push_roll_end = (-4.0, 4.0)
+    push_pitch_end = (-4.0, 4.0)
 
     def __post_init__(self):
         super().__post_init__()
@@ -37,9 +39,11 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         # self collision off for deleting fishy and chaotic collisions
         self.robot.spawn.articulation_props.enabled_self_collisions = False
 
+        self.termination_height = 0.2
+
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.6,
-            endup=1.0,
+            warmup=0.2,
+            endup=0.4,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
@@ -68,14 +72,9 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
             ]
         )
 
-        self.events.push_robot.interval_range_s = (2.0, 3.0)
-        # self.events.push_robot.params["velocity_range"] = {
-        #     "x": (-2.0, 2.0),
-        #     "y": (-2.0, 2.0),
-        #     "roll": (-5.0, 5.0)
-        #     "pitch": (-5.0, 5.0),
-        # }
+        self.events.push_robot.interval_range_s = (2.0, 4.0)
 
+# Environment for eveluating Reach-avoid network
 @configclass
 class G1FallPlayEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
@@ -101,34 +100,70 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
 
         # ==== Viz data ==== #
         self.viz_data = {
-            "com_pos": 0,                  # (3,)
-            "left_foot_pos": 0,            # (3,)
-            "right_foot_pos": 0,           # (3,)
-            "icp_pos": 0,                  # (2,)
-            "capture_region_center": 0,    # (2,)
-            "capture_region_radius": 0,    # scalar
-            "time_hist": 0,                # scalar
             "risk_value": 0,               # scalar
             "icp_ankle_dist_hist": 0,      # scalar
         }
 
         self.scene.num_envs = 1
 
-        self.plotter: CapturabilityPlotter = CapturabilityPlotter
+        self.plotter: PNGSavePlotter = PNGSavePlotter
 
 
-# Initial Data Collection Environment
+# Data Collection Environment for Initial dataset construction
 @configclass
 class G1FallCollectEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+        # Episode
+        self.episode_length_s = 5.0
 
         # curriculum
         self.curriculum = None
+
+        # events
+        self.events.push_robot.interval_range_s = (2.0, 3.0) 
         self.events.push_robot.params["velocity_range"] = {
             "x": self.push_x_end,
             "y": self.push_y_end,
-            "roll": self.push_roll_end,
+            "roll" : self.push_roll_end,
+            "pitch": self.push_pitch_end,
+        }
+
+
+# Data Collection Environment for disturbance region analysis.
+# One env carries one disturbance condition, so the push must be logged and must
+# fire exactly once per episode.
+@configclass
+class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        # Episode
+        self.episode_length_s = 7.0
+
+        # commands
+        self.commands.resampling_time_range = (3.0, 3.0)
+        self.commands.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.ranges.lin_vel_y = (0.0, 0.0)
+
+        # viewer
+        # self.viewer = ViewerCfg(
+        #     origin_type="asset_root",
+        #     asset_name="robot",
+        #     env_index=0,
+        #     eye=(0.0, 3.0, 0.5),
+        #     lookat=(0.0, 0.0, 0.0)
+        # )
+
+        # events
+        self.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
+
+        self.events.push_robot.func = push_and_log
+        self.events.push_robot.interval_range_s = (3.0, 3.0)
+        self.events.push_robot.params["velocity_range"] = {
+            "x": self.push_x_end,
+            "y": (0.0, 0.0),
+            "roll" : (0.0, 0.0),    # disabled for the (vx, vy) sweep
             "pitch": self.push_pitch_end,
         }
 
@@ -162,10 +197,6 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         # self.safe_action_space = 29
         # self.safe_observation_space = 96
         # self.safe_state_space = 96
-
-        # visualization
-        # self.plotter = None
-        # self.viz_data = None
 
         # plotter
         self.plotter = PNGSavePlotter

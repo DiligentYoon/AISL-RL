@@ -56,7 +56,7 @@ from wrapper.isaaclab_wrapper import IsaacLabWrapper
 from wrapper.record_wrapper import RecordVideo
 from lib.utils.parse_utils import parse_env_cfg, load_cfg_from_registry
 from lib.buffer.rolloutbuffer import RolloutBuffer
-from lib.buffer.risk_buffer import RiskClassifiedBuffer
+from lib.buffer.reach_avoid.riskbuffer import RiskClassifiedBuffer
 from lib.model.model_factory import ModelFactory
 
 
@@ -262,7 +262,7 @@ def main():
     # ============= RA Model & Agent (frozen) ===============
     from lib.model.MLP import RA_Critic
     from lib.agent.reach_avoid import ReachAvoid
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
+    from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
 
     if not hasattr(env._unwrapped.cfg, "ra_state_space"):
         raise RuntimeError("Explicit state space is not defined.")

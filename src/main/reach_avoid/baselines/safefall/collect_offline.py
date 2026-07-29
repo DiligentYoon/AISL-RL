@@ -234,7 +234,7 @@ def main():
     obs, states, infos = env.reset()
     while simulation_app.is_running() and len(buffer.closed_episodes) < target:
         with torch.no_grad():
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             timestep += 1
 

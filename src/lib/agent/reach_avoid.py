@@ -10,20 +10,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from lib.agent.agent import Agent
-from lib.buffer.replaybuffer import HindSightReplayBuffer
+from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
 
 class ReachAvoid(Agent):
     def __init__(self,
                  model: Dict[str, nn.Module],
-                 buffer: HindSightReplayBuffer,
+                 buffer: Optional[HindSightReplayBuffer],
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
         """Reach-Avoid Approximator
 
         Args:
             model: Models used by the agent
-            buffer: Memory to storage the transitions.
+            buffer: Memory to storage the transitions. Only required for training;
+                    inference-only users (evaluation, deployment) may pass None.
             device: Device on which a tensor/array is or will be allocated (cuda, cpu).
             cfg: Configuration dictionary
         """

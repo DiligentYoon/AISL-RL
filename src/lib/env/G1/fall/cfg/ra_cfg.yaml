@@ -1,8 +1,9 @@
 seed: 42
 
 train:
-  timesteps: 25600
+  timesteps: 32000
 
+# Initial-condition dataset (collect_init_data.py)
 collection:
   capacity_per_bucket: 100000
   thresholds:
@@ -13,9 +14,17 @@ collection:
   subsample_stride: 4
   save_subdir: "collected"
 
+# Disturbance region sweep (collect_region_data.py).
+# One env carries one disturbance condition, so the run length is bounded by the
+# episode itself; there is nothing to size here beyond the output location.
+region_collection:
+  save_subdir: "region"
+
 ra:
   buffer:
     buffer_size: 1024
+  eval:
+    threshold: 0.0               # V(s) > 0 is the unsafe set by the RA formulation
   agent:
     learning_epochs: 1
     batch_size: 4096
