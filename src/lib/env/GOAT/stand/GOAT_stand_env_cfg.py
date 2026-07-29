@@ -50,7 +50,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     r_height_weight = 6.0
     r_upright_weight = 4.0
     r_joint_tracking_weight = 5.0
-    r_velocity_tracking_weight = 4.0
+    r_velocity_tracking_weight = 5.0
 
     p_illegal_contact_weight = 1.0
     p_joint_deviation_lr_weight = 1.0
@@ -150,6 +150,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
         self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
         self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
+
+        self.events.robot_wheel_joint_friction.params["friction_distribution_params"] = (0.8, 1.2)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.05)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.05)

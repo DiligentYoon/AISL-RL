@@ -67,6 +67,18 @@ class EventCfg:
           "make_consistent": True,
         },
     )
+    robot_center_of_mass = EventTerm(
+        func=randomizer.randomize_rigid_body_coms,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "com_distribution_params": ((-0.075, 0.075), (-0.075, 0.075), (-0.075, 0.075)),
+            "operation": "add",
+            "distribution": "uniform",
+        },
+    )
+    
+    # reset
     robot_hip_actuator_gain = EventTerm(
         func=randomizer.randomize_actuator_gains,
         mode="reset",
@@ -111,18 +123,17 @@ class EventCfg:
             "distribution": "uniform",
         },
     )
-    robot_center_of_mass = EventTerm(
-        func=randomizer.randomize_rigid_body_coms,
-        mode="startup",
+    robot_wheel_joint_friction = EventTerm(
+        func=randomizer.randomize_joint_parameters,
+        mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "com_distribution_params": ((-0.075, 0.075), (-0.075, 0.075), (-0.075, 0.075)),
-            "operation": "add",
+            "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
+            "friction_distribution_params": (1.0, 1.0),
+            "armature_distribution_params": (1.0, 1.0),
+            "operation": "scale",
             "distribution": "uniform",
-        },
+        }
     )
-
-    # reset
     reset_body = EventTerm(
         func=randomizer.reset_root_state_uniform,
         mode='reset',
