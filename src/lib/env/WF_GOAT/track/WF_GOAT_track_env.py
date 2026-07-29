@@ -7,17 +7,15 @@ import numpy as np
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.sensors import ContactSensor
-from lib.env.GOAT.track.GOAT_track_env_cfg import GOATTrackEnvCfg, GOATTrackPlayEnvCfg
-from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
-from lib.controller.PD_controller import PD_Controller
-from lib.controller.PI_controller import PI_Controller
+from lib.env.WF_GOAT.track.WF_GOAT_track_env_cfg import WFGOATTrackEnvCfg, WFGOATTrackPlayEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env import WFGOATBaseEnv
 from lib.domain_randomizer.commander import UniformNonHolonomicCommand
 from lib.domain_randomizer.randomizer import sample_rao_torque, sample_rfi_torque
 
-class GOATTrackEnv(GOATBaseEnv):
-    cfg: GOATTrackEnvCfg | GOATTrackPlayEnvCfg
+class GOATTrackEnv(WFGOATBaseEnv):
+    cfg: WFGOATTrackEnvCfg | WFGOATTrackPlayEnvCfg
 
-    def __init__(self, cfg: GOATTrackEnvCfg | GOATTrackPlayEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: WFGOATTrackEnvCfg | WFGOATTrackPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Config

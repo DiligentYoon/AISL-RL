@@ -2,7 +2,7 @@
 import isaaclab.sim as sim_utils
 
 from isaaclab.utils import configclass
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import SceneEntityCfg
@@ -15,10 +15,10 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 from lib.assets.objects.Jig.object import JIGCFG
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 
-from lib.env.GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer
+from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer
 
 @configclass
-class GOATStandEnvCfg(GOATBaseEnvCfg):
+class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -196,7 +196,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
         self.events.push_robot = None
 
 @configclass
-class GOATStandPlayEnvCfg(GOATStandEnvCfg):
+class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None

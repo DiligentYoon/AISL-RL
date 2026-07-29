@@ -7,14 +7,14 @@ from isaaclab.utils.math import quat_apply, quat_from_euler_xyz
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers 
 from isaaclab.assets import RigidObject
-from lib.env.GOAT.stand.GOAT_stand_env_cfg import GOATStandEnvCfg, GOATStandPlayEnvCfg
-from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
+from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env import WFGOATBaseEnv
 from lib.domain_randomizer.commander import UniformNonHolonomicCommand
 
-class GOATStandEnv(GOATBaseEnv):
-    cfg: GOATStandEnvCfg | GOATStandPlayEnvCfg
+class WFGOATStandEnv(WFGOATBaseEnv):
+    cfg: WFGOATStandEnvCfg | WFGOATStandPlayEnvCfg
 
-    def __init__(self, cfg: GOATStandEnvCfg | GOATStandPlayEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: WFGOATStandEnvCfg | WFGOATStandPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Config

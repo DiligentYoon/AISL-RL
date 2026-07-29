@@ -6,14 +6,14 @@ import copy
 from isaaclab.terrains import TerrainImporter
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.utils.math import quat_apply
-from lib.env.GOAT.track.GOAT_track_fixed_env_cfg import GOATTrackFixedEnvCfg, GOATTrackFixedPlayEnvCfg
-from lib.env.GOAT.base.GOAT_base_env import GOATBaseEnv
-from lib.env.GOAT.track.mdp.commander import UniformJointPositionCommand
+from lib.env.WF_GOAT.track.WF_GOAT_track_fixed_env_cfg import WFGOATTrackFixedEnvCfg, WFGOATTrackFixedPlayEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env import WFGOATBaseEnv
+from lib.env.WF_GOAT.track.mdp.commander import UniformJointPositionCommand
 
-class GOATTrackFixedEnv(GOATBaseEnv):
-    cfg: GOATTrackFixedEnvCfg | GOATTrackFixedPlayEnvCfg
+class WFGOATTrackFixedEnv(WFGOATBaseEnv):
+    cfg: WFGOATTrackFixedEnvCfg | WFGOATTrackFixedPlayEnvCfg
 
-    def __init__(self, cfg: GOATTrackFixedEnvCfg | GOATTrackFixedPlayEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: WFGOATTrackFixedEnvCfg | WFGOATTrackFixedPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Config

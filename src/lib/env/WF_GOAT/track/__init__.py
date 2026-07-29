@@ -1,45 +1,45 @@
 import gymnasium as gym
 
 gym.register(
-    id="GOAT-track", 
-    entry_point=f"{__name__}.GOAT_track_env:GOATTrackEnv",
+    id="WF-GOAT-track", 
+    entry_point=f"{__name__}.WF_GOAT_track_env:WFGOATTrackEnv",
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.GOAT_track_env_cfg:GOATTrackEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.WF_GOAT_track_env_cfg:WFGOATTrackEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
     }
 )
 
 gym.register(
-    id="GOAT-track-play", 
-    entry_point=f"{__name__}.GOAT_track_env:GOATTrackEnv",
+    id="WF-GOAT-track-play", 
+    entry_point=f"{__name__}.WF_GOAT_track_env:WFGOATTrackEnv",
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.GOAT_track_env_cfg:GOATTrackPlayEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.WF_GOAT_track_env_cfg:WFGOATTrackPlayEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
     }
 )
 
 gym.register(
-    id="GOAT-track-fixed", 
-    entry_point=f"{__name__}.GOAT_track_fixed_env:GOATTrackFixedEnv",
+    id="WF-GOAT-track-fixed", 
+    entry_point=f"{__name__}.WF_GOAT_track_fixed_env:WFGOATTrackFixedEnv",
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.GOAT_track_fixed_env_cfg:GOATTrackFixedEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.WF_GOAT_track_fixed_env_cfg:WFGOATTrackFixedEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
     }
 )
 
 gym.register(
-    id="GOAT-track-fixed-play", 
-    entry_point=f"{__name__}.GOAT_track_fixed_env:GOATTrackFixedEnv",
+    id="WF-GOAT-track-fixed-play", 
+    entry_point=f"{__name__}.WF_GOAT_track_fixed_env:WFGOATTrackFixedEnv",
     disable_env_checker=True,
     kwargs={
         # Environment-Specific Entry Point for Env Cfg Class
-        "env_cfg_entry_point": f"{__name__}.GOAT_track_fixed_env_cfg:GOATTrackFixedPlayEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.WF_GOAT_track_fixed_env_cfg:WFGOATTrackFixedPlayEnvCfg",
         "rl_ppo_cfg_entry_point": f"{__name__}.cfg:ppo_cfg.yaml",
     }
 )

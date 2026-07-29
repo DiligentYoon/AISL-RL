@@ -8,7 +8,7 @@ import torch
 from isaaclab.utils import configclass
 from isaaclab.assets import Articulation
 
-from lib.env.GOAT.track.mdp.utils import GOATLegFK
+from lib.env.WF_GOAT.track.mdp.utils import GOATLegFK
 
 
 # =======================================================================

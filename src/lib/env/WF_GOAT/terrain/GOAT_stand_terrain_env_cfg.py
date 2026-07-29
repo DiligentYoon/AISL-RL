@@ -10,7 +10,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg, SubTerrainBaseCfg
 from lib.utils.terrain_utils import *
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import GOATBaseEnvCfg
 from isaaclab.terrains.height_field.hf_terrains_cfg import *
 
 

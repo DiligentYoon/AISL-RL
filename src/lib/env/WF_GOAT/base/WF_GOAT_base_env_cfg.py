@@ -170,7 +170,7 @@ class EventCfg:
 
 
 @configclass
-class GOATBaseEnvCfg(EnvCfg):
+class WFGOATBaseEnvCfg(EnvCfg):
     # Env
     episode_length_s: int = 10       # Episode length in seconds
     sim_dt: float = 0.01             # Simulation(low-level controller) frequency

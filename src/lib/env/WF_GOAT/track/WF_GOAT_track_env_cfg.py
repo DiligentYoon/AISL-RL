@@ -3,14 +3,14 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.utils.plot_utils import PNGSavePlotter
 
 @configclass
-class GOATTrackEnvCfg(GOATBaseEnvCfg):
+class WFGOATTrackEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -189,7 +189,7 @@ class GOATTrackEnvCfg(GOATBaseEnvCfg):
         self.events.push_robot = None
 
 @configclass
-class GOATTrackPlayEnvCfg(GOATTrackEnvCfg):
+class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None

@@ -6,17 +6,17 @@ from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.markers import VisualizationMarkersCfg
 
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
-from lib.env.GOAT.track.mdp.commander import UniformJointPositionCommandCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
+from lib.env.WF_GOAT.track.mdp.commander import UniformJointPositionCommandCfg
 from lib.domain_randomizer.noise_model import build_noise_std_vector
 from lib.domain_randomizer.randomizer import randomize_actuator_gains
-from lib.env.GOAT.track.mdp.randomizer import reset_joints_by_scale_and_bias
+from lib.env.WF_GOAT.track.mdp.randomizer import reset_joints_by_scale_and_bias
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.utils.plot_utils import PNGSavePlotter
 
 
 @configclass
-class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
+class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
     sim_dt = 0.005                              # 200Hz torque controller
@@ -149,7 +149,7 @@ class GOATTrackFixedEnvCfg(GOATBaseEnvCfg):
 
 
 @configclass
-class GOATTrackFixedPlayEnvCfg(GOATTrackFixedEnvCfg):
+class WFGOATTrackFixedPlayEnvCfg(WFGOATTrackFixedEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         # viewer

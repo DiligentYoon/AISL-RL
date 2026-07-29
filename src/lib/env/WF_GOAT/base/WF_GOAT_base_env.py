@@ -3,15 +3,15 @@ import torch
 from abc import abstractmethod
 from isaaclab.assets import Articulation
 from isaaclab.sensors import ContactSensor
-from lib.env.GOAT.base.GOAT_base_env_cfg import GOATBaseEnvCfg
+from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
 from lib.env.env import Env 
 
 
-class GOATBaseEnv(Env):
+class WFGOATBaseEnv(Env):
     # Load config file
-    cfg: GOATBaseEnvCfg
+    cfg: WFGOATBaseEnvCfg
 
-    def __init__(self, cfg: GOATBaseEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: WFGOATBaseEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # Total env ids
