@@ -30,7 +30,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
-                           "wheel" : [5.0, ()]}
+                           "wheel" : [20.0, ()]}
 
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
@@ -42,7 +42,7 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     terminated_lin_vel_limit_z_start = 0.2
     terminated_lin_vel_limit_z_end = 0.15
-    terminated_lin_vel_limit_z = 0.2
+    terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.523
@@ -66,8 +66,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.1},
-        "base_rot_w":        {"dim": 4,  "std": 0.01},
+        "base_ang_vel":      {"dim": 3,  "std": 0.2},
+        "base_rot_w":        {"dim": 4,  "std": 0.05},
         "command":           {"dim": 3,  "std": 0.0},
         "joint_pos":         {"dim": 6,  "std": 0.01},
         "joint_vel":         {"dim": 8,  "std": 1.5},
@@ -84,8 +84,8 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
     }
     
     ## ======================== Curriculum ======================= ##
-    # warmup = 0.1
-    # endup = 0.25
+    # warmup = 0.05
+    # endup = 0.9
 
     # curriculum = CurriculumManagerCfg(
     #     warmup=warmup,
@@ -137,19 +137,19 @@ class GOATStandEnvCfg(GOATBaseEnvCfg):
                                               "wheel_R_Joint": 0.0,}
         
         # event
-        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.3, 0.9)
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.3, 0.7)
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.9)
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.7)
+        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.7, 1.1)
+        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.7, 0.9)
+        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.8)
+        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.6)
 
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
-        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
-        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
-        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.05)
-        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.7, 1.05)
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
+        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
+        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
+        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
+        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
 
         self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.05)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.05)
