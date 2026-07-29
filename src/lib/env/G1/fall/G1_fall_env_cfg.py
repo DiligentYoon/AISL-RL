@@ -154,7 +154,7 @@ class G1FallUnifiedPlayEnvCfg(G1FallPlayEnvCfg):
         # Fixed force
         self.events.push_robot.params={
             "asset_cfg": SceneEntityCfg("robot", body_names="torso_link"),
-            "force_range": {"x": (-223.0, -223.0), "y": (-149.0, -149), "z": (1, 1)},
+            "force_range": {"x": (-100.0, -100.0), "y": (-100.0, -100.0), "z": (1, 1)},
             "torque_range": {"x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (-0.0, 0.0)}}
         
         # Fixed command
