@@ -74,9 +74,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         # Plotting boolean
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
-        self.is_plot = (self.num_envs == 1)
-
-    
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         if debug_vis:

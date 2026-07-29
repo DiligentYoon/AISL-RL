@@ -169,15 +169,24 @@ class GIFSavePlotter:
     # ----------------------------------------------------------
     def process_data(self, x):
         """
-        Convert incoming step data to a numpy array or Python scalar.
+        Convert incoming step data to a NumPy array or Python scalar.
 
-        Handles torch.Tensor, numpy arrays, and plain scalars.
+        If the first dimension is the parallel-environment dimension,
+        keep only environment 0.
         """
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
         x = np.asarray(x)
+
         if x.ndim == 0:
             return x.item()
+        else:
+            if x.shape[0] == self.env.num_envs:
+                x = x[0]
+
+            if x.ndim == 0:
+                return x.item()
+
         return x.copy()
 
     def append(self, viz_data: dict, episode_end: bool = False):

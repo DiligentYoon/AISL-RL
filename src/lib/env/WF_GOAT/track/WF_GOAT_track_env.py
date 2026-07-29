@@ -78,7 +78,6 @@ class GOATTrackEnv(WFGOATBaseEnv):
         # Plotting boolean
         debug_vis = self.num_envs <= 32
         self.set_debug_vis(debug_vis)
-        self.is_plot = (self.num_envs == 1)
 
         # Default config
         self.default_joint_pos = self._robot.data.default_joint_pos
