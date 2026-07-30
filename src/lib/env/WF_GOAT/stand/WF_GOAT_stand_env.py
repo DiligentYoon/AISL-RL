@@ -225,22 +225,22 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             # ==========================================
             # Task Reward (+)
             # ==========================================
-            "Task Reward / Upright"             : self.cfg.r_upright_weight * r_upright,
-            "Task Reward / Height"              : self.cfg.r_height_weight * r_height,
-            "Task Reward / Joint_Tracking"      : self.cfg.r_joint_tracking_weight * r_joint_tracking,
-            "Task Reward / Velocity_Tracking"   : self.cfg.r_velocity_tracking_weight * r_lin_vel_tracking,
+            "Task Reward / Upright"             : r_upright,
+            "Task Reward / Height"              : r_height,
+            "Task Reward / Joint_Tracking"      : r_joint_tracking,
+            "Task Reward / Velocity_Tracking"   : r_lin_vel_tracking,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Contact"            : self.cfg.p_illegal_contact_weight * p_illegal_contact,
-            "Task Penalty / Ang_Vel"            : self.cfg.p_ang_vel_weight * p_ang_vel,
-            "Task Penalty / Torque_Limit"       : self.cfg.p_all_torque_limit_weight * p_all_torque_limit,
-            "Task Penalty / Torque"             : self.cfg.p_all_torque_weight * p_all_torque,
-            "Task Penalty / Vel_Limit"          : self.cfg.p_joint_vel_limit_weight * p_velocity_limit, 
-            "Task Penalty / Joint_Vel"          : self.cfg.p_joint_velocity_weight * p_joint_velocity,
-            "Task Penalty / Joint_Acc"          : self.cfg.p_joint_accel_weight * p_joint_accel,
-            "Task Penalty / Joint_Deviation_LR" : self.cfg.p_joint_deviation_lr_weight * p_joint_deviation_lr,
-            "Task Penalty / Action_Rate"        : self.cfg.p_action_rate_weight * p_action_rate,
+            "Task Penalty / Contact"            : p_illegal_contact,
+            "Task Penalty / Ang_Vel"            : p_ang_vel,
+            "Task Penalty / Torque_Limit"       : p_all_torque_limit,
+            "Task Penalty / Torque"             : p_all_torque,
+            "Task Penalty / Vel_Limit"          : p_velocity_limit, 
+            "Task Penalty / Joint_Vel"          : p_joint_velocity,
+            "Task Penalty / Joint_Acc"          : p_joint_accel,
+            "Task Penalty / Joint_Deviation_LR" : p_joint_deviation_lr,
+            "Task Penalty / Action_Rate"        : p_action_rate,
         }
 
         self.previous_actions = self.actions.clone()

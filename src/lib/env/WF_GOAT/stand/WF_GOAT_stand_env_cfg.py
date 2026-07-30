@@ -50,9 +50,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     r_height_weight = 6.0
     r_upright_weight = 4.0
     r_joint_tracking_weight = 6.0
-    r_velocity_tracking_weight = 4.0
+    r_velocity_tracking_weight = 6.0
 
-    p_illegal_contact_weight = 1.0
+    p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 1.0
     p_ang_vel_weight = 0.1
 
@@ -164,7 +164,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_3.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_4.pt",
             }
         )
 
