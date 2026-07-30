@@ -9,7 +9,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
-from lib.domain_randomizer.noise_model import build_noise_std_vector
+from lib.domain_randomizer.noise_model import build_noise_uniform_vector
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG
@@ -30,7 +30,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
-                           "wheel" : [20.0, ()]}
+                           "wheel" : [5.0, ()]}
 
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
@@ -49,8 +49,8 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     r_height_weight = 6.0
     r_upright_weight = 4.0
-    r_joint_tracking_weight = 5.0
-    r_velocity_tracking_weight = 5.0
+    r_joint_tracking_weight = 6.0
+    r_velocity_tracking_weight = 4.0
 
     p_illegal_contact_weight = 1.0
     p_joint_deviation_lr_weight = 1.0
@@ -66,20 +66,20 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.2},
-        "base_rot_w":        {"dim": 4,  "std": 0.05},
-        "command":           {"dim": 3,  "std": 0.0},
-        "joint_pos":         {"dim": 6,  "std": 0.01},
-        "joint_vel":         {"dim": 8,  "std": 1.5},
-        "previous_actions":  {"dim": 8,  "std": 0.0},
+        "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
+        "base_rot_w":        {"dim": 4,  "min": -0.01, "max": 0.01},
+        "command":           {"dim": 3,  "min": 0.0,   "max": 0.0},
+        "joint_pos":         {"dim": 6,  "min": -0.01, "max": 0.01},
+        "joint_vel":         {"dim": 8,  "min": -1.5,  "max": 1.5},
+        "previous_actions":  {"dim": 8,  "min": 0.0,   "max": 0.0},
     }
-    obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
+    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
 
     # Noise Model
-    observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
+    observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": obs_noise_end,
+        "min": obs_noise_min,
+        "max": obs_noise_max,
         "operation": "add",
     }
     
@@ -151,7 +151,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
         self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
 
-        self.events.robot_wheel_joint_friction.params["friction_distribution_params"] = (0.8, 1.2)
+        self.events.robot_wheel_joint_friction = None
 
         self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.05)
         self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.05)
@@ -211,7 +211,8 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
-        # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        self.events.robot_wheel_joint_friction = None
+        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
         self.observation_noise_type = None
