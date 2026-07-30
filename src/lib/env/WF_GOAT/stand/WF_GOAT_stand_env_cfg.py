@@ -188,7 +188,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
                 },
                 "robot_cfg": SceneEntityCfg("robot"),
                 "object_cfg": SceneEntityCfg("jig"),
-                "object_relative_pos": (0.0, 0.0, 0.0),  
+                "object_relative_pos": (-0.07, 0.0, 0.0),  # Collision Mesh friendly setting
                 "object_relative_yaw": 0.0,          
             }
         )
