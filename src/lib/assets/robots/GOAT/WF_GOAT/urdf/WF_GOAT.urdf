@@ -65,6 +65,13 @@
                 <box size="0.214 0.200 0.190"/>
             </geometry>
         </collision>
+        <collision>
+            <origin xyz="0.06242 0.0 -0.149" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.07 0.25 0.08"/>
+            </geometry>
+        </collision>
+
     </link>
 
     <link name="hip_L_Link">
