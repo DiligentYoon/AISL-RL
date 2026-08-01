@@ -142,14 +142,14 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.8)
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.6)
 
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
-        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
-        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
-        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.1)
-        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.1)
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
+        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
+        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
+        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
+        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
 
         self.events.robot_wheel_joint_friction = None
 
@@ -164,7 +164,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos_4.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
             }
         )
 
