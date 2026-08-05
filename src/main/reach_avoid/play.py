@@ -16,9 +16,15 @@ parser.add_argument("--video_length", type=int, default=500, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
+parser.add_argument("--task", type=str, default="G1-fall-play", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default="", help="Path to model checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default="", help="Path to Reach-Avoid model checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
+
+parser.add_argument("--predictor",
+                    type=str,
+                    default="ra",
+                    choices=["ra", "safefall"],
+                    help="Fall predictor type to train.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -87,22 +93,26 @@ def main():
         return
 
     # specify directory for logging experiments (load checkpoint)
-    if args_cli.checkpoint is not None:
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)), "Reach_Avoid")
+    if args_cli.predictor_checkpoint is not None:
+        log_dir = os.path.dirname(args_cli.predictor_checkpoint)
     else:
-        raise ValueError("Checkpoint path must be assigned for policy-conditioned RA value function.")
+        raise ValueError("Predictor checkpoint path must be assigned for policy-conditioned RA value function.")
 
     # ============================ Env & Wrapper Spawn ================================
+
+    # Predictor selection
+    predictor = args_cli.predictor
+    pred_cfg = ra_cfg[predictor if predictor == "ra" else "safe_fall"]
 
     # Create isaac environment
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
         cfg["agent"]["seed"] = args_cli.seed
-        ra_cfg["agent"]["seed"] = args_cli.seed
+        pred_cfg["agent"]["seed"] = args_cli.seed
     else:
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-        ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+        pred_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # wrap for video recording
@@ -191,8 +201,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
-    # Scale Factor
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -238,33 +246,53 @@ def main():
                     cfg=cfg["agent"])
         
 
-    # ============= RA Buffer and Model Spawn ===============
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
-    from lib.model.MLP import RA_Critic
-    if not hasattr(env._unwrapped.cfg, "ra_state_space"):
-        raise RuntimeError("Explicit state space is not defined.")
-    ra_buffer =  HindSightReplayBuffer(ra_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
-    ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+    # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
+    if predictor == "ra":
+        from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
+        from lib.model.MLP import RA_Critic
+        from lib.agent.reach_avoid import ReachAvoid
 
-    # ==================== RA Agent Spawn ===================
-    from lib.agent.reach_avoid import ReachAvoid
-    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
+        if not hasattr(env._unwrapped.cfg, "ra_state_space"):
+            raise RuntimeError("Explicit state space is not defined.")
+
+        pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+                                            env.num_envs, device=env.device)
+        pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+        pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+        pred_agent = ReachAvoid(pred_model, pred_buffer,
+                                device=env.device, cfg=pred_cfg["agent"])
+
+    elif predictor == "safefall":
+        from lib.model.Baselines.SafeFall.safe_fall import GRU
+        from lib.agent.Baselines.safe_fall import SafeFall
+
+        if not hasattr(env._unwrapped.cfg, "safe_fall_obs_dim"):
+            raise RuntimeError("safe_fall_obs_dim is not defined in env cfg.")
+
+        obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
+        # Inference-only model holder; trained offline via collect_offline.py + train_offline.py.
+        pred_model = {"critic": GRU(obs_dim=obs_dim,
+                                    hidden_dim=pred_cfg["model"]["hidden_dim"],
+                                    num_layers=pred_cfg["model"].get("num_layers", 1),
+                                    dropout=pred_cfg["model"].get("dropout", 0.0))}
+        pred_agent = SafeFall(pred_model, device=env.device, cfg=pred_cfg["agent"])
+
+    else:
+        raise ValueError(f"Unknown predictor: {predictor}")
     
     # Checkpoint (Policy)
     resume_path = os.path.abspath(args_cli.checkpoint)
     agent.load(resume_path)
     print(f"[INFO] Get checkpoint of policy from {resume_path}")
-    # Checkpoint (RA value)
-    if args_cli.ra_checkpoint is not None:
-        resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
-        ra_agent.load(resume_path_ra)
-        print(f"[INFO] Get checkpoint RA Value from {resume_path_ra}")
+
+    # Checkpoint (Predictor)
+    if args_cli.predictor_checkpoint is not None:
+        resume_path_pred = os.path.abspath(args_cli.predictor_checkpoint)
+        pred_agent.load(resume_path_pred)
+        print(f"[INFO] Get predictor checkpoint ({predictor}) from {resume_path_pred}")
     else:
-        resume_path_ra = None
-        print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
-
-
+        resume_path_pred = None
+        print(f"[INFO] No pre-trained predictor ({predictor}) checkpoint found.")
 
     # ======================= Evaluation ============================
     
@@ -280,30 +308,51 @@ def main():
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
     timestep = 0
-    
+
+    # SafeFall predictor recurrent state; carried across steps within an episode,
+    # zeroed per-env on done. None for RA (stateless MLP).
+    pred_h = None
+    if predictor == "safefall":
+        n_layers = int(pred_cfg["model"].get("num_layers", 1))
+        hidden_dim = int(pred_cfg["model"]["hidden_dim"])
+        pred_h = torch.zeros(n_layers, env.num_envs, hidden_dim, device=env.device)
+
     # Simulate environment
     while simulation_app.is_running() and timestep <= cfg["train"]["timesteps"]:
 
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping
-            actions, _, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
-            RA_value, _, _ = ra_agent.critic(infos["ra_states"])
+            actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+
+            # Predictor forward
+            if predictor == "ra":
+                risk_value, _, _ = pred_agent.critic(infos["ra_states"])
+            else:  # safefall
+                obs_in = infos["safe_fall_obs"].unsqueeze(1)            # (N, 1, obs_dim)
+                logits, pred_h, _ = pred_agent.critic(obs_in, pred_h)
+                risk_value = logits.softmax(dim=-1)[..., 1].reshape(-1, 1)
+
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
 
+        # Per-env hidden state reset for SafeFall on episode boundary
+        if pred_h is not None:
+            done_mask = (terminated | truncated).reshape(-1)
+            if done_mask.any():
+                pred_h[:, done_mask, :] = 0.0
+
         # Plot Phase
         if plot is not None:
             done = terminated[0] | truncated[0]
-            RA_value = RA_value.squeeze(-1)
-            infos["viz_data"]["RA_value"] = RA_value
-            infos["viz_data"]["m_step_hist"] = RA_value
+            risk_value = risk_value.float().squeeze(-1)
+            infos["viz_data"]["risk_value"] = risk_value
             plot.append(viz_data=infos["viz_data"], episode_end=done)
 
         # Video update
-        if args_cli.video and timestep == args_cli.video_length:
+        if timestep == args_cli.video_length:
             # exit the play loop after recording one video
             break
 

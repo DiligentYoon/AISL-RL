@@ -178,8 +178,7 @@ class Env(gym.Env):
         # allocate dictionary to store metrics
         self.extras = {}
         # allocate viz_data dictionary to information dict
-        self.is_plot = (self.num_envs == 1)
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             self.extras["viz_data"] = self.cfg.viz_data
 
         # initialize data and constants
@@ -306,8 +305,8 @@ class Env(gym.Env):
         self._reset_idx(indices)
 
         # update articulation kinematics
-        self.scene.write_data_to_sim()
-        self.sim.forward()
+        # self.scene.write_data_to_sim()
+        # self.sim.forward()
 
         # if sensors are added to the scene, make sure we render to reflect changes in reset
         if self.sim.has_rtx_sensors() and self.cfg.num_rerenders_on_reset > 0:
@@ -334,12 +333,8 @@ class Env(gym.Env):
             else:
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
 
-        # update viz data
-        if (self.cfg.viz_data is not None) and (self.is_plot):
-            self.extras = self._update_viz_data()
-
-        # return observations
-        return self.obs_buf, self.state_buf, self.extras
+        # return observations and extras with shallow copy
+        return self.obs_buf, self.state_buf, dict(self.extras)
 
     def step(self, action: Union[torch.Tensor | Dict[str, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         """Execute one time-step of the environment's dynamics.
@@ -452,11 +447,11 @@ class Env(gym.Env):
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
         
         # update viz data
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             self.extras = self._update_viz_data()
 
-        # return observations, rewards, resets and extras
-        return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
+        # return observations, rewards, resets and extras with shallow copy
+        return self.obs_buf, self.state_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, dict(self.extras)
 
     @staticmethod
     def seed(seed: int = -1) -> int:
@@ -655,6 +650,9 @@ class Env(gym.Env):
 
         # apply events such as randomization for environments that need a reset
         if self.cfg.events:
+            # Manager reset
+            self.event_manager.reset(env_ids)
+            # Reset mode apply
             if "reset" in self.event_manager.available_modes:
                 env_step_count = self._sim_step_counter // self.cfg.decimation
                 self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
@@ -756,7 +754,7 @@ class Env(gym.Env):
 
     @abstractmethod
     def _update_viz_data(self) -> Dict:
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             raise NotImplementedError(
                 f"{self.__class__.__name__}: vizualization option is true, "
                 "so 'update_viz_data must be implemented to update visualization info")

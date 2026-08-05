@@ -84,10 +84,6 @@ class G1BaseEnv(Env):
     def _reset_idx(self, env_ids: torch.Tensor):
         super()._reset_idx(env_ids)
 
-
-    ## =============== RL main abstract methods ================ ##
-
-    @abstractmethod
     def _pre_physics_step(self, actions: torch.Tensor):
         """Pre-process actions before stepping through the physics.
 
@@ -97,16 +93,46 @@ class G1BaseEnv(Env):
         Args:
             actions: The actions to apply on the environment. Shape is (num_envs, action_dim).
         """
-        raise NotImplementedError(f"Please implement the '_pre_physics_step' method for {self.__class__.__name__}.")
+        self.actions = actions
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            self.processed_actions = {
+                "arm": actions["arm"] * self.cfg.action_scale_factor["arm"][0],
+                "leg": actions["leg"] * self.cfg.action_scale_factor["leg"][0]
+            }
+        else:
+            # Single Agent
+            self.processed_actions = actions * self.cfg.action_scale_factor
 
-    @abstractmethod
     def _apply_action(self):
         """Apply actions to the simulator.
 
-        This function is responsible for applying the actions to the simulator. It is called at each
-        physics time-step.
+        This function is responsible for applying the scaled actions to the simulator.
+        It is called at each physics time-step.
         """
-        raise NotImplementedError(f"Please implement the '_apply_action' method for {self.__class__.__name__}.")
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            arm_actions = self.processed_actions["arm"]
+            leg_actions = self.processed_actions["leg"]
+
+            self._robot.set_joint_position_target(
+                target=self._robot.data.default_joint_pos[:, self.total_arm_joint_ids] + arm_actions,
+                joint_ids=self.total_arm_joint_ids
+            )
+
+            self._robot.set_joint_position_target(
+                target=self._robot.data.default_joint_pos[:, self.total_leg_joint_ids] + leg_actions,
+                joint_ids=self.total_leg_joint_ids
+            )
+        else:
+            # Single Agent
+            self._robot.set_joint_position_target(
+                target=self._robot.data.default_joint_pos[:, self._joint_dof_ids] + self.processed_actions,
+                joint_ids=self._joint_dof_ids
+            )
+
+    ## =============== RL main abstract methods ================ ##
+
 
     @abstractmethod
     def _get_observations(self) -> dict[str, torch.Tensor]:

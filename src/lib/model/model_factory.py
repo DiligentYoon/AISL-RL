@@ -3,13 +3,11 @@ import gymnasium as gym
 
 from typing import Union, Any
 
-from lib.model.MLP import Actor, Critic, SharedActor
-from lib.model.MLP_test import SuperConnectedActor, CommunetActor
-from lib.model.NerveNet import NerveNetPolicy
+from lib.model.MLP import Actor, Critic, SharedActor, CommunetActor
 from lib.utils.graph_utils import Mapping
-from lib.model.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
-from lib.model.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
-from lib.model.BodyTransformer.transformer_components import BodyTransformer
+from lib.model.Baselines.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
+from lib.model.Baselines.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer
+from lib.model.Baselines.BodyTransformer.transformer_components import BodyTransformer
 
 class ModelFactory:
     def __init__(self,
@@ -29,7 +27,7 @@ class ModelFactory:
         self.is_multi_agent = self.model_cfg.get("multi_agent", True)
         self.model_type = self.model_cfg.get("model_type", "mlp").lower()
 
-        if (self.model_type == "nervenet") or (self.model_type == "bodytransformer"):
+        if self.model_type == "bodytransformer":
             self.model_class = "gnn"
         else:
             self.model_class = "mlp"
@@ -58,15 +56,6 @@ class ModelFactory:
                                     max_log_std=self.model_cfg["policy"]["max_log_std"],
                                     squash=self.is_squashed,
                                     device=self.device)
-            
-            elif self.model_type == "superconnected":
-                actor = SuperConnectedActor(possible_agents=possible_agents,
-                                            num_observations=observation_size,
-                                            num_actions=action_size,
-                                            min_log_std=self.model_cfg["policy"]["min_log_std"],
-                                            max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                            squash=self.is_squashed,
-                                            device=self.device)
             
             elif self.model_type == "communet":
                 actor = CommunetActor(possible_agents=possible_agents,
@@ -123,29 +112,9 @@ class ModelFactory:
                             observation_space: gym.Space,
                             state_space: Union[gym.Space, None],
                             action_space: gym.Space,
-                            node_cfg: dict = None,
                             mapping_cfg: dict = None):
-        
-        if self.model_type == "nervenet":
-            actor = NerveNetPolicy(
-                    observation_space=observation_space,
-                    action_space=action_space,
-                    node_info=node_cfg["node_info"],
-                    device=self.device,
-                    num_nodes=node_cfg["num_nodes"],
-                    num_actuated_nodes=node_cfg["num_actuated_nodes"],
-                    min_log_std=self.model_cfg['policy']['min_log_std'],
-                    max_log_std=self.model_cfg['policy']['max_log_std'],
-                )
 
-            if state_size is None:
-                raise RuntimeError("Nervenet should have state space for asyncronous actor critic")
-            state_size = state_space.shape[-1]
-
-            critic = Critic(num_states=state_size,
-                            device=self.device)
-
-        elif self.model_type == "bodytransformer":
+        if self.model_type == "bodytransformer":
             mapping = Mapping(mapping_cfg)
             use_mlp = self.model_cfg.get("use_mlp", False)
             action_detokenizer = ActionDetokenizer(mapping=mapping,

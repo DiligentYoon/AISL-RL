@@ -53,29 +53,29 @@ def constant_noise(data: torch.Tensor, bias: float, operation: str = "add") -> t
         raise ValueError(f"Unknown operation in noise: {operation}")
 
 
-def uniform_noise(data: torch.Tensor, n_min: float, n_max: float, operation: str = "add") -> torch.Tensor:
+def uniform_noise(data: torch.Tensor, min: float, max: float, operation: str = "add") -> torch.Tensor:
     """Applies a uniform noise to a given data set.
 
     Args:
         data: The unmodified data set to apply noise to.
-        n_min: Lower bound of the uniform distribution. Can be a scalar, list, or tensor.
+        min: Lower bound of the uniform distribution. Can be a scalar, list, or tensor.
                If a list or tensor of length == data.shape[-1], applied per-dimension.
-        n_max: Upper bound of the uniform distribution. Can be a scalar, list, or tensor.
+        max: Upper bound of the uniform distribution. Can be a scalar, list, or tensor.
                If a list or tensor of length == data.shape[-1], applied per-dimension.
         operation: One of "add", "scale", or "abs".
 
     Returns:
         The data modified by the noise parameters provided.
     """
-    n_min = _ensure_tensor(n_min, data)
-    n_max = _ensure_tensor(n_max, data)
+    min = _ensure_tensor(min, data)
+    max = _ensure_tensor(max, data)
 
     if operation == "add":
-        return data + torch.rand_like(data) * (n_max - n_min) + n_min
+        return data + torch.rand_like(data) * (max - min) + min
     elif operation == "scale":
-        return data * (torch.rand_like(data) * (n_max - n_min) + n_min)
+        return data * (torch.rand_like(data) * (max - min) + min)
     elif operation == "abs":
-        return torch.rand_like(data) * (n_max - n_min) + n_min
+        return torch.rand_like(data) * (max - min) + min
     else:
         raise ValueError(f"Unknown operation in noise: {operation}")
 
@@ -141,3 +141,18 @@ def build_noise_std_vector(groups: dict) -> list:
     for name, spec in groups.items():
         std_vector.extend([spec["std"]] * spec["dim"])
     return std_vector
+
+
+def build_noise_uniform_vector(groups: dict) -> list:
+    n_min = []
+    n_max = []
+
+    for group in groups.values():
+        dim = group["dim"]
+        low = group["min"]
+        high = group["max"]
+
+        n_min.extend([low] * dim)
+        n_max.extend([high] * dim)
+
+    return n_min, n_max

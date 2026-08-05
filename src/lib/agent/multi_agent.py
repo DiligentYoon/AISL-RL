@@ -92,13 +92,13 @@ class MultiAgent:
                 raise ValueError("Not supported running mode. Please choose 'train' or 'eval'.")
 
 
-    def save(self, path: str, path_jit: str | None = None) -> None:
+    def save(self, path: str, path_onnx: str | None = None) -> None:
         """
         Save the agent to the specified path
 
         Args:
             path: Path to save the model to
-            path_jit: Path to save jit scriptModule to (TODO: Multi-agent is not supported yet.)
+            path_onnx: Path to save the deterministic ONNX actor (TODO: Multi-agent ONNX export is not supported yet — per-uid export would write one file per agent.)
         """
         modules = {}
         for uid in self.possible_agents:

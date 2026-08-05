@@ -1,0 +1,52 @@
+seed: 42
+
+models:
+  policy:
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+  value: 
+    clip_actions: False
+
+  model_type: null
+  squashed: False
+
+buffer:
+  buffer_size: -1
+
+agent:
+  
+  class: PPO
+  rollouts: 24
+  learning_epochs: 5
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 1.0e-04
+  learning_rate_scheduler: KLAdaptive
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  entropy_loss_scale: 0.01
+  value_loss_scale: 1.0
+  kl_threshold: 0.0
+  time_limit_bootstrap: True
+  clip_predicted_values: False
+  async_actor_critic: False
+
+  # Action scaling (Env-specific)
+  action_scale_factor: null
+
+  # logging and checkpoint
+  experiment:
+    directory: "g1_safe"
+    experiment_name: ""
+    evaluation_interval: auto
+    write_interval: auto
+    checkpoint_interval: auto
+
+train:
+  timesteps: 56000

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import re
 from typing import Literal
 
@@ -1366,114 +1367,114 @@ def reset_root_state_orientation_biased_uniform(
     asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
 
 
-def reset_robot_and_object_root_state_uniform(
-    env,
-    env_ids: torch.Tensor,
-    pose_range: dict[str, tuple[float, float]],
-    velocity_range: dict[str, tuple[float, float]],
-    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    object_cfg: SceneEntityCfg = SceneEntityCfg("jig"),
-    object_relative_pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    object_relative_yaw: float = 0.0,
-):
-    robot: Articulation = env.scene[robot_cfg.name]
-    obj: RigidObject = env.scene[object_cfg.name]
+# def reset_robot_and_object_root_state_uniform(
+#     env,
+#     env_ids: torch.Tensor,
+#     pose_range: dict[str, tuple[float, float]],
+#     velocity_range: dict[str, tuple[float, float]],
+#     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+#     object_cfg: SceneEntityCfg = SceneEntityCfg("jig"),
+#     object_relative_pos: tuple[float, float, float] = (0.0, 0.0, 0.0),
+#     object_relative_yaw: float = 0.0,
+# ):
+#     robot: Articulation = env.scene[robot_cfg.name]
+#     obj: RigidObject = env.scene[object_cfg.name]
 
-    # default states
-    robot_root_states = robot.data.default_root_state[env_ids].clone()
-    obj_root_states = obj.data.default_root_state[env_ids].clone()
+#     # default states
+#     robot_root_states = robot.data.default_root_state[env_ids].clone()
+#     obj_root_states = obj.data.default_root_state[env_ids].clone()
 
-    # shared pose random sample
-    pose_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
-    pose_ranges = torch.tensor(
-        [pose_range.get(key, (0.0, 0.0)) for key in pose_keys],
-        device=robot.device,
-        dtype=torch.float32,
-    )
-    pose_samples = math_utils.sample_uniform(
-        pose_ranges[:, 0], pose_ranges[:, 1], (len(env_ids), 6), device=robot.device
-    )
+#     # shared pose random sample
+#     pose_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+#     pose_ranges = torch.tensor(
+#         [pose_range.get(key, (0.0, 0.0)) for key in pose_keys],
+#         device=robot.device,
+#         dtype=torch.float32,
+#     )
+#     pose_samples = math_utils.sample_uniform(
+#         pose_ranges[:, 0], pose_ranges[:, 1], (len(env_ids), 6), device=robot.device
+#     )
 
-    pos_delta = pose_samples[:, 0:3]      # shared sampled xyz
-    rpy_delta = pose_samples[:, 3:6]      # shared sampled rpy
+#     pos_delta = pose_samples[:, 0:3]      # shared sampled xyz
+#     rpy_delta = pose_samples[:, 3:6]      # shared sampled rpy
 
-    # robot pose
-    robot_positions = (
-        robot_root_states[:, 0:3]
-        + env.scene.env_origins[env_ids]
-        + pos_delta
-    )
+#     # robot pose
+#     robot_positions = (
+#         robot_root_states[:, 0:3]
+#         + env.scene.env_origins[env_ids]
+#         + pos_delta
+#     )
 
-    robot_orient_delta = math_utils.quat_from_euler_xyz(
-        rpy_delta[:, 0], rpy_delta[:, 1], rpy_delta[:, 2]
-    )
-    robot_orientations = math_utils.quat_mul(
-        robot_root_states[:, 3:7], robot_orient_delta
-    )
+#     robot_orient_delta = math_utils.quat_from_euler_xyz(
+#         rpy_delta[:, 0], rpy_delta[:, 1], rpy_delta[:, 2]
+#     )
+#     robot_orientations = math_utils.quat_mul(
+#         robot_root_states[:, 3:7], robot_orient_delta
+#     )
 
-    # robot velocity
-    vel_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
-    vel_ranges = torch.tensor(
-        [velocity_range.get(key, (0.0, 0.0)) for key in vel_keys],
-        device=robot.device,
-        dtype=torch.float32,
-    )
-    vel_samples = math_utils.sample_uniform(
-        vel_ranges[:, 0], vel_ranges[:, 1], (len(env_ids), 6), device=robot.device
-    )
-    robot_velocities = robot_root_states[:, 7:13] + vel_samples
+#     # robot velocity
+#     vel_keys = ["x", "y", "z", "roll", "pitch", "yaw"]
+#     vel_ranges = torch.tensor(
+#         [velocity_range.get(key, (0.0, 0.0)) for key in vel_keys],
+#         device=robot.device,
+#         dtype=torch.float32,
+#     )
+#     vel_samples = math_utils.sample_uniform(
+#         vel_ranges[:, 0], vel_ranges[:, 1], (len(env_ids), 6), device=robot.device
+#     )
+#     robot_velocities = robot_root_states[:, 7:13] + vel_samples
 
-    robot.write_root_pose_to_sim(
-        torch.cat([robot_positions, robot_orientations], dim=-1),
-        env_ids=env_ids,
-    )
-    robot.write_root_velocity_to_sim(robot_velocities, env_ids=env_ids)
+#     robot.write_root_pose_to_sim(
+#         torch.cat([robot_positions, robot_orientations], dim=-1),
+#         env_ids=env_ids,
+#     )
+#     robot.write_root_velocity_to_sim(robot_velocities, env_ids=env_ids)
 
-    # object pose: follow only shared x, y, yaw
-    rel_pos = torch.tensor(object_relative_pos, device=robot.device, dtype=torch.float32)
-    rel_pos = rel_pos.unsqueeze(0).repeat(len(env_ids), 1)
+#     # object pose: follow only shared x, y, yaw
+#     rel_pos = torch.tensor(object_relative_pos, device=robot.device, dtype=torch.float32)
+#     rel_pos = rel_pos.unsqueeze(0).repeat(len(env_ids), 1)
 
-    shared_yaw = rpy_delta[:, 2] + object_relative_yaw
-    yaw_quat = math_utils.quat_from_euler_xyz(
-        torch.zeros_like(shared_yaw),
-        torch.zeros_like(shared_yaw),
-        shared_yaw,
-    )
+#     shared_yaw = rpy_delta[:, 2] + object_relative_yaw
+#     yaw_quat = math_utils.quat_from_euler_xyz(
+#         torch.zeros_like(shared_yaw),
+#         torch.zeros_like(shared_yaw),
+#         shared_yaw,
+#     )
 
-    # rotate only the xy part of the relative offset
-    rel_xy = rel_pos[:, :2]
-    rel_xy_3d = torch.cat(
-        [rel_xy, torch.zeros((len(env_ids), 1), device=robot.device)], dim=-1
-    )
-    rel_xy_world = math_utils.quat_apply(yaw_quat, rel_xy_3d)[:, :2]
+#     # rotate only the xy part of the relative offset
+#     rel_xy = rel_pos[:, :2]
+#     rel_xy_3d = torch.cat(
+#         [rel_xy, torch.zeros((len(env_ids), 1), device=robot.device)], dim=-1
+#     )
+#     rel_xy_world = math_utils.quat_apply(yaw_quat, rel_xy_3d)[:, :2]
 
-    # start from object's own default root position
-    obj_positions = obj_root_states[:, 0:3].clone() + env.scene.env_origins[env_ids]
+#     # start from object's own default root position
+#     obj_positions = obj_root_states[:, 0:3].clone() + env.scene.env_origins[env_ids]
 
-    # shared translation only in x,y
-    obj_positions[:, 0] += pos_delta[:, 0]
-    obj_positions[:, 1] += pos_delta[:, 1]
+#     # shared translation only in x,y
+#     obj_positions[:, 0] += pos_delta[:, 0]
+#     obj_positions[:, 1] += pos_delta[:, 1]
 
-    # then add rotated relative xy offset
-    obj_positions[:, 0] += rel_xy_world[:, 0]
-    obj_positions[:, 1] += rel_xy_world[:, 1]
+#     # then add rotated relative xy offset
+#     obj_positions[:, 0] += rel_xy_world[:, 0]
+#     obj_positions[:, 1] += rel_xy_world[:, 1]
 
-    # z should NOT follow robot z
-    # keep object's default z and only add its own relative z
-    obj_positions[:, 2] += rel_pos[:, 2]
+#     # z should NOT follow robot z
+#     # keep object's default z and only add its own relative z
+#     obj_positions[:, 2] += rel_pos[:, 2]
 
-    # object orientation: default orientation followed only by shared yaw
-    obj_default_orientation = obj_root_states[:, 3:7]
-    obj_orientations = math_utils.quat_mul(obj_default_orientation, yaw_quat)
+#     # object orientation: default orientation followed only by shared yaw
+#     obj_default_orientation = obj_root_states[:, 3:7]
+#     obj_orientations = math_utils.quat_mul(obj_default_orientation, yaw_quat)
 
-    obj.write_root_pose_to_sim(
-        torch.cat([obj_positions, obj_orientations], dim=-1),
-        env_ids=env_ids,
-    )
+#     obj.write_root_pose_to_sim(
+#         torch.cat([obj_positions, obj_orientations], dim=-1),
+#         env_ids=env_ids,
+#     )
 
-    # object is kinematic/static support object
-    obj_velocities = torch.zeros((len(env_ids), 6), device=robot.device)
-    obj.write_root_velocity_to_sim(obj_velocities, env_ids=env_ids)
+#     # object is kinematic/static support object
+#     obj_velocities = torch.zeros((len(env_ids), 6), device=robot.device)
+#     obj.write_root_velocity_to_sim(obj_velocities, env_ids=env_ids)
 
 
 def reset_root_state_with_random_orientation(
@@ -1674,50 +1675,6 @@ def reset_joints_by_offset(
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
 
-def reset_joints_by_offset_and_bias(
-    env: Env,
-    env_ids: torch.Tensor,
-    bias: tuple[float, float, float],
-    position_range: tuple[float, float],
-    velocity_range: tuple[float, float],
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
-    """Reset the robot joints with offsets around the default position and velocity by the given ranges.
-
-    This function samples random values from the given ranges and biases the default joint positions and velocities
-    by these values. The biased values are then set into the physics simulation.
-    """
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    eps = 1e-10
-
-    # cast env_ids to allow broadcasting
-    if asset_cfg.joint_ids != slice(None):
-        iter_env_ids = env_ids[:, None]
-    else:
-        iter_env_ids = env_ids
-
-    # get default joint state
-    joint_pos = asset.data.default_joint_pos[iter_env_ids, asset_cfg.joint_ids].clone()
-    joint_vel = asset.data.default_joint_vel[iter_env_ids, asset_cfg.joint_ids].clone()
-    
-    # add constant bias
-    # signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-    joint_pos += torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-
-    # bias these values randomly
-    joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)
-    joint_vel += math_utils.sample_uniform(*velocity_range, joint_vel.shape, joint_vel.device)
-
-    # clamp joint pos to limits
-    joint_pos_limits = asset.data.soft_joint_pos_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
-    # clamp joint vel to limits
-    joint_vel_limits = asset.data.soft_joint_vel_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
-
-    # set into the physics simulation
-    asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
 
 def reset_nodal_state_uniform(
     env: Env,

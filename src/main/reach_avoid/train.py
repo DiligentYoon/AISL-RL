@@ -15,10 +15,16 @@ parser.add_argument("--video", action="store_true", default=False, help="Record 
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable fabric and use USD I/O operations.")
-parser.add_argument("--num_envs", type=int, default=4096, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default="G1-fall", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, default=None, help="Path to Reach-Avoid model checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, default=None, help="Path to fall predictor model checkpoint.")
+
+parser.add_argument("--predictor",
+                    type=str,
+                    default="ra",
+                    choices=["ra"],
+                    help="Fall predictor type to train. SafeFall baseline is trained offline; see main/reach_avoid/baselines/safefall/.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -89,21 +95,26 @@ def main():
 
     # specify directory for logging experiments (load checkpoint)
     if args_cli.checkpoint is not None:
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(args_cli.checkpoint)), "Reach_Avoid")
+        base_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
+        log_dir = os.path.join(base_dir, "Reach_Avoid")
     else:
-        log_dir = os.getcwd()
+        log_dir = os.path.join(os.getcwd(), "Reach_Avoid")
+    log_dir = os.path.join(log_dir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
 
     # ============================ Env & Wrapper Spawn ================================
+
+    predictor = args_cli.predictor
+    pred_cfg = ra_cfg["ra"]
 
     # Create isaac environment
     if args_cli.seed is not None:
         env_cfg.seed = args_cli.seed
         cfg["agent"]["seed"] = args_cli.seed
-        ra_cfg["agent"]["seed"] = args_cli.seed
+        pred_cfg["agent"]["seed"] = args_cli.seed
     else:
         env_cfg.seed = cfg.get("seed", None)
         cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
-        ra_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
+        pred_cfg["agent"]["seed"] = cfg.get("seed", 42) # 42 is a default seed (equal to env)
     env_cfg.total_timesteps = cfg["train"]["timesteps"]
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -128,10 +139,13 @@ def main():
     # Wrap around environment
     env = IsaacLabWrapper(env)  
 
+    # Interval
+    cfg["train"]["timesteps"] = ra_cfg["train"]["timesteps"]
+    pred_train_timesteps = ra_cfg["train"]["timesteps"]
     if cfg["agent"]["experiment"]["write_interval"] == "auto":
         write_interval = int(cfg["train"]["timesteps"] / 100)
     if cfg["agent"]["experiment"]["checkpoint_interval"] == "auto":
-        checkpoint_interval = int(cfg["train"]["timesteps"] / 10)
+        checkpoint_interval = int(cfg["train"]["timesteps"] / 5)
 
     # ======================= Buffer =========================
     multi_agent = algorithm == "mappo"
@@ -198,8 +212,6 @@ def main():
         raise RuntimeError("Not supported class")
 
     # ====================== Agent Spawn  ==========================
-    # Scale Factor
-    cfg["agent"]["action_scale_factor"] = env._unwrapped.cfg.action_scale_factor
     if multi_agent:
         if model_manager.model_type == "mlp":
             from lib.agent.mappo import MAPPO
@@ -245,19 +257,21 @@ def main():
                     cfg=cfg["agent"])
         
 
-    # ============= RA Buffer and Model Spawn ===============
-    from lib.buffer.replaybuffer import HindSightReplayBuffer
+    # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
+    from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
     from lib.model.MLP import RA_Critic
+    from lib.agent.reach_avoid import ReachAvoid
+
     if not hasattr(env._unwrapped.cfg, "ra_state_space"):
         raise RuntimeError("Explicit state space is not defined.")
-    ra_buffer =  HindSightReplayBuffer(ra_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
-    ra_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
-    ra_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
 
-    # ==================== RA Agent Spawn ===================
-    from lib.agent.reach_avoid import ReachAvoid
-    ra_agent = ReachAvoid(ra_model, ra_buffer, device=env.device, cfg=ra_cfg["agent"])
-    
+    pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+                                        env.num_envs, device=env.device)
+    pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+    pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
+    pred_agent = ReachAvoid(pred_model, pred_buffer,
+                            device=env.device, cfg=pred_cfg["agent"])
+
     # Checkpoint (Policy)
     if args_cli.checkpoint is not None:
         resume_path = os.path.abspath(args_cli.checkpoint)
@@ -267,14 +281,14 @@ def main():
         resume_path = None
         print("[INFO] Unfortunately a pre-trained policy is not found for this task.")
 
-    # Checkpoint (RA value)
-    if args_cli.ra_checkpoint is not None:
-        resume_path_ra = os.path.abspath(args_cli.ra_checkpoint)
-        ra_agent.load(resume_path_ra)
-        print(f"[INFO] Get checkpoint RA Value from {resume_path_ra}")
+    # Checkpoint (Predictor)
+    if args_cli.predictor_checkpoint is not None:
+        resume_path_pred = os.path.abspath(args_cli.predictor_checkpoint)
+        pred_agent.load(resume_path_pred)
+        print(f"[INFO] Get predictor checkpoint ({predictor}) from {resume_path_pred}")
     else:
-        resume_path_ra = None
-        print("[INFO] Unfortunately a pre-trained RA Value is not found for this task.")
+        resume_path_pred = None
+        print(f"[INFO] No pre-trained predictor ({predictor}) checkpoint found.")
 
     # ======================= Training ============================
 
@@ -290,30 +304,28 @@ def main():
     start_time = time.time()
     
     # Simulate environment
-    while simulation_app.is_running() and timestep <= ra_cfg["train"]["timesteps"]:
+    while simulation_app.is_running() and timestep <= pred_train_timesteps:
 
         # ================== Interaction Phase =====================
         with torch.no_grad():
             # agent stepping (freeze and deterministic Nominal Policy)
-            actions, nonscaled_actions, action_log_probs, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
+            actions, _, _ = agent.act(obs, infos, timestep=timestep, deterministic=True)
             # env stepping
             next_obs, next_states, rewards, terminated, truncated, next_infos = env.step(actions)
             # update rollout number
             timestep += 1
-        
-            # Insert data to the buffer
-            ra_agent.insert_data(states=infos["ra_states"],
-                                 next_states=next_infos["ra_states"],
-                                 l_values=infos["l_values"],
-                                 g_values=infos["g_values"],
-                                 truncated=truncated,
-                                 terminated=terminated)
-        
+
+            # Insert data to the buffer (unified interface across predictors)
+            pred_agent.insert_data(infos=infos,
+                                   next_infos=next_infos,
+                                   terminated=terminated,
+                                   truncated=truncated)
+
         # Parameter update
-        if timestep >= ra_cfg["agent"]["learning_starts"]:
-            value_loss = ra_agent.update()
+        if timestep >= pred_cfg["agent"]["learning_starts"]:
+            value_loss = pred_agent.update()
             CLI_value_loss.append(value_loss)
-            tracking_data["Loss / RA Value Loss"].append(value_loss)
+            tracking_data[f"Loss / {predictor}"].append(value_loss)
 
         # =============== Logging Phase ================
         # Tensorboard logging
@@ -329,13 +341,13 @@ def main():
             tracking_data.clear()
 
         # CLI Logging about the training process at each parameter update
-        if timestep % ra_buffer.buffer_size == 0:
+        if timestep % pred_buffer.buffer_size == 0:
             per_update_value_loss = float(np.mean(CLI_value_loss)) if len(CLI_value_loss) else float("nan")
-            per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.3f}"
+            per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.5f}"
 
             elapsed_time = time.time() - start_time
             elapsed_time_per_step = elapsed_time / timestep if timestep > 0 else 0
-            complete_time = elapsed_time_per_step * (int(ra_cfg["train"]["timesteps"]) - timestep)
+            complete_time = elapsed_time_per_step * (pred_train_timesteps - timestep)
 
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
@@ -346,9 +358,9 @@ def main():
             c_s = int(complete_time % 60)
 
             content_width = 64
-            line_header = f"Step Progress {timestep} / {ra_cfg['train']['timesteps']}"
+            line_header = f"Step Progress {timestep} / {pred_train_timesteps}"
             line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
-            line_value_loss = f"Value Loss        : {per_value_loss}"
+            line_value_loss = f"{predictor} Loss        : {per_value_loss}"
 
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
@@ -361,8 +373,8 @@ def main():
 
         # Checkpoint save
         if timestep % checkpoint_interval == 0:
-            checkpoint_ra_path = os.path.join(log_dir, f"ra_agent_{timestep}.pt")
-            ra_agent.save(checkpoint_ra_path)
+            checkpoint_pred_path = os.path.join(log_dir, f"{predictor}_agent_{timestep}.pt")
+            pred_agent.save(checkpoint_pred_path)
 
         # update
         obs = next_obs

@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from lib.agent.agent import Agent
 from lib.buffer.rolloutbuffer import RolloutBuffer
 from lib.utils.Running_mean_std import RunningMeanStd
+from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 
 class PPO(Agent):
     def __init__(self,
@@ -50,6 +51,9 @@ class PPO(Agent):
         self.mini_batches = self.cfg["mini_batches"]
 
         self.learning_rate = self.cfg["learning_rate"]
+        self.learning_rate_scheduler = self.cfg["learning_rate_scheduler"]
+        self.kl_threshold = self.cfg["kl_threshold"]
+
         self.discount_factor = self.cfg["discount_factor"]
         self.gae_lambda = self.cfg["lambda"]
 
@@ -68,24 +72,15 @@ class PPO(Agent):
 
         self.is_async_actor_critic = self.cfg.get("async_actor_critic", False)
 
-        self.action_scale_factor = self.cfg.get("action_scale_factor", 1.0)
-        self.mapped_action_scale_factor = torch.zeros(self.num_action, device=self.device)
-        if isinstance(self.action_scale_factor, dict):
-            # Per-action dictionary
-            # Action Scale Factor : [k_1 : [0.5, (0, 1, ...)], k_2 : [1.5, (5, 6, ...)], ...]
-            for k, v in self.action_scale_factor.items():
-                scale_factor = v[0]
-                mapping_ids = v[1]
-                self.mapped_action_scale_factor[mapping_ids] = scale_factor
-        else:
-            # Single scalar
-            self.mapped_action_scale_factor[:] = self.action_scale_factor
-
         # Set up Adam optimizer
         if self.actor is not None and self.critic is not None:
             self.optimizer = torch.optim.Adam(
                     itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
             self.checkpoint_modules["optimizer"] = self.optimizer
+
+        # Set up learning rate scheduler
+        if self.learning_rate_scheduler is not None:
+                self.learning_rate_scheduler = KLAdaptiveLR(self.optimizer, self.kl_threshold)
 
         self.tensors_names = ["observations", "next_observations", "actions", "action_log_probs", 
                               "value_preds", "rewards", "truncated", "terminated",
@@ -138,19 +133,15 @@ class PPO(Agent):
         """
         if timestep < self.random_timesteps:
             # Random act
-            nonscaled_actions, log_prob, entropy = self.actor.random_act(observations)
+            raw_actions, log_prob, entropy = self.actor.random_act(observations)
         else:
             # Normal act
-            nonscaled_actions, log_prob, entropy = self.actor(observations=observations,
-                                                              taken_actions=None,
-                                                              deterministic=deterministic,
-                                                              update_rms=update_rms)
-        
-        # Action scaling
-        n_batch = nonscaled_actions.shape[0]
-        actions = nonscaled_actions.clone() * self.mapped_action_scale_factor.repeat(n_batch, 1) # [E, A]
+            raw_actions, log_prob, entropy = self.actor(observations=observations,
+                                                        taken_actions=None,
+                                                        deterministic=deterministic,
+                                                        update_rms=update_rms)
 
-        return actions, nonscaled_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
+        return raw_actions, log_prob, entropy                       # Add raw action which is inserted into buffer
 
     def insert_data(self,
                     observations: torch.Tensor,
@@ -322,13 +313,21 @@ class PPO(Agent):
                 if self.entropy_loss_scale:
                     cumulative_entropy_loss += entropy_loss.item()
                 
+
+        # Learning rate scheduler update
+        kl = torch.tensor(kl_divergences, device=self.device).mean().item()
+        if self.learning_rate_scheduler is not None:
+            self.learning_rate_scheduler.step(kl)
+            learning_rate = self.learning_rate_scheduler.get_last_lr()[0]
+        else:
+            learning_rate = self.optimizer.param_groups[0]["lr"]
+
         self.set_running_mode("eval")
 
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches)
         mean_value_loss = cumulative_value_loss / (self.learning_epochs * self.mini_batches)
         mean_entropy_loss = cumulative_entropy_loss / (self.learning_epochs * self.mini_batches)
-        mean_kl_divergence = sum(kl_divergences) / (self.learning_epochs * self.mini_batches)
+        mean_kl_divergence = kl
 
-
-        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, None
+        return mean_policy_loss, mean_value_loss, mean_entropy_loss, mean_kl_divergence, learning_rate
             
