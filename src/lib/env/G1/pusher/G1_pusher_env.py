@@ -131,7 +131,7 @@ class G1PusherEnv(G1BaseEnv):
         self.prev_actions = {
                 "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
                 "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device),
-                "adv": torch.zeros((self.num_envs, len(self.cfg.action_space["adv"])), device=self.device)}
+                "adv": torch.zeros((self.num_envs, self.cfg.action_space["adv"]), device=self.device)}
 
         # Geometry vector
         self.forward_vec = torch.tensor([1.0, 0.0, 0.0], device=self.device).repeat(self.num_envs, 1)
@@ -195,8 +195,7 @@ class G1PusherEnv(G1BaseEnv):
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
-        self.torso_rotation_visalizer.visualize(translations=torso_pos,
-                                                orientations=torso_rot)
+        self.torso_rotation_visalizer.visualize(translations=torso_pos, orientations=torso_rot)
 
 
     def _setup_scene(self):
@@ -324,7 +323,8 @@ class G1PusherEnv(G1BaseEnv):
                     self.phase_cos.unsqueeze(-1),                       # [E, 1]
                     self.joint_pos[:, self.total_joint_ids],            # [E, 29]
                     self.joint_vel[:, self.total_joint_ids]             # [E, 29]
-                ]
+                ],
+                dim=-1
             )
         }
 
@@ -351,7 +351,22 @@ class G1PusherEnv(G1BaseEnv):
             
             states = {
                 "arm": shared_states,
-                "leg": shared_states
+                "leg": shared_states,
+                "adv": torch.cat(
+                [
+                    self.root_pos_w[:, 2:3],                            # [E, 1]
+                    self.root_heading,                                  # [E, 1]
+                    self.root_lin_vel_b,                                # [E, 3]
+                    self.root_ang_vel_b,                                # [E, 3]
+                    self.projected_gravity,                             # [E, 3]
+                    self.command_inputs_b,                              # [E, 3]
+                    self.phase_sin.unsqueeze(-1),                       # [E, 1]
+                    self.phase_cos.unsqueeze(-1),                       # [E, 1]
+                    self.joint_pos[:, self.total_joint_ids],            # [E, 29]
+                    self.joint_vel[:, self.total_joint_ids]             # [E, 29]
+                ],
+                dim=-1
+            )
             }
         else:
             # Single Agent
@@ -523,7 +538,6 @@ class G1PusherEnv(G1BaseEnv):
         super()._reset_idx(env_ids)
 
         # Gait guidance (Phase scheduler)
-        self.z_c[env_ids] = self.cfg.z_c_min + (self.cfg.z_c_max - self.cfg.z_c_min) * torch.rand(env_ids.shape[0], device=self.device)
         self.phase[env_ids] = 0
         self.phase_count[env_ids] = 0
         self.update_phase_ids[env_ids] = False
@@ -534,34 +548,22 @@ class G1PusherEnv(G1BaseEnv):
         self.foot_on_swing[env_ids] = 0
         self.foot_on_swing[env_ids, 0] = 1 # Initial swing feet is the left feet
 
-        if hasattr(self, "prev_actions"):
-            if self.cfg.num_agents > 1:
-                # Multi Agent
-                self.prev_actions["leg"][env_ids] = 0.0
-                self.prev_actions["arm"][env_ids] = 0.0
-                self.prev_actions["adv"][env_ids] = 0.0
-            else:
-                # Single Agent
-                self.prev_actions[env_ids] = 0.0
+        if self.cfg.num_agents > 1:
+            # Multi Agent
+            self.prev_actions["leg"][env_ids] = 0.0
+            self.prev_actions["arm"][env_ids] = 0.0
+            self.prev_actions["adv"][env_ids] = 0.0
         else:
-            if self.cfg.num_agents > 1:
-                # Multi Agent
-                self.prev_actions = {
-                        "leg": torch.zeros((self.num_envs, len(self.total_leg_joint_ids)), device=self.device),
-                        "arm": torch.zeros((self.num_envs, len(self.total_arm_joint_ids)), device=self.device),
-                        "adv": torch.zeros((self.num_envs, len(self.action_space["adv"])), device=self.device)
-                }
-            else:
-                # Single Agent
-                self.prev_actions = torch.zeros((self.num_envs, len(self._joint_dof_ids)), device=self.device)
-
+            # Single Agent
+            self.prev_actions[env_ids] = 0.0
+        
         # Command resampling
         self.commands.reset(env_ids)
-        self.step_period, self.full_step_period= resample_commands(self.step_period,
-                                                                   self.full_step_period,
-                                                                   env_ids,
-                                                                   self.step_dt,
-                                                                   self.cfg.time_period_min, self.cfg.time_period_max,)
+        # self.step_period, self.full_step_period= resample_commands(self.step_period,
+        #                                                            self.full_step_period,
+        #                                                            env_ids,
+        #                                                            self.step_dt,
+        #                                                            self.cfg.time_period_min, self.cfg.time_period_max,)
 
         self._compute_intermediate_values(env_ids)
 
