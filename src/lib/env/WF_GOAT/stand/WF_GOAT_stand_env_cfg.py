@@ -142,8 +142,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-                "friction_distribution_params": (0.03, 0.3),
-                "viscous_distribution_params": (0.01, 0.3),
+                "friction_distribution_params": (0.07, 0.15),
+                "coulomb_distribution_params": (0.03, 0.08),
+                "viscous_distribution_params": (0.05, 0.09),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -154,8 +155,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-                "friction_distribution_params": (0.03, 0.3),
-                "viscous_distribution_params": (0.01, 0.3),
+                "friction_distribution_params": (0.07, 0.15),
+                "coulomb_distribution_params": (0.03, 0.08),
+                "viscous_distribution_params": (0.03, 0.07),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -166,8 +168,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.03, 0.3),
-                "viscous_distribution_params": (0.01, 0.3),
+                "friction_distribution_params": (0.1, 0.3),
+                "coulomb_distribution_params": (0.2, 0.4),
+                "viscous_distribution_params": (0.08, 0.12),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -178,7 +181,8 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
                 "friction_distribution_params": (0.03, 0.1),
-                "viscous_distribution_params": (0.01, 0.03),
+                "coulomb_distribution_params": (0.01, 0.03),
+                "viscous_distribution_params": (0.001, 0.003),
                 "operation": "abs",
                 "distribution": "uniform",
             }

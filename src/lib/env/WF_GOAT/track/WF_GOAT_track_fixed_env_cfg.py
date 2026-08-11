@@ -8,9 +8,9 @@ from isaaclab.markers import VisualizationMarkersCfg
 
 from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
 from lib.env.WF_GOAT.track.mdp.commander import UniformJointPositionCommandCfg
-from lib.domain_randomizer.noise_model import build_noise_std_vector
-from lib.domain_randomizer.randomizer import randomize_actuator_gains
 from lib.env.WF_GOAT.track.mdp.randomizer import reset_joints_by_scale_and_bias
+from lib.env.WF_GOAT.stand.mdp.randomizer import randomize_joint_parameters
+from lib.domain_randomizer.noise_model import build_noise_uniform_vector
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.utils.plot_utils import PNGSavePlotter
 
@@ -46,25 +46,22 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     p_action_rate_weight = 0.1
     p_terminated_weight = 100.0
 
-    # Per-axis observation noise groups (must match _get_observations concat order)
-    # std=0.0 for internal values that require no sensor noise injection
+    # Per-axis observation noise groups
     obs_noise_groups_end = {
-        "joint_pos":         {"dim": 6,  "std": 0.01},
-        "joint_vel":         {"dim": 6,  "std": 1.5},
-        "previous_actions":  {"dim": 6,  "std": 0.0},
-        "command":           {"dim": 6,  "std": 0.0},   # internal target command (no noise)
+        "joint_pos":         {"dim": 6,  "min": -0.01, "max": 0.01},
+        "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
+        "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
+        "command":           {"dim": 6,  "min": 0.0,   "max": 0.0},
     }
-    obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
+    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
 
-    # Noise Model — std is a list for per-axis control; initialized to max difficulty
-    # and overridden to start values by CurriculumManager on env init.
-    observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
+    # Noise Model
+    observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
     observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": obs_noise_end,
+        "min": obs_noise_min,
+        "max": obs_noise_max,
         "operation": "add",
     }
-
 
     ## ======================== Curriculum ======================= ##
 
@@ -72,8 +69,8 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     decay_factor_end = 0.7
 
     curriculum = CurriculumManagerCfg(
-        warmup=0.3,
-        endup=0.5,
+        warmup=0.15,
+        endup=0.3,
         params=[
             CurriculumParamCfg(
                 name="decay_factor",
@@ -124,17 +121,52 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_leg_physics_material = None
         self.events.robot_wheel_physics_material = None
         self.events.robot_wheel_actuator_gain = None
+        self.events.robot_wheel_joint_friction = None
         self.events.reset_body = None
         self.events.push_robot = None
         
         # Change event parameters
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+
+        self.events.robot_hip_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
+                "friction_distribution_params": (0.07, 0.15),
+                "coulomb_distribution_params": (0.03, 0.08),
+                "viscous_distribution_params": (0.05, 0.09),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )       
+
+        self.events.robot_thigh_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+                "friction_distribution_params": (0.07, 0.15),
+                "coulomb_distribution_params": (0.03, 0.08),
+                "viscous_distribution_params": (0.03, 0.07),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )       
+
+        self.events.robot_knee_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+                "friction_distribution_params": (0.1, 0.3),
+                "coulomb_distribution_params": (0.2, 0.4),
+                "viscous_distribution_params": (0.08, 0.12),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )     
 
         # Newly assigned event
         self.events.reset_robot_joints = EventTerm(
