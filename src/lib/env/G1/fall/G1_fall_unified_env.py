@@ -56,6 +56,14 @@ class G1FallUnifiedEnv(G1FallEnv):
 
     # Overriding to add Safety policy information
     def _get_states(self) -> dict[str, torch.Tensor]:
+        # Action Processing
+        if isinstance(self.prev_actions, dict):
+            arm_actions = self.prev_actions["arm"]
+            leg_actions = self.prev_actions["leg"]
+        else:
+            arm_actions = self.prev_actions[:, self.total_arm_joint_ids]
+            leg_actions = self.prev_actions[:, self.total_leg_joint_ids]
+
         # Nominal Policy
         if self.cfg.num_agents > 1:
            # Multi Agent

@@ -1,26 +1,17 @@
 
 from __future__ import annotations
 
-import math
-import os
-
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
-from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.assets import ArticulationCfg
-from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.sensors import ContactSensorCfg
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG, CUBOID_MARKER_CFG, FRAME_MARKER_CFG
 
 from lib.domain_randomizer import randomizer
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 from lib.env.G1.base.G1_base_env_cfg import G1BaseEnvCfg
-from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-from isaaclab.managers import SceneEntityCfg
 
 
 # @configclass
@@ -107,7 +98,7 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
     adversarial_agents = ["adv"]                             # Adversarial agent
     action_space = {"arm": 17, "leg": 12, "adv": 10}                         
     observation_space = {"arm": 65, "leg": 50, "adv": 74}    # TODO: 나중에 수정            
-    state_space = {"arm": 102, "leg": 102}
+    state_space = {"arm": 102, "leg": 102, "adv": 74}
     num_agents = 3
     action_scale_factor = {"arm": [0.5, ()], 
                            "leg": [0.5, ()],
@@ -175,7 +166,7 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
                                 "waist_roll_link"]
 
     # Simulation
-    sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
+    # sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
 
     # Event
     # events: EventCfg = EventCfg()
@@ -232,10 +223,22 @@ class G1PusherEnvCfg(G1BaseEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        self.events.push_robot.interval_range_s = (4.0, 5.0)
-        self.events.push_robot.params["velocity_range"] = {
-            "x": (-0.5, 0.5), 
-            "y": (-0.5, 0.5), 
-            "roll": (-2.5, 2.5), 
-            "pitch": (-2.5, 2.5)
-        }
+        self.events.push_robot = None
+
+@configclass
+class G1PusherPlayEnvCfg(G1PusherEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+    
+        # viewer
+        self.viewer = ViewerCfg(
+            origin_type="asset_root",
+            asset_name="robot",
+            env_index=0,
+            eye=(0.0, 3.0, 0.5),
+            lookat=(0.0, 0.0, 0.0)
+        )
+
+        self.scene.num_envs = 1
+
+        # self.events.push_robot = None

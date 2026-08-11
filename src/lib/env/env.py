@@ -178,8 +178,7 @@ class Env(gym.Env):
         # allocate dictionary to store metrics
         self.extras = {}
         # allocate viz_data dictionary to information dict
-        self.is_plot = (self.num_envs == 1)
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             self.extras["viz_data"] = self.cfg.viz_data
 
         # initialize data and constants
@@ -334,10 +333,6 @@ class Env(gym.Env):
             else:
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
 
-        # update viz data
-        # if (self.cfg.viz_data is not None) and (self.is_plot):
-        #     self.extras = self._update_viz_data()
-
         # return observations and extras with shallow copy
         return self.obs_buf, self.state_buf, dict(self.extras)
 
@@ -452,7 +447,7 @@ class Env(gym.Env):
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
         
         # update viz data
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             self.extras = self._update_viz_data()
 
         # return observations, rewards, resets and extras with shallow copy
@@ -759,7 +754,7 @@ class Env(gym.Env):
 
     @abstractmethod
     def _update_viz_data(self) -> Dict:
-        if (self.cfg.viz_data is not None) and (self.is_plot):
+        if (self.cfg.viz_data is not None):
             raise NotImplementedError(
                 f"{self.__class__.__name__}: vizualization option is true, "
                 "so 'update_viz_data must be implemented to update visualization info")
