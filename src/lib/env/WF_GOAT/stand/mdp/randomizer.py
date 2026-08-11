@@ -8,52 +8,7 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
 
-
-def reset_joints_by_offset_and_bias(
-    env,
-    env_ids: torch.Tensor,
-    bias: tuple[float, float, float],
-    position_range: tuple[float, float],
-    velocity_range: tuple[float, float],
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
-    """Reset the robot joints with offsets around the default position and velocity by the given ranges.
-
-    This function samples random values from the given ranges and biases the default joint positions and velocities
-    by these values. The biased values are then set into the physics simulation.
-    """
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    eps = 1e-10
-
-    # cast env_ids to allow broadcasting
-    if asset_cfg.joint_ids != slice(None):
-        iter_env_ids = env_ids[:, None]
-    else:
-        iter_env_ids = env_ids
-
-    # get default joint state
-    joint_pos = asset.data.default_joint_pos[iter_env_ids, asset_cfg.joint_ids].clone()
-    joint_vel = asset.data.default_joint_vel[iter_env_ids, asset_cfg.joint_ids].clone()
-    
-    # add constant bias
-    # signed_bias = torch.sign(joint_pos + eps) * torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-    joint_pos += torch.tensor(bias, dtype=torch.float32, device=joint_pos.device)
-
-    # bias these values randomly
-    joint_pos += math_utils.sample_uniform(*position_range, joint_pos.shape, joint_pos.device)
-    joint_vel += math_utils.sample_uniform(*velocity_range, joint_vel.shape, joint_vel.device)
-
-    # clamp joint pos to limits
-    joint_pos_limits = asset.data.soft_joint_pos_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
-    # clamp joint vel to limits
-    joint_vel_limits = asset.data.soft_joint_vel_limits[iter_env_ids, asset_cfg.joint_ids]
-    joint_vel = joint_vel.clamp_(-joint_vel_limits, joint_vel_limits)
-
-    # set into the physics simulation
-    asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
-
+from lib.domain_randomizer.randomizer import _validate_scale_range, _randomize_prop_by_op, get_isaac_sim_version
 
 def reset_robot_and_object_root_state_uniform(
     env,
@@ -300,21 +255,7 @@ class reset_joint_state_from_buffer(ManagerTermBase):
                  dataset_path: str,
                  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
                  use_default_for_unmatched_joints: bool = True,):
-        """Apply sampled joint positions to selected envs.
-
-        Args:
-            env:
-                IsaacLab environment.
-            env_ids:
-                Environment indices to reset.
-            dataset_path:
-                Path to .pt file containing joint_pos and joint_names.
-            asset_cfg:
-                Target robot asset config.
-            use_default_for_unmatched_joints:
-                If True, unmatched robot joints are set to default_joint_pos.
-                If False, unmatched robot joints keep their current position.
-        """
+        """Apply sampled joint positions to selected envs."""
 
         if not self._loaded:
             self._load_buffer(dataset_path)
@@ -348,409 +289,125 @@ class reset_joint_state_from_buffer(ManagerTermBase):
         self.asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
 
-class reset_robot_state_from_buffer(ManagerTermBase):
-    """Reset root pose and joint positions from the same sampled dataset row.
+class randomize_joint_parameters(ManagerTermBase):
+    """Randomize the simulated joint parameters of an articulation by adding, scaling, or setting random values."""
 
-    Expected .pt format:
-        {
-            "joint_pos": Tensor[num_samples, num_logged_joints],
-            "joint_names": List[str],
-
-            "base_pos": Tensor[num_samples, 3],
-            "base_quat": Tensor[num_samples, 4],
-
-            "base_pos_order": ["x", "y", "z"],       # optional metadata
-            "base_quat_order": ["w", "x", "y", "z"],  # optional metadata
-        }
-
-    Reset behavior:
-        - joint position: sampled from the buffer
-        - joint velocity: zero
-        - root x, y: default root x, y + environment origin
-        - root z: sampled base height
-        - root roll: zero
-        - root pitch: extracted from sampled buffer quaternion
-        - root yaw: uniformly randomized
-        - root linear/angular velocity: zero
-    """
-
-    REQUIRED_KEYS = (
-        "joint_pos",
-        "joint_names",
-        "base_pos",
-        "base_quat",
-    )
-
-    def __init__(self, cfg: EventTermCfg, env):
+    def __init__(self, cfg: EventTermCfg, env: Env):
+        """Initialize the term."""
         super().__init__(cfg, env)
 
-        self.asset_cfg: SceneEntityCfg = cfg.params.get(
-            "asset_cfg",
-            SceneEntityCfg("robot"),
-        )
-        self.asset: Articulation = env.scene[self.asset_cfg.name]
-        self._device = self.asset.device
-
-        self._loaded = False
-        self._buffer_cap = 0
-
-        # Dataset buffers
-        self._buffer_joint_pos: torch.Tensor | None = None
-        self._buffer_joint_names: list[str] | None = None
-        self._buffer_base_z: torch.Tensor | None = None
-        self._buffer_base_pitch: torch.Tensor | None = None
-
-        # Mapping:
-        # dataset joint index -> IsaacLab articulation joint index
-        self._src_indices: torch.Tensor | None = None
-        self._dst_indices: torch.Tensor | None = None
-
-    def _load_buffer(self, path: str) -> None:
-        path = os.path.abspath(os.path.expanduser(path))
-
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"Initial-state buffer file not found: {path}"
-            )
-
-        payload = torch.load(
-            path,
-            map_location=self._device,
-        )
-
-        for key in self.REQUIRED_KEYS:
-            if key not in payload:
-                raise KeyError(
-                    f"{path} is missing required key '{key}'."
-                )
-
-        joint_pos = payload["joint_pos"]
-        joint_names = payload["joint_names"]
-        base_pos = payload["base_pos"]
-        base_quat = payload["base_quat"]
-        num_samples = joint_pos.shape[0]
-
-        # ------------------------------------------------------------
-        # Move tensors to simulation device
-        # ------------------------------------------------------------
-        joint_pos = joint_pos.to(
-            device=self._device,
-            dtype=torch.float32,
-        )
-        base_pos = base_pos.to(
-            device=self._device,
-            dtype=torch.float32,
-        )
-        base_quat = base_quat.to(
-            device=self._device,
-            dtype=torch.float32,
-        )
-
-        # ------------------------------------------------------------
-        # Reorder base fields according to stored metadata
-        # ------------------------------------------------------------
-        base_pos_order = list(
-            payload.get(
-                "base_pos_order",
-                ["x", "y", "z"],
-            )
-        )
-        base_quat_order = list(
-            payload.get(
-                "base_quat_order",
-                ["w", "x", "y", "z"],
-            )
-        )
-
-        base_pos = self._reorder_columns(
-            tensor=base_pos,
-            source_order=base_pos_order,
-            target_order=["x", "y", "z"],
-            field_name="base_pos",
-        )
-
-        base_quat = self._reorder_columns(
-            tensor=base_quat,
-            source_order=base_quat_order,
-            target_order=["w", "x", "y", "z"],
-            field_name="base_quat",
-        )
-
-        # ------------------------------------------------------------
-        # Normalize quaternion and extract pitch
-        # ------------------------------------------------------------
-        quat_norm = torch.linalg.vector_norm(
-            base_quat,
-            dim=-1,
-            keepdim=True,
-        )
-
-        if torch.any(quat_norm < 1.0e-8):
-            invalid_count = int(
-                torch.sum(quat_norm.squeeze(-1) < 1.0e-8).item()
-            )
+        # extract the used quantities (to enable type-hinting)
+        self.asset_cfg: SceneEntityCfg = cfg.params["asset_cfg"]
+        self.asset: RigidObject | Articulation = env.scene[self.asset_cfg.name]
+        # check for valid operation
+        if cfg.params["operation"] == "scale":
+            if "friction_distribution_params" in cfg.params:
+                _validate_scale_range(cfg.params["friction_distribution_params"], "friction_distribution_params")
+            if "armature_distribution_params" in cfg.params:
+                _validate_scale_range(cfg.params["armature_distribution_params"], "armature_distribution_params")
+        elif cfg.params["operation"] not in ("abs", "add"):
             raise ValueError(
-                f"Dataset contains {invalid_count} invalid zero-norm "
-                "quaternion samples."
-            )
-
-        base_quat = base_quat / quat_norm
-
-        _, base_pitch, _ = math_utils.euler_xyz_from_quat(base_quat)
-
-        # Only the sampled absolute height and pitch are needed.
-        self._buffer_joint_pos = joint_pos
-        self._buffer_joint_names = list(joint_names)
-        self._buffer_base_z = base_pos[:, 2]
-        self._buffer_base_pitch = base_pitch
-        self._buffer_cap = num_samples
-
-        self._build_joint_mapping()
-
-        print(
-            "[reset_robot_state_from_buffer] Buffer loaded\n"
-            f"  path           : {path}\n"
-            f"  samples        : {self._buffer_cap}\n"
-            f"  buffer joints  : {len(self._buffer_joint_names)}\n"
-            f"  robot joints   : {self.asset.num_joints}\n"
-            f"  matched joints : {len(self._src_indices)}\n"
-            f"  base z range   : "
-            f"[{self._buffer_base_z.min().item():.6f}, "
-            f"{self._buffer_base_z.max().item():.6f}] m\n"
-            f"  pitch range    : "
-            f"[{torch.rad2deg(self._buffer_base_pitch.min()).item():.3f}, "
-            f"{torch.rad2deg(self._buffer_base_pitch.max()).item():.3f}] deg"
-        )
-
-    @staticmethod
-    def _reorder_columns(
-        tensor: torch.Tensor,
-        source_order: list[str],
-        target_order: list[str],
-        field_name: str,
-    ) -> torch.Tensor:
-        """Reorder tensor columns using saved metadata."""
-
-        if len(source_order) != tensor.shape[1]:
-            raise ValueError(
-                f"{field_name}_order has {len(source_order)} entries, "
-                f"but {field_name} has {tensor.shape[1]} columns."
-            )
-
-        missing = [
-            name
-            for name in target_order
-            if name not in source_order
-        ]
-
-        if missing:
-            raise ValueError(
-                f"{field_name}_order is missing fields: {missing}. "
-                f"Stored order: {source_order}"
-            )
-
-        indices = [
-            source_order.index(name)
-            for name in target_order
-        ]
-
-        return tensor[:, indices]
-
-    def _build_joint_mapping(self) -> None:
-        """Map dataset joint columns to the articulation joint order."""
-
-        assert self._buffer_joint_names is not None
-
-        robot_joint_names = list(self.asset.joint_names)
-        robot_name_to_idx = {
-            name: index
-            for index, name in enumerate(robot_joint_names)
-        }
-
-        src_indices: list[int] = []
-        dst_indices: list[int] = []
-        missing_in_robot: list[str] = []
-
-        for src_idx, joint_name in enumerate(
-            self._buffer_joint_names
-        ):
-            if joint_name in robot_name_to_idx:
-                src_indices.append(src_idx)
-                dst_indices.append(
-                    robot_name_to_idx[joint_name]
-                )
-            else:
-                missing_in_robot.append(joint_name)
-
-        if not src_indices:
-            raise RuntimeError(
-                "No dataset joint names match the robot articulation.\n"
-                f"Dataset joints: {self._buffer_joint_names}\n"
-                f"Robot joints  : {robot_joint_names}"
-            )
-
-        if missing_in_robot:
-            print(
-                "[reset_robot_state_from_buffer] Warning: "
-                "dataset joints not found in the robot:\n"
-                f"  {missing_in_robot}"
-            )
-
-        self._src_indices = torch.tensor(
-            src_indices,
-            dtype=torch.long,
-            device=self._device,
-        )
-        self._dst_indices = torch.tensor(
-            dst_indices,
-            dtype=torch.long,
-            device=self._device,
-        )
+                "Randomization term 'randomize_fixed_tendon_parameters' does not support operation:"
+                f" '{cfg.params['operation']}'.")
 
     def __call__(
         self,
-        env,
-        env_ids: torch.Tensor,
-        dataset_path: str,
-        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-        yaw_range: tuple[float, float] = (-3.14, 3.14),
-    ) -> None:
-        """Apply sampled root pose and joint state to selected environments.
+        env: Env,
+        env_ids: torch.Tensor | None,
+        asset_cfg: SceneEntityCfg,
+        friction_distribution_params: tuple[float, float] | None = None,
+        viscous_distribution_params: tuple[float, float] | None = None,
+        armature_distribution_params: tuple[float, float] | None = None,
+        operation: Literal["add", "scale", "abs"] = "abs",
+        distribution: Literal["uniform", "log_uniform", "gaussian"] = "uniform",
+    ):
+        # resolve environment ids
+        if env_ids is None:
+            env_ids = torch.arange(env.scene.num_envs, device=self.asset.device)
 
-        Reset behavior:
-            - One dataset row is sampled per environment.
-            - Logged joint positions are restored from the sampled row.
-            - Joints absent from the dataset, including wheels, use
-            default_joint_pos.
-            - Joint velocities are initialized to zero.
-            - Root x/y use the default position relative to each environment.
-            - Root z uses the sampled dataset height relative to env_origin_z.
-            - Root roll is zero.
-            - Root pitch is extracted from the sampled dataset quaternion.
-            - Root yaw is uniformly randomized.
-            - Root linear and angular velocities are initialized to zero.
-        """
+        # resolve joint indices
+        if self.asset_cfg.joint_ids == slice(None):
+            joint_ids = slice(None)  # for optimization purposes
+        else:
+            joint_ids = torch.tensor(self.asset_cfg.joint_ids, dtype=torch.int, device=self.asset.device)
 
-        # asset_cfg is resolved in __init__.
-        _ = asset_cfg
+        if env_ids != slice(None) and joint_ids != slice(None):
+            env_ids_for_slice = env_ids[:, None]
+        else:
+            env_ids_for_slice = env_ids
 
-        if not self._loaded:
-            self._load_buffer(dataset_path)
-            self._loaded = True
-
-        if env_ids.numel() == 0:
-            return
-
-        assert self._buffer_joint_pos is not None
-        assert self._buffer_base_z is not None
-        assert self._buffer_base_pitch is not None
-        assert self._src_indices is not None
-        assert self._dst_indices is not None
-
-        yaw_min = float(yaw_range[0])
-        yaw_max = float(yaw_range[1])
-
-        if yaw_max < yaw_min:
-            raise ValueError(
-                f"Invalid yaw_range={yaw_range}: "
-                "maximum is smaller than minimum."
+        # sample joint properties from the given ranges and set into the physics simulation
+        # joint friction coefficient
+        if friction_distribution_params is not None:
+            friction_coeff = _randomize_prop_by_op(
+                self.asset.data.default_joint_friction_coeff.clone(),
+                friction_distribution_params,
+                env_ids,
+                joint_ids,
+                operation=operation,
+                distribution=distribution,
             )
 
-        device = self._device
-        num_reset_envs = int(env_ids.numel())
-        num_robot_joints = self.asset.num_joints
+            # ensure the friction coefficient is non-negative
+            friction_coeff = torch.clamp(friction_coeff, min=0.0)
 
-        # ============================================================
-        # 1. Sample one common dataset row for root and joint state
-        # ============================================================
-        row_ids = torch.randint(
-            low=0,
-            high=self._buffer_cap,
-            size=(num_reset_envs,),
-            device=device,
-        )
+            # Always set static friction (indexed once)
+            static_friction_coeff = friction_coeff[env_ids_for_slice, joint_ids]
 
-        sampled_joint_pos = self._buffer_joint_pos[row_ids]
-        sampled_base_z = self._buffer_base_z[row_ids]
-        sampled_base_pitch = self._buffer_base_pitch[row_ids]
+            # if isaacsim version is lower than 5.0.0 we can set only the static friction coefficient
+            if get_isaac_sim_version().major >= 5:
+                # Randomize raw tensors
+                dynamic_friction_coeff = _randomize_prop_by_op(
+                    self.asset.data.default_joint_dynamic_friction_coeff.clone(),
+                    friction_distribution_params,
+                    env_ids,
+                    joint_ids,
+                    operation=operation,
+                    distribution=distribution,
+                )
+                viscous_friction_coeff = _randomize_prop_by_op(
+                    self.asset.data.default_joint_viscous_friction_coeff.clone(),
+                    viscous_distribution_params,
+                    env_ids,
+                    joint_ids,
+                    operation=operation,
+                    distribution=distribution,
+                )
 
-        # ============================================================
-        # 2. Construct full joint state
-        # ============================================================
-        # Joints absent from the dataset, such as wheels, always use
-        # default_joint_pos.
-        joint_pos = self.asset.data.default_joint_pos[env_ids].clone()
+                # Clamp to non-negative
+                dynamic_friction_coeff = torch.clamp(dynamic_friction_coeff, min=0.0)
+                viscous_friction_coeff = torch.clamp(viscous_friction_coeff, min=0.0)
 
-        joint_pos[:, self._dst_indices] = (
-            sampled_joint_pos[:, self._src_indices]
-        )
+                # Ensure dynamic ≤ static (same shape before indexing)
+                dynamic_friction_coeff = torch.minimum(dynamic_friction_coeff, friction_coeff)
 
-        joint_vel = torch.zeros(
-            (num_reset_envs, num_robot_joints),
-            dtype=torch.float32,
-            device=device,
-        )
+                # Index once at the end
+                dynamic_friction_coeff = dynamic_friction_coeff[env_ids_for_slice, joint_ids]
+                viscous_friction_coeff = viscous_friction_coeff[env_ids_for_slice, joint_ids]
+            else:
+                # For versions < 5.0.0, we do not set these values
+                dynamic_friction_coeff = None
+                viscous_friction_coeff = None
 
-        # ============================================================
-        # 3. Construct root position
-        # ============================================================
-        default_root_state = (
-            self.asset.data.default_root_state[env_ids].clone()
-        )
-        env_origins = env.scene.env_origins[env_ids]
+            # Single write call for all versions
+            self.asset.write_joint_friction_coefficient_to_sim(
+                joint_friction_coeff=static_friction_coeff,
+                joint_dynamic_friction_coeff=dynamic_friction_coeff,
+                joint_viscous_friction_coeff=viscous_friction_coeff,
+                joint_ids=joint_ids,
+                env_ids=env_ids,
+            )
 
-        # Default x/y position relative to each vectorized environment.
-        root_pos = default_root_state[:, 0:3] + env_origins
-
-        # Dataset z is always interpreted as height relative to the
-        # environment origin.
-        root_pos[:, 2] = env_origins[:, 2] + sampled_base_z
-
-        # ============================================================
-        # 4. Construct root orientation
-        # ============================================================
-        root_roll = torch.zeros_like(sampled_base_pitch)
-
-        random_yaw = torch.empty(
-            num_reset_envs,
-            dtype=torch.float32,
-            device=device,
-        ).uniform_(yaw_min, yaw_max)
-
-        # IsaacLab quaternion order: [w, x, y, z]
-        root_quat = math_utils.quat_from_euler_xyz(
-            root_roll,
-            sampled_base_pitch,
-            random_yaw,
-        )
-
-        root_pose = torch.cat(
-            (root_pos, root_quat),
-            dim=-1,
-        )
-
-        # [vx, vy, vz, wx, wy, wz]
-        root_vel = torch.zeros(
-            (num_reset_envs, 6),
-            dtype=torch.float32,
-            device=device,
-        )
-
-        # ============================================================
-        # 5. Apply root and joint states
-        # ============================================================
-        self.asset.write_root_pose_to_sim(
-            root_pose,
-            env_ids=env_ids,
-        )
-
-        self.asset.write_root_velocity_to_sim(
-            root_vel,
-            env_ids=env_ids,
-        )
-
-        self.asset.write_joint_state_to_sim(
-            joint_pos,
-            joint_vel,
-            env_ids=env_ids,
-    )
+        # joint armature
+        if armature_distribution_params is not None:
+            armature = _randomize_prop_by_op(
+                self.asset.data.default_joint_armature.clone(),
+                armature_distribution_params,
+                env_ids,
+                joint_ids,
+                operation=operation,
+                distribution=distribution,
+            )
+            self.asset.write_joint_armature_to_sim(
+                armature[env_ids_for_slice, joint_ids], joint_ids=joint_ids, env_ids=env_ids
+            )

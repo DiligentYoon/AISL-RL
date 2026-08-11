@@ -15,7 +15,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 from lib.assets.objects.Jig.object import JIGCFG
 from lib.domain_randomizer.commander import UniformVelocityCommandCfg
 
-from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer
+from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer, randomize_joint_parameters
 
 @configclass
 class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
@@ -54,7 +54,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 1.0
-    p_ang_vel_weight = 0.1
+    p_ang_vel_weight = 0.5
 
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.001
@@ -110,7 +110,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.1, 0.1), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(-0.3, 0.3), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
@@ -124,41 +124,66 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-
         self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4605)
         # self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.523) # Target Height
-        self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
-                                              "hip_R_Joint": 0.0,
-                                              "thigh_L_Joint": 0.738,
-                                              "thigh_R_Joint": -0.738,
-                                              "knee_L_Joint": 1.462,
-                                              "knee_R_Joint": -1.462,
-                                              "wheel_L_Joint": 0.0,
-                                              "wheel_R_Joint": 0.0,}
         
-        # event
+        # Revise parameter
         self.events.robot_leg_physics_material.params["static_friction_range"] = (0.7, 1.1)
         self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.7, 0.9)
         self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.8)
         self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.6)
 
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
-        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
-        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
-        self.events.robot_wheel_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.2)
-        self.events.robot_wheel_actuator_gain.params["damping_distribution_params"] = (0.8, 1.2)
-
-        self.events.robot_wheel_joint_friction = None
-
-        self.events.add_base_mass.params["mass_distribution_params"] = (0.9, 1.05)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.05)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
 
-        # robot's joints should be reset by dataset
+        # Renew randomization
+        self.events.robot_hip_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
+                "friction_distribution_params": (0.03, 0.3),
+                "viscous_distribution_params": (0.01, 0.3),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )       
+
+        self.events.robot_thigh_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+                "friction_distribution_params": (0.03, 0.3),
+                "viscous_distribution_params": (0.01, 0.3),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )       
+
+        self.events.robot_knee_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+                "friction_distribution_params": (0.03, 0.3),
+                "viscous_distribution_params": (0.01, 0.3),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )        
+        self.events.robot_wheel_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
+                "friction_distribution_params": (0.03, 0.1),
+                "viscous_distribution_params": (0.01, 0.03),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )
+
         self.events.reset_robot_joints = EventTerm(
             func=reset_joint_state_from_buffer,
             mode="reset",
@@ -193,6 +218,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             }
         )
 
+        # Disable
         self.events.push_robot = None
 
 @configclass
@@ -211,7 +237,6 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
-        self.events.robot_wheel_joint_friction = None
         self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise

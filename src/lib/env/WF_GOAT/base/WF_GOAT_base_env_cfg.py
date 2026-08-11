@@ -30,7 +30,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg":SceneEntityCfg("robot", body_names="base_Link"),
-            "mass_distribution_params": (0.8, 1.2),
+            "mass_distribution_params": (0.9, 1.1),
             "operation": "scale",
         }
     )
@@ -39,10 +39,11 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_[LR]_Link"),
-            "mass_distribution_params": (0.8, 1.2),
+            "mass_distribution_params": (0.9, 1.1),
             "operation": "scale",
         },
     )
+
     robot_leg_physics_material = EventTerm(
         func=randomizer.randomize_rigid_body_material,
         mode="startup",
@@ -67,6 +68,7 @@ class EventCfg:
           "make_consistent": True,
         },
     )
+    
     robot_center_of_mass = EventTerm(
         func=randomizer.randomize_rigid_body_coms,
         mode="startup",
@@ -84,8 +86,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-            "stiffness_distribution_params": (0.7, 1.2),
-            "damping_distribution_params": (0.7, 1.2),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -95,8 +97,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-            "stiffness_distribution_params": (0.7, 1.2),
-            "damping_distribution_params": (0.7, 1.2),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -106,8 +108,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-            "stiffness_distribution_params": (0.7, 1.2),
-            "damping_distribution_params": (0.7, 1.2),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -117,11 +119,45 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-            "stiffness_distribution_params": (0.7, 1.2),
-            "damping_distribution_params": (0.7, 1.2),
+            "stiffness_distribution_params": (0.8, 1.2),
+            "damping_distribution_params": (0.8, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
+    )
+
+    robot_hip_joint_friction = EventTerm(
+        func=randomizer.randomize_joint_parameters,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
+            "friction_distribution_params": (1.0, 1.0),
+            "armature_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        }      
+    )
+    robot_thigh_joint_friction = EventTerm(
+        func=randomizer.randomize_joint_parameters,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+            "friction_distribution_params": (1.0, 1.0),
+            "armature_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        }      
+    )
+    robot_knee_joint_friction = EventTerm(
+        func=randomizer.randomize_joint_parameters,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+            "friction_distribution_params": (1.0, 1.0),
+            "armature_distribution_params": (1.0, 1.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        }      
     )
     robot_wheel_joint_friction = EventTerm(
         func=randomizer.randomize_joint_parameters,
@@ -134,6 +170,7 @@ class EventCfg:
             "distribution": "uniform",
         }
     )
+
     reset_body = EventTerm(
         func=randomizer.reset_root_state_uniform,
         mode='reset',
