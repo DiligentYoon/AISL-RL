@@ -42,8 +42,8 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     p_all_torque_weight = 0.01
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.02
-    p_joint_accel_weight = 5.0e-5
-    p_action_rate_weight = 0.1
+    p_joint_accel_weight = 7.0e-5
+    p_action_rate_weight = 0.15
     p_terminated_weight = 100.0
 
     # Per-axis observation noise groups (must match _get_observations concat order)
@@ -131,10 +131,12 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
         self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
         self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
         self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.9, 1.1)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (0.9, 1.1)
+        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.0)
+        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (1.0, 1.3)
+        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.0)
+        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (1.0, 1.3)
+        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.6, 1.0)
+        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (1.0, 1.4)
 
         # Newly assigned event
         self.events.reset_robot_joints = EventTerm(
