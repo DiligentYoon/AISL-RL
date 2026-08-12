@@ -134,9 +134,9 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-                "friction_distribution_params": (0.03, 0.09),
+                "friction_distribution_params": (0.03, 0.08),
                 "coulomb_distribution_params": (0.03, 0.06),
-                "viscous_distribution_params": (0.04, 0.08),
+                "viscous_distribution_params": (0.03, 0.08),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -147,7 +147,7 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-                "friction_distribution_params": (0.03, 0.09),
+                "friction_distribution_params": (0.03, 0.08),
                 "coulomb_distribution_params": (0.03, 0.06),
                 "viscous_distribution_params": (0.03, 0.06),
                 "operation": "abs",
@@ -160,9 +160,9 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.05, 0.2),
-                "coulomb_distribution_params": (0.15, 0.35),
-                "viscous_distribution_params": (0.08, 0.12),
+                "friction_distribution_params": (0.1, 0.25),
+                "coulomb_distribution_params": (0.1, 0.25),
+                "viscous_distribution_params": (0.07, 0.11),
                 "operation": "abs",
                 "distribution": "uniform",
             }
