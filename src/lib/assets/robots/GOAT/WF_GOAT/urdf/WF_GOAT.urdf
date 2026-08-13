@@ -241,9 +241,9 @@
             <color rgba="0.69804 0.69804 0.69804 1" />
         </visual>
         <collision>
-            <origin rpy="1.5707963267948966 0 0" xyz="0 7E-03 0" />
+            <origin rpy="1.5707963267948966 0 0" xyz="0 -0.03 0" />
             <geometry>
-                <cylinder length="7E-03" radius="72.75E-03" />
+                <cylinder length="0.05" radius="0.1" />
             </geometry>
         </collision>
         <inertial>
@@ -310,9 +310,9 @@
             <color rgba="0.69804 0.69804 0.69804 1" />
         </visual>
         <collision>
-            <origin rpy="1.5707963267948966 0 0" xyz="0 -7E-03 0" />
+            <origin rpy="1.5707963267948966 0 0" xyz="0 0.03 0" />
             <geometry>
-                <cylinder length="7E-03" radius="72.75E-03" />
+                <cylinder length="0.05" radius="0.1" />
             </geometry>
         </collision>
         <inertial>
