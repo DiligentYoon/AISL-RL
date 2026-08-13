@@ -316,6 +316,7 @@ class randomize_joint_parameters(ManagerTermBase):
         env_ids: torch.Tensor | None,
         asset_cfg: SceneEntityCfg,
         friction_distribution_params: tuple[float, float] | None = None,
+        coulomb_distribution_params: tuple[float, float] | None = None,
         viscous_distribution_params: tuple[float, float] | None = None,
         armature_distribution_params: tuple[float, float] | None = None,
         operation: Literal["add", "scale", "abs"] = "abs",
@@ -359,7 +360,7 @@ class randomize_joint_parameters(ManagerTermBase):
                 # Randomize raw tensors
                 dynamic_friction_coeff = _randomize_prop_by_op(
                     self.asset.data.default_joint_dynamic_friction_coeff.clone(),
-                    friction_distribution_params,
+                    coulomb_distribution_params,
                     env_ids,
                     joint_ids,
                     operation=operation,

@@ -69,12 +69,23 @@ class EventCfg:
         },
     )
     
-    robot_center_of_mass = EventTerm(
+    robot_base_center_of_mass = EventTerm(
         func=randomizer.randomize_rigid_body_coms,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "com_distribution_params": ((-0.075, 0.075), (-0.075, 0.075), (-0.075, 0.075)),
+            "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+            "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
+            "operation": "add",
+            "distribution": "uniform",
+        },
+    )
+
+    robot_link_center_of_mass = EventTerm(
+        func=randomizer.randomize_rigid_body_coms,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=r"(?!wheel_).*_[LR]_Link"),
+            "com_distribution_params": ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01)),
             "operation": "add",
             "distribution": "uniform",
         },
