@@ -241,7 +241,7 @@
             <color rgba="0.69804 0.69804 0.69804 1" />
         </visual>
         <collision>
-            <origin rpy="1.5707963267948966 0 0" xyz="0 -0.03 0" />
+            <origin rpy="1.5707963267948966 0 0" xyz="0 0.03 0" />
             <geometry>
                 <cylinder length="0.05" radius="0.1" />
             </geometry>
@@ -310,7 +310,7 @@
             <color rgba="0.69804 0.69804 0.69804 1" />
         </visual>
         <collision>
-            <origin rpy="1.5707963267948966 0 0" xyz="0 0.03 0" />
+            <origin rpy="1.5707963267948966 0 0" xyz="0 -0.03 0" />
             <geometry>
                 <cylinder length="0.05" radius="0.1" />
             </geometry>
