@@ -74,7 +74,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
+            "com_distribution_params": ((-0.03, 0.03), (-0.03, 0.03), (-0.03, 0.03)),
             "operation": "add",
             "distribution": "uniform",
         },

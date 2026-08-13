@@ -45,11 +45,11 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
-    target_height = 0.523
+    target_height = 0.53
 
     r_height_weight = 6.0
     r_upright_weight = 4.0
-    r_joint_tracking_weight = 6.0
+    r_joint_tracking_weight = 4.0
     r_velocity_tracking_weight = 6.0
 
     p_illegal_contact_weight = 2.0
@@ -124,8 +124,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4605)
-        # self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.523) # Target Height
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.53)
         
         # Revise parameter
         self.events.robot_leg_physics_material.params["static_friction_range"] = (0.7, 1.1)
