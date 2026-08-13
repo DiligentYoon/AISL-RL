@@ -47,10 +47,10 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.53
 
-    r_height_weight = 6.0
+    r_height_weight = 4.0
     r_upright_weight = 4.0
     r_joint_tracking_weight = 4.0
-    r_velocity_tracking_weight = 6.0
+    r_velocity_tracking_weight = 10.0
 
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 1.0
@@ -60,8 +60,8 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_all_torque_weight = 0.001
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
-    p_joint_accel_weight = 5.0e-5
-    p_action_rate_weight = 0.1
+    p_joint_accel_weight = 5.0e-6
+    p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
     # Per-axis observation noise groups
@@ -218,9 +218,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
                 "object_relative_yaw": 0.0,          
             }
         )
-
-        # Disable
-        self.events.push_robot = None
 
 @configclass
 class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
