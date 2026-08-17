@@ -47,20 +47,20 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.53
 
-    r_height_weight = 4.0
-    r_upright_weight = 4.0
-    r_joint_tracking_weight = 4.0
+    r_height_weight = 6.0
+    r_upright_weight = 6.0
+    r_joint_tracking_weight = 3.0
     r_velocity_tracking_weight = 10.0
 
-    p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 1.0
-    p_ang_vel_weight = 0.5
+    p_illegal_contact_weight = 0.0
+    p_joint_deviation_lr_weight = 2.0
+    p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.001
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
-    p_joint_accel_weight = 5.0e-6
+    p_joint_accel_weight = 5.0e-5
     p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
@@ -110,12 +110,12 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.1, 0.3), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(-0.5, 0.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
     ## ===================== Jig Object ======================= ##
-    jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
+    # jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
 
     def __post_init__(self):
         super().__post_init__()
@@ -190,34 +190,34 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/new_random_joint_pos.pt",
             }
         )
 
         # robot must be syncronized with jig object. 
-        self.events.reset_body = EventTerm(
-            func=reset_robot_and_object_root_state_uniform,
-            mode="reset",
-            params={
-                "pose_range": {
-                    "x": (-0.0, 0.0),
-                    "y": (-0.0, 0.0),
-                    "yaw": (-3.14, 3.14),
-                },
-                "velocity_range": {
-                    "x": (-0.0, 0.0),
-                    "y": (-0.0, 0.0),
-                    "z": (-0.0, 0.0),
-                    "roll": (-0.0, 0.0),
-                    "pitch": (-0.0, 0.0),
-                    "yaw": (-0.0, 0.0),
-                },
-                "robot_cfg": SceneEntityCfg("robot"),
-                "object_cfg": SceneEntityCfg("jig"),
-                "object_relative_pos": (-0.07, 0.0, 0.0),  # Collision Mesh friendly setting
-                "object_relative_yaw": 0.0,          
-            }
-        )
+        # self.events.reset_body = EventTerm(
+        #     func=reset_robot_and_object_root_state_uniform,
+        #     mode="reset",
+        #     params={
+        #         "pose_range": {
+        #             "x": (-0.0, 0.0),
+        #             "y": (-0.0, 0.0),
+        #             "yaw": (-3.14, 3.14),
+        #         },
+        #         "velocity_range": {
+        #             "x": (-0.0, 0.0),
+        #             "y": (-0.0, 0.0),
+        #             "z": (-0.0, 0.0),
+        #             "roll": (-0.0, 0.0),
+        #             "pitch": (-0.0, 0.0),
+        #             "yaw": (-0.0, 0.0),
+        #         },
+        #         "robot_cfg": SceneEntityCfg("robot"),
+        #         "object_cfg": SceneEntityCfg("jig"),
+        #         "object_relative_pos": (-0.07, 0.0, 0.0),  # Collision Mesh friendly setting
+        #         "object_relative_yaw": 0.0,          
+        #     }
+        # )
 
 @configclass
 class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
