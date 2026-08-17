@@ -282,6 +282,7 @@ class reset_joint_state_from_buffer(ManagerTermBase):
 
         # Fill only matched joints
         joint_pos[:, self._dst_indices] = sampled_logged_joint_pos[:, self._src_indices]
+        joint_pos[:, :2] += math_utils.sample_uniform(-0.05, 0.05, (n, 2), device=device)
 
         # Joint velocity is always zero because the buffer only contains joint positions
         joint_vel = torch.zeros((n, J), dtype=torch.float32, device=device)
