@@ -138,22 +138,22 @@
             </geometry>
         </collision>
     </link>
-    
+
     <!-- Update required-->
     <link name="calf_L_Link">
         <inertial>
             <origin rpy="0 0 0" xyz="3.619E-03 -0.038E-03 -122.422E-03"/>
             <mass value="0.145"/>
-            <inertia ixx="3319.3E-06" ixy="-0.0065456E-06" ixz="51.963E-06"
-                iyy="3340.3E-06" iyz="-2.9598E-06" izz="66.810E-06"/>
+            <inertia ixx="1132.200e-6" ixy="-0.027e-6" ixz="-12.685e-6"
+                     iyy="1151.200e-6" iyz="-2.282e-6" izz="64.899e-6"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/point_calf_L_Link.stl"/>
             </geometry>
-            <material name="">
-                <color rgba="0.79216 0.81961 0.93333 1"/>
+            <material name="black">
+                <color rgba="0.0 0.0 0.0 1.0"/>
             </material>
         </visual>
         <collision>
@@ -174,16 +174,16 @@
         <inertial>
             <origin rpy="0 0 0" xyz="3.619E-03 0.038E-03 -122.422E-03"/>
             <mass value="0.145"/>
-            <inertia ixx="3319.3E-06" ixy="0.0065456E-06" ixz="51.963E-06"
-                iyy="3340.3E-06" iyz="2.9598E-06" izz="66.810E-06"/>
+            <inertia ixx="1132.200e-6" ixy="0.027e-6" ixz="-12.685e-6"
+                     iyy="1151.200e-6" iyz="2.282e-6" izz="64.899e-6"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/point_calf_R_Link.stl"/>
             </geometry>
-            <material name="">
-                <color rgba="0.79216 0.81961 0.93333 1"/>
+            <material name="black">
+                <color rgba="0.0 0.0 0.0 1.0"/>
             </material>
         </visual>
         <collision>
@@ -242,13 +242,12 @@
         <dynamics friction="0.0" />
     </joint>
 
-    <!-- Update required-->
     <joint name="knee_L_Joint" type="revolute">
         <origin xyz="0 18E-03 -205E-03" rpy="0 0 0"/>
         <parent link="thigh_L_Link"/>
         <child link="calf_L_Link"/>
         <axis xyz="0 -1 0"/>
-        <limit effort="4.5" lower="-0.523599" upper="2.3387" velocity="33.5"/>
+        <limit effort="9.0" lower="-0.523599" upper="2.3387" velocity="33.5"/>
         <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
     </joint>
@@ -258,7 +257,7 @@
         <parent link="thigh_R_Link"/>
         <child link="calf_R_Link"/>
         <axis xyz="0 1 0"/>
-        <limit effort="4.5" lower="-2.3387" upper="0.523599" velocity="33.5"/>
+        <limit effort="9.0" lower="-2.3387" upper="0.523599" velocity="33.5"/>
         <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
     </joint>
