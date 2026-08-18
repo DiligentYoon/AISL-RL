@@ -20,7 +20,7 @@ from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_sta
 @configclass
 class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -41,27 +41,27 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     terminated_lin_vel_limit_z_start = 0.2
-    terminated_lin_vel_limit_z_end = 0.15
+    terminated_lin_vel_limit_z_end = 0.2
     terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
-    target_height = 0.523
+    target_height = 0.389
 
     r_height_weight = 6.0
-    r_upright_weight = 4.0
-    r_joint_tracking_weight = 6.0
-    r_velocity_tracking_weight = 6.0
+    r_upright_weight = 6.0
+    r_joint_tracking_weight = 2.0
+    r_velocity_tracking_weight = 0.0
 
-    p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 1.0
-    p_ang_vel_weight = 0.5
+    p_illegal_contact_weight = 0.0
+    p_joint_deviation_lr_weight = 2.0
+    p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.001
+    p_all_torque_weight = 0.05
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
     p_joint_accel_weight = 5.0e-5
-    p_action_rate_weight = 0.1
+    p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
     # Per-axis observation noise groups
@@ -104,13 +104,13 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ======================== Command ======================= ##
     commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
-        prob_standing_envs=0.3,
+        resampling_time_range=(5.0, 5.0),
+        prob_standing_envs=1.0,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.1, 0.3), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
         ),
     )
 
@@ -124,8 +124,17 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4605)
-        # self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.523) # Target Height
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.389)
+        self.GOAT_cfg.init_state.joint_pos = {
+            "hip_L_Joint": 0.0,
+            "hip_R_Joint": 0.0,
+            "thigh_L_Joint": 0.9756,
+            "thigh_R_Joint": -0.9756,
+            "knee_L_Joint": 2.0944,
+            "knee_R_Joint": -2.0944,
+            "wheel_L_Joint": 0.0,
+            "wheel_R_Joint": 0.0,
+        }
         
         # Revise parameter
         self.events.robot_leg_physics_material.params["static_friction_range"] = (0.7, 1.1)
@@ -153,8 +162,8 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
                 "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.03, 0.06),
-                "viscous_distribution_params": (0.03, 0.06),
+                "coulomb_distribution_params": (0.12, 0.17),
+                "viscous_distribution_params": (0.05, 0.12),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -165,9 +174,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.15, 0.3),
-                "coulomb_distribution_params": (0.15, 0.3),
-                "viscous_distribution_params": (0.07, 0.11),
+                "friction_distribution_params": (0.2, 0.35),
+                "coulomb_distribution_params": (0.2, 0.3),
+                "viscous_distribution_params": (0.08, 0.2),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -180,7 +189,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
                 "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
                 "friction_distribution_params": (0.01, 0.05),
                 "coulomb_distribution_params": (0.01, 0.03),
-                "viscous_distribution_params": (0.001, 0.004),
+                "viscous_distribution_params": (0.001, 0.0035),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -191,7 +200,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/random_joint_pos.pt",
+                "dataset_path":"logs/GOAT_stand/joint_buffer/new_random_joint_pos_2.pt",
             }
         )
 
@@ -215,12 +224,11 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
                 },
                 "robot_cfg": SceneEntityCfg("robot"),
                 "object_cfg": SceneEntityCfg("jig"),
-                "object_relative_pos": (-0.07, 0.0, 0.0),  # Collision Mesh friendly setting
+                "object_relative_pos": (-0.057, 0.0, 0.0),  # Collision Mesh friendly setting
                 "object_relative_yaw": 0.0,          
             }
         )
 
-        # Disable
         self.events.push_robot = None
 
 @configclass

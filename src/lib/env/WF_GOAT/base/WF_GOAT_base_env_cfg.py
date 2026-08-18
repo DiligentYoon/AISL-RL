@@ -74,7 +74,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
+            "com_distribution_params": ((-0.03, 0.03), (-0.03, 0.03), (-0.03, 0.03)),
             "operation": "add",
             "distribution": "uniform",
         },
@@ -212,7 +212,7 @@ class EventCfg:
         interval_range_s=(3.0, 4.0),
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "roll": (-1.0, 1.0), "pitch": (-1.0, 1.0)}},
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
     )
 
 
