@@ -123,8 +123,8 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         self.cfg.dome_light_cfg.spawn.func(self.cfg.dome_light_cfg.prim_path,
                                            self.cfg.dome_light_cfg.spawn)
         # Jig object
-        # self._jig = RigidObject(self.cfg.jig)
-        # self.scene.rigid_objects["jig"] = self._jig
+        self._jig = RigidObject(self.cfg.jig)
+        self.scene.rigid_objects["jig"] = self._jig
         # Commands cfg
         self.cfg.commands.num_envs = self.scene.num_envs
         self.cfg.commands.step_dt = self.step_dt

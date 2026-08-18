@@ -124,10 +124,6 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_wheel_joint_friction = None
         self.events.reset_body = None
         self.events.push_robot = None
-        
-        # Change event parameters
-        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
-        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
 
         self.events.robot_hip_joint_friction = EventTerm(
             func=randomize_joint_parameters,
@@ -148,8 +144,8 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
                 "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.03, 0.06),
-                "viscous_distribution_params": (0.03, 0.06),
+                "coulomb_distribution_params": (0.12, 0.17),
+                "viscous_distribution_params": (0.05, 0.12),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -160,9 +156,9 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.15, 0.3),
-                "coulomb_distribution_params": (0.15, 0.3),
-                "viscous_distribution_params": (0.07, 0.11),
+                "friction_distribution_params": (0.2, 0.35),
+                "coulomb_distribution_params": (0.2, 0.3),
+                "viscous_distribution_params": (0.08, 0.2),
                 "operation": "abs",
                 "distribution": "uniform",
             }
