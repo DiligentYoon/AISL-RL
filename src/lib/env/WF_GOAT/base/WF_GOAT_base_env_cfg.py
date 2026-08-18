@@ -49,7 +49,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]),
-            "static_friction_range": (0.4, 1.2),
+            "static_friction_range": (0.7, 1.1),
             "dynamic_friction_range": (0.7, 0.9),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 1000,
@@ -61,8 +61,8 @@ class EventCfg:
       mode='startup',
       params={
           "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
-          "static_friction_range": (0.4, 1.2),
-          "dynamic_friction_range": (0.7, 0.9),
+          "static_friction_range": (0.3, 0.8),
+          "dynamic_friction_range": (0.3, 0.7),
           "restitution_range": (0.0, 0.0),
           "num_buckets": 1000,
           "make_consistent": True,

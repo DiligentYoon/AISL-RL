@@ -136,12 +136,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             "wheel_R_Joint": 0.0,
         }
         
-        # Revise parameter
-        self.events.robot_leg_physics_material.params["static_friction_range"] = (0.7, 1.1)
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = (0.7, 0.9)
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = (0.3, 0.8)
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = (0.3, 0.6)
-
         # Renew randomization
         self.events.robot_hip_joint_friction = EventTerm(
             func=randomize_joint_parameters,
