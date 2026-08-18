@@ -163,17 +163,6 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
                 "distribution": "uniform",
             }
         )     
-        
-        # Change event parameters
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.9, 1.1)
-        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) 
-        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01))
-        self.events.robot_hip_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.0)
-        self.events.robot_hip_actuator_gain.params["damping_distribution_params"] = (1.0, 1.2)
-        self.events.robot_thigh_actuator_gain.params["stiffness_distribution_params"] = (0.8, 1.0)
-        self.events.robot_thigh_actuator_gain.params["damping_distribution_params"] = (1.0, 1.2)
-        self.events.robot_knee_actuator_gain.params["stiffness_distribution_params"] = (0.7, 1.0)
-        self.events.robot_knee_actuator_gain.params["damping_distribution_params"] = (1.0, 1.3)
 
         # Newly assigned event
         self.events.reset_robot_joints = EventTerm(
@@ -229,7 +218,6 @@ class WFGOATTrackFixedPlayEnvCfg(WFGOATTrackFixedEnvCfg):
 
         # disable randomization
         self.events.add_link_mass = None
-        self.events.robot_center_of_mass = None
         self.events.robot_hip_actuator_gain = None
         self.events.robot_thigh_actuator_gain = None
         self.events.robot_knee_actuator_gain = None
