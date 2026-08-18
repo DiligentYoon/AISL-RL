@@ -20,7 +20,7 @@ from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_sta
 @configclass
 class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
+    episode_length_s = 5.0
     sim_dt = 0.005                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 8                            # [L + R, joint pos + wheel velocity]
@@ -38,7 +38,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
     terminated_tilt = 0.6
-    terminated_joint_vel_limit = 1.5 * joint_vel_limit  # rad/s
+    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     terminated_lin_vel_limit_z_start = 0.2
     terminated_lin_vel_limit_z_end = 0.2
@@ -49,7 +49,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     r_height_weight = 6.0
     r_upright_weight = 6.0
-    r_joint_tracking_weight = 8.0
+    r_joint_tracking_weight = 2.0
     r_velocity_tracking_weight = 0.0
 
     p_illegal_contact_weight = 0.0
@@ -57,10 +57,10 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.001
+    p_all_torque_weight = 0.05
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.01
-    p_joint_accel_weight = 5.0e-6
+    p_joint_accel_weight = 5.0e-5
     p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
