@@ -142,7 +142,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             Observation space
         """
         observation = torch.cat((self.base_ang_vel,                                                              # [E, 3]
-                                 self.base_rot_w,                                                                # [E, 4]
+                                 self.gravity_vector,                                                            # [E, 3]
                                  self.command_inputs_b,                                                          # [E, 3]
                                  self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 6]
                                  self.joint_vel,                                                                 # [E, 8]
@@ -159,7 +159,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             State space
         """
         observation = torch.cat((self.base_ang_vel,                                                               # [E, 3]
-                                 self.base_rot_w,                                                                 # [E, 4]
+                                 self.gravity_vector,                                                             # [E, 3]
                                  self.command_inputs_b,                                                           # [E, 3]
                                  self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],   # [E, 6]
                                  self.joint_vel,                                                                  # [E, 8]
@@ -189,7 +189,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
 
         # Command Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.command_inputs_b[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.1)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.05)
 
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :3], dim=-1)        

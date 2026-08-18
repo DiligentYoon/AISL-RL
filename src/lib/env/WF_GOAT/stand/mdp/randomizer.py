@@ -282,6 +282,7 @@ class reset_joint_state_from_buffer(ManagerTermBase):
 
         # Fill only matched joints
         joint_pos[:, self._dst_indices] = sampled_logged_joint_pos[:, self._src_indices]
+        joint_pos[:, :2] += math_utils.sample_uniform(-0.05, 0.05, (n, 2), device=device)
 
         # Joint velocity is always zero because the buffer only contains joint positions
         joint_vel = torch.zeros((n, J), dtype=torch.float32, device=device)
@@ -316,6 +317,7 @@ class randomize_joint_parameters(ManagerTermBase):
         env_ids: torch.Tensor | None,
         asset_cfg: SceneEntityCfg,
         friction_distribution_params: tuple[float, float] | None = None,
+        coulomb_distribution_params: tuple[float, float] | None = None,
         viscous_distribution_params: tuple[float, float] | None = None,
         armature_distribution_params: tuple[float, float] | None = None,
         operation: Literal["add", "scale", "abs"] = "abs",
@@ -359,7 +361,7 @@ class randomize_joint_parameters(ManagerTermBase):
                 # Randomize raw tensors
                 dynamic_friction_coeff = _randomize_prop_by_op(
                     self.asset.data.default_joint_dynamic_friction_coeff.clone(),
-                    friction_distribution_params,
+                    coulomb_distribution_params,
                     env_ids,
                     joint_ids,
                     operation=operation,
