@@ -145,8 +145,9 @@ class G1PusherEnv(G1BaseEnv):
         self.deviation_torso        = torch.zeros((self.num_envs, len(self.torso_joint_ids)), dtype=torch.float, device=self.device)
 
         # Adversarial agent's sparse action
-        self.adv_agent_action_num = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device) 
+        self.adv_agent_action_num = torch.zeros(self.num_envs, dtype=torch.float, device=self.device) 
 
+        # Terminated flag
         self.died = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
         
         # Visualization
@@ -173,7 +174,6 @@ class G1PusherEnv(G1BaseEnv):
             if hasattr(self, "torso_rotation_visualizer"):
                 self.torso_rotation_visalizer.set_visibility(False)
 
-    
 
     def _debug_vis_callback(self, event):
         if not self._robot.is_initialized:
@@ -215,7 +215,10 @@ class G1PusherEnv(G1BaseEnv):
 
 
     def _pre_physics_step(self, actions: dict[str, torch.Tensor] | torch.Tensor):
-        self.actions = actions
+        self.actions = {
+        "arm": actions["arm"] * self.cfg.action_scale_factor["arm"][0],
+        "leg": actions["leg"] * self.cfg.action_scale_factor["leg"][0],
+        "adv": actions["adv"] * self.cfg.action_scale_factor["adv"][0]}
 
 
     def _apply_action(self):
@@ -525,7 +528,7 @@ class G1PusherEnv(G1BaseEnv):
                                        torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
         died_ang = torch.norm(self.root_ang_vel_b, dim=-1) >= self.cfg.termination_ang_vel
         
-        # died_collision   = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
+        # died_collision = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=1)
         self.died = died_fall | died_fall_2 | died_ang
         return self.died, time_out
 
