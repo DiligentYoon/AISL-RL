@@ -25,7 +25,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     r_ang_vel_tracking_weight = 2.0
 
     p_hip_deviation_weight = 1.0
-    p_illegal_contact_weight = 5.0
+    p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 4.0
 
     p_joint_limit_weight = 10.0
@@ -34,8 +34,8 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     terminated_joint_vel_limit = 6.0
 
     # Jig Delete Logic
-    jig_release_height = 0.4
-    jig_release_hold_step = 50
+    jig_release_height = 0.39
+    jig_release_hold_step = 20
     jig_release_depth = -5.0                  
 
 
@@ -95,7 +95,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.4, 0.6)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.4, 0.56)
         ),
     )
 
