@@ -52,7 +52,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         r_upright = torch.exp(-upright_error / 0.25)
 
         # Height tracking Reward
-        height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 2:3]), (-1,))
+        height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
         r_height = torch.exp(-height_error / 0.05)
 
         # Lin vel Tracking Reward

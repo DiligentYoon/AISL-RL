@@ -37,7 +37,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
-    terminated_tilt = 0.6
+    terminated_tilt = 0.7
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     terminated_lin_vel_limit_z_start = 0.2

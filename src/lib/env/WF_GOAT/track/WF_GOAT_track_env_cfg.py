@@ -9,6 +9,9 @@ from lib.domain_randomizer.randomizer import push_by_setting_velocity
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
 from lib.env.WF_GOAT.track.mdp.commander import UniformVelocityHeightCommandCfg
 
+from lib.env.WF_GOAT.stand.mdp.randomizer import reset_joint_state_from_buffer
+
+
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
@@ -16,19 +19,24 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     state_space = 38                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 6.0
-    r_upright_weight = 4.0
+    r_height_weight = 10.0
+    r_upright_weight = 2.0
     r_lin_vel_tracking_weight = 6.0
-    r_ang_vel_tracking_weight = 4.0
+    r_ang_vel_tracking_weight = 2.0
 
     p_hip_deviation_weight = 1.0
+    p_illegal_contact_weight = 5.0
     p_joint_deviation_lr_weight = 4.0
+
     p_joint_limit_weight = 10.0
+    p_all_torque_weight = 0.01
+
+    terminated_joint_vel_limit = 6.0
 
     # Jig Delete Logic
     jig_release_height = 0.4
-    jig_release_hold_step = 10
-    jig_release_depth = -5.0                    # world-frame z the jig is teleported to on release
+    jig_release_hold_step = 50
+    jig_release_depth = -5.0                  
 
 
     # Per-axis observation noise groups
@@ -52,30 +60,30 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     
     ## ======================== Curriculum ======================= ##
 
-    curriculum = CurriculumManagerCfg(
-        params=[
-            CurriculumParamCfg(
-                name="lin_vel_range",
-                attr_path="cfg/commands/ranges/lin_vel_x",
-                start_value=(0.0, 0.0),
-                end_value=(-0.5, 0.5),
-                schedule="step",
-                schedule_kwargs={
-                    "steps": [0.3, 0.7],
-                }
-            ),
-            CurriculumParamCfg(
-                name="ang_vel_range",
-                attr_path="cfg/commands/ranges/ang_vel_z",
-                start_value=(0.0, 0.0),
-                end_value=(-0.5, 0.5),
-                schedule="step",
-                schedule_kwargs={
-                    "steps": [0.3, 0.7],
-                }
-            ),
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="lin_vel_range",
+    #             attr_path="cfg/commands/ranges/lin_vel_x",
+    #             start_value=(0.0, 0.0),
+    #             end_value=(-0.5, 0.5),
+    #             schedule="step",
+    #             schedule_kwargs={
+    #                 "steps": [0.8],
+    #             }
+    #         ),
+    #         CurriculumParamCfg(
+    #             name="ang_vel_range",
+    #             attr_path="cfg/commands/ranges/ang_vel_z",
+    #             start_value=(0.0, 0.0),
+    #             end_value=(-0.5, 0.5),
+    #             schedule="step",
+    #             schedule_kwargs={
+    #                 "steps": [0.8],
+    #             }
+    #         ),
+    #     ]
+    # )
 
     # Command
     commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
@@ -87,7 +95,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 0.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0), height=(0.45, 0.55)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.4, 0.6)
         ),
     )
 
@@ -110,13 +118,22 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         self.observation_noise_type = None
         self.observation_noise_params = None
 
+        self.events.reset_robot_joints = EventTerm(
+            func=reset_joint_state_from_buffer,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "dataset_path":"logs/GOAT_track/joint_buffer/random_joint_pos.pt",
+            }
+        )
+
         self.events.push_robot = EventTerm(
             func=push_by_setting_velocity,
             mode="interval",
-            interval_range_s=(3.0, 4.0),
+            interval_range_s=(4.0, 6.0),
             params={
                 "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-                "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+                "velocity_range": {"x": (-1.0, 1.0), "pitch": (-0.5, 0.5)}},
         )
 
 @configclass
@@ -131,6 +148,3 @@ class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
-        # TrackEnvCfg.__post_init__ runs after the play deactivations and re-enables the push
-        # event, so it has to be switched off again here.
-        self.events.push_robot = None
