@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import torch
 
+from isaaclab.utils.math import quat_apply
+
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env import WFGOATStandEnv
 from lib.env.WF_GOAT.track.WF_GOAT_track_env_cfg import WFGOATTrackEnvCfg, WFGOATTrackPlayEnvCfg
 from lib.env.WF_GOAT.track.mdp.commander import UniformVelocityHeightCommand
@@ -29,26 +31,20 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # ============== Arrow ================ #
         # Arrow: get marker location
-        # The goal marker sits at the commanded base height, the current marker at the measured one,
-        # so the vertical gap between the two arrows reads out the height tracking error.
-        goal_pos_w = self._robot.data.root_pos_w.clone()
+        x_offset_w = quat_apply(self._robot.data.root_quat_w, 0.3 * self.forward_vec)
+        goal_pos_w = self._robot.data.root_pos_w.clone() + x_offset_w
         goal_pos_w[:, 2] = self.commands.height_command.squeeze(-1)
-        curr_pos_w = self._robot.data.root_pos_w.clone()
+        curr_pos_w = self._robot.data.root_pos_w.clone() + x_offset_w
         # Arrow: resolve the scales and quaternions
-        # NOTE: only the planar velocity may drive the arrow, the yaw and height channels of
-        # the command must be sliced off or they leak into the arrow scale.
         vel_des_arrow_scale, vel_des_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.goal_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                               xy_velocity=self.commands.command_b[:, :2])
         vel_arrow_scale, vel_arrow_quat = self.commands._resolve_xy_velocity_to_arrow(scale=self.current_vel_visualizer.cfg.markers["arrow"].scale,
                                                                                       xy_velocity=self._robot.data.root_lin_vel_b[:, :2])
-        root_pos = self.base_pos_w
-        root_rot = self.base_rot_w
 
         if hasattr(self, "goal_vel_visualizer"):
             self.goal_vel_visualizer.visualize(goal_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         if hasattr(self, "current_vel_visualizer"):
             self.current_vel_visualizer.visualize(curr_pos_w, vel_arrow_quat, vel_arrow_scale)
-        self.root_visualizer.visualize(root_pos, root_rot)
     
     def _get_rewards(self) -> torch.Tensor:
         # Orientation Reward (Projected Gravity Alignment)
@@ -56,7 +52,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         r_upright = torch.exp(-upright_error / 0.25)
 
         # Height tracking Reward
-        height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3]), (-1,))
+        height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 2:3]), (-1,))
         r_height = torch.exp(-height_error / 0.05)
 
         # Lin vel Tracking Reward
@@ -70,6 +66,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :2], dim=-1)        
         p_hip_deviation      = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=1)
+        p_illegal_contact    = -torch.sum(self.illegal_force, dim=1)
         
         p_velocity_limit     = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1)     # wheel is not included
         p_all_torque_limit   = -torch.sum(self.out_of_limits_torque, dim=1)
@@ -88,6 +85,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking         +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_hip_deviation_weight * p_hip_deviation               +
+            self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
@@ -111,6 +109,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             # ==========================================
             "Task Penalty / Ang_Vel"            : p_ang_vel,
             "Task Penalty / Hip_Deviation"      : p_hip_deviation,
+            "Task Penalty / Contact"            : p_illegal_contact,
             "Task Penalty / Torque_Limit"       : p_all_torque_limit,
             "Task Penalty / Torque"             : p_all_torque,
             "Task Penalty / Vel_Limit"          : p_velocity_limit, 
