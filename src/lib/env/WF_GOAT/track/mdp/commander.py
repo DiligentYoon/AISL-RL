@@ -1,4 +1,4 @@
-"""Sub-module containing command generators for the joint tracking task."""
+"""Sub-module containing command generators for the GOAT tracking tasks."""
 
 from __future__ import annotations
 from collections.abc import Sequence
@@ -8,6 +8,7 @@ import torch
 from isaaclab.utils import configclass
 from isaaclab.assets import Articulation
 
+from lib.domain_randomizer.commander import UniformNonHolonomicCommand, UniformVelocityCommandCfg
 from lib.env.WF_GOAT.track.mdp.utils import GOATLegFK
 
 
@@ -145,8 +146,6 @@ class UniformJointPositionCommand():
 
         # sample absolute target for the left leg, uniform within its soft limits
         s = left_lo + (left_hi - left_lo) * torch.rand(n, 3, device=self.device)  # (n, 3)
-        # right leg mirrors the left with a sign flip; clamp into the right soft limits
-        # as a safeguard against asymmetric limits.
         neg_s = torch.clamp(-s, min=right_lo, max=right_hi)
 
         # write into buffers via broadcasted advanced indexing (in-place, copy-safe)
@@ -172,3 +171,88 @@ class UniformJointPositionCommand():
 
         # count
         self.command_counter[env_ids] += 1
+
+
+# ===================================================================
+# Uniform Velocity + Base Height Command for Non-Holonomic Dynamics Model
+# ===================================================================
+@configclass
+class UniformVelocityHeightCommandCfg(UniformVelocityCommandCfg):
+    """Configuration for the velocity command generator extended with a base-height channel."""
+
+    height_resampling_time_range: tuple[float, float] = (2.5, 4.0)
+    """Sampling time of which the height command is generated.
+
+    Kept separate from :attr:`resampling_time_range` so that the height and the velocity
+    commands never change at the same instant. Otherwise the policy can learn to associate
+    a height change with a simultaneous velocity change.
+    """
+
+    @configclass
+    class Ranges(UniformVelocityCommandCfg.Ranges):
+        """Uniform distribution ranges for the velocity and height commands."""
+
+        height: tuple[float, float] = (0.40, 0.56)
+        """Range for the base height command (in m)."""
+
+    ranges: Ranges = Ranges()
+    """Distribution ranges for the velocity and height commands."""
+
+
+class UniformVelocityHeightCommand(UniformNonHolonomicCommand):
+    """Command generator that extends the non-holonomic velocity command with a base height.
+
+    The height channel runs on its own resampling clock, so both commands stay decorrelated.
+    """
+
+    def __init__(self,
+                 cfg: UniformVelocityHeightCommandCfg,
+                 robot: Articulation,
+                 device: torch.device | str):
+        self.height_command_b = torch.zeros(cfg.num_envs, 1, device=device)
+        self.height_time_left = torch.zeros(cfg.num_envs, device=device)
+        self.vel_height_command_b = torch.zeros(cfg.num_envs, 4, device=device)
+
+        super().__init__(cfg, robot, device)
+
+    @property
+    def command_b(self) -> torch.Tensor:
+        """(num_envs, 4): [vx, vy, yaw_rate, height] in base frame (ground truth)."""
+        self.vel_height_command_b[:, :3] = self.vel_command_b
+        self.vel_height_command_b[:, 3:] = self.height_command_b
+        return self.vel_height_command_b
+
+    @property
+    def height_command(self) -> torch.Tensor:
+        """(num_envs, 1): absolute base height target (in m)."""
+        return self.height_command_b
+
+    def reset(self, env_ids: Sequence[int] | torch.Tensor | None = None) -> dict[str, float]:
+        """Call this when those envs are reset."""
+        metrics = super().reset(env_ids)
+        self._resample_height(self._resolve_env_ids(env_ids))
+        return metrics
+
+    def update(self):
+        """Call this once per env-step."""
+        # the height clock is stepped separately from the velocity clock of the base class
+        self.height_time_left -= self.step_dt
+        resample_ids = (self.height_time_left <= 0.0).nonzero(as_tuple=False).flatten()
+        if resample_ids.numel() > 0:
+            self._resample_height(resample_ids)
+
+        super().update()
+
+    # --------------------
+    # internals
+    # --------------------
+    def _resample_height(self, env_ids: torch.Tensor):
+        if env_ids.numel() == 0:
+            return
+
+        r = torch.empty(env_ids.numel(), device=self.device)
+
+        # duration
+        self.height_time_left[env_ids] = r.uniform_(*self.cfg.height_resampling_time_range)
+        # absolute base height target
+        self.height_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.height)

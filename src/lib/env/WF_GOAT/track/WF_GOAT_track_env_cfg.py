@@ -1,221 +1,136 @@
 from isaaclab.utils import configclass
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
+from isaaclab.managers import EventTermCfg as EventTerm
 
-from lib.env.WF_GOAT.base.WF_GOAT_base_env_cfg import WFGOATBaseEnvCfg
-from lib.domain_randomizer.noise_model import build_noise_std_vector
+from lib.domain_randomizer.noise_model import build_noise_uniform_vector
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-from lib.domain_randomizer.commander import UniformVelocityCommandCfg
-from lib.utils.plot_utils import PNGSavePlotter
+from lib.domain_randomizer.randomizer import push_by_setting_velocity
+
+from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
+from lib.env.WF_GOAT.track.mdp.commander import UniformVelocityHeightCommandCfg
 
 @configclass
-class WFGOATTrackEnvCfg(WFGOATBaseEnvCfg):
+class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 10.0
-    sim_dt = 0.005                              # 200Hz torque controller
-    decimation = 2                              # 50Hz policy
-    action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 32                      # Observation space
     state_space = 38                            # State space including privilege information
-    max_episode_length = episode_length_s / (sim_dt * decimation) 
-
-    ## ======================== Controller gain ======================= ##
-    action_scale_factor = {"joint" : [0.5, ()],
-                           "wheel" : [5.0, ()]}
-    
-    torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ======================= Reward Shaping ====================== ##
-    soft_torque_limit = 0.7
-    height_reset_condition = 0.1 
-    termination_gravity = 0.6
-    joint_vel_limit = 2.0                               # rad/s
-    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
+    r_height_weight = 6.0
+    r_upright_weight = 4.0
+    r_lin_vel_tracking_weight = 6.0
+    r_ang_vel_tracking_weight = 4.0
 
-    r_lin_vel_tracking_weight = 3.0
-    r_ang_vel_tracking_weight = 1.0
-    r_upright_weight = 1.0
-
-    p_joint_deviation_weight = 1.0
-    p_ang_vel_weight = 0.5
+    p_hip_deviation_weight = 1.0
+    p_joint_deviation_lr_weight = 4.0
     p_joint_limit_weight = 10.0
-    p_all_torque_limit_weight = 2.0
-    p_all_torque_weight = 0.01
-    p_joint_velocity_weight = 0.05
-    p_wheel_velocity_weight = 1e-3
-    p_joint_accel_weight = 5.0e-7
-    p_action_rate_weight = 0.01
-    p_terminated_weight = 200.0
 
-    ## ==================== ERFI Configuration ==================== ##
-    erfi_enabled: bool = False
-    vel_hist_length: int = 4
+    # Jig Delete Logic
+    jig_release_height = 0.4
+    jig_release_hold_step = 10
+    jig_release_depth = -5.0                    # world-frame z the jig is teleported to on release
 
-    ## ======================== Curriculum ======================= ##
-    warmup = 0.2
-    endup = 0.6
-    static_friction_start: tuple[float, float] = (0.6, 1.2)
-    static_friction_end: tuple[float, float] = (0.4, 1.2)
-    dynamic_friction_start: tuple[float, float] = (0.6, 0.9)
-    dynamic_friction_end: tuple[float, float] = (0.4, 0.9)
 
-    # Per-axis observation noise groups (must match _get_observations concat order)
-    # std=0.0 for internal values that require no sensor noise injection
-    obs_noise_groups_start = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.1},   # IMU gyroscope
-        "base_rot_w":        {"dim": 4,  "std": 0.01},  # Quaternion (normalized, sensitive)
-        "command_inputs_b":  {"dim": 3,  "std": 0.0},   # Internal command (no noise)
-        "joint_pos":         {"dim": 6,  "std": 0.005}, # Joint encoder
-        "joint_vel":         {"dim": 8,  "std": 0.5},   # Encoder derivative (noisy)
-        "previous_actions":  {"dim": 8,  "std": 0.0},   # Internal action buffer (no noise)
-    }
+    # Per-axis observation noise groups
     obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "std": 0.2},
-        "base_rot_w":        {"dim": 4,  "std": 0.03},
-        "command_inputs_b":  {"dim": 3,  "std": 0.0},
-        "joint_pos":         {"dim": 6,  "std": 0.01},
-        "joint_vel":         {"dim": 8,  "std": 1.5},
-        "previous_actions":  {"dim": 8,  "std": 0.0},
+        "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
+        "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
+        "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
+        "joint_pos":         {"dim": 6,  "min": -0.01, "max": 0.01},
+        "joint_vel":         {"dim": 8,  "min": -1.5,  "max": 1.5},
+        "previous_actions":  {"dim": 8,  "min": 0.0,   "max": 0.0},
     }
-    obs_noise_start = build_noise_std_vector(obs_noise_groups_start)  # list
-    obs_noise_end   = build_noise_std_vector(obs_noise_groups_end)    # list
+    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
 
-    rfi_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.01, 0.01]
-    rfi_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.02, 0.02]
-    rao_start = [0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.05, 0.05]
-    rao_end = [0.2, 0.2, 0.2, 0.2, 0.4, 0.4, 0.1, 0.1]
+    # Noise Model
+    observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
+    observation_noise_params: dict = {
+        "min": obs_noise_min,
+        "max": obs_noise_max,
+        "operation": "add",
+    }
+    
+    ## ======================== Curriculum ======================= ##
 
     curriculum = CurriculumManagerCfg(
-        warmup=warmup,
-        endup=endup,
         params=[
             CurriculumParamCfg(
-                name="observation_noise",
-                attr_path="cfg/observation_noise_params/std",
-                start_value=obs_noise_start,
-                end_value=obs_noise_end,
-                schedule="linear",
+                name="lin_vel_range",
+                attr_path="cfg/commands/ranges/lin_vel_x",
+                start_value=(0.0, 0.0),
+                end_value=(-0.5, 0.5),
+                schedule="step",
+                schedule_kwargs={
+                    "steps": [0.3, 0.7],
+                }
+            ),
+            CurriculumParamCfg(
+                name="ang_vel_range",
+                attr_path="cfg/commands/ranges/ang_vel_z",
+                start_value=(0.0, 0.0),
+                end_value=(-0.5, 0.5),
+                schedule="step",
+                schedule_kwargs={
+                    "steps": [0.3, 0.7],
+                }
             ),
         ]
     )
 
     # Command
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+    commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 4.0),
-        prob_standing_envs=0.01,
+        resampling_time_range=(4.0, 5.0),
+        height_resampling_time_range=(3.0, 4.0),
+        prob_standing_envs=0.1,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.7), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+        ranges=UniformVelocityHeightCommandCfg.Ranges(
+            lin_vel_x=(-0.5, 0.5), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0), height=(0.45, 0.55)
         ),
     )
-    
-    # ERFI
-    rfi_torque_limit: list[float] = rfi_end    # N·m 
-    rao_torque_limit: list[float] = rao_end    # N·m
-
-    # Noise Model — std is a list for per-axis control; initialized to max difficulty
-    # and overridden to start values by CurriculumManager on env init.
-    observation_noise_type: str = "gaussian" # [gaussian, uniform, constant]
-    observation_noise_params: dict = {
-        "mean": 0.0,
-        "std": obs_noise_end,
-        "operation": "add",
-    }
-
-    ## ==================== Plot variables ==================== ##
-    viz_data: dict = {
-        "left_hip_torque (Nm)": 0.0,
-        "right_hip_torque (Nm)": 0.0,
-        "left_thigh_torque (Nm)": 0.0,
-        "right_thigh_torque (Nm)": 0.0,
-        "left_knee_torque (Nm)": 0.0,
-        "right_knee_torque (Nm)": 0.0,
-        "left_wheel_torque (Nm)": 0.0,
-        "right_wheel_torque (Nm)": 0.0,
-        "left_hip_velocity (deg/s)": 0.0,
-        "right_hip_velocity (deg/s)": 0.0,
-        "left_thigh_velocity (deg/s)": 0.0,
-        "right_thigh_velocity (deg/s)": 0.0,
-        "left_knee_velocity (deg/s)": 0.0,
-        "right_knee_velocity (deg/s)": 0.0,
-        "left_wheel_velocity (deg/s)": 0.0,
-        "right_wheel_velocity (deg/s)": 0.0,
-        "base_linear_velocity (m/s)": 0.0,
-        "command_velocity (m/s)": 0.0,
-        "command_angular_velocity (deg/s)": 0.0,
-        }
 
     def __post_init__(self):
         super().__post_init__()
-        self.sim.dt = self.sim_dt
-        self.sim.render_interval = self.decimation
+        self.episode_length_s = 10.0
+        self.max_episode_length = self.episode_length_s / (self.sim_dt * self.decimation) 
 
-        # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
-        self.scene.replicate_physics = False
-
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.5)
-        self.GOAT_cfg.init_state.joint_pos = {"hip_L_Joint": 0.0,
-                                              "hip_R_Joint": 0.0,
-                                              "thigh_L_Joint": 0.0,
-                                              "thigh_R_Joint": 0.0,
-                                              "knee_L_Joint": 0.0,
-                                              "knee_R_Joint": 0.0,
-                                              "wheel_L_Joint": 0.0,
-                                              "wheel_R_Joint": 0.0,}
-
-        self.events.robot_leg_physics_material.params["static_friction_range"] = self.static_friction_end
-        self.events.robot_leg_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.robot_wheel_physics_material.params["static_friction_range"] = self.static_friction_end
-        self.events.robot_wheel_physics_material.params["dynamic_friction_range"] = self.dynamic_friction_end
-        self.events.reset_robot_joints.params["bias"] = (0.0, 0.0, 0.17, 0.17, 0.135, 0.135, 0.0, 0.0)
-
-        # event
-        self.events.add_base_mass.params["mass_distribution_params"] = (-0.5, 0.5)
-        self.events.add_link_mass.params["mass_distribution_params"] = (0.8, 1.2)
-        self.events.rigid_body_mass_inertia.params["mass_inertia_distribution_params"] = (0.8, 1.2)
-        self.events.robot_center_of_mass.params["asset_cfg"] = SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]) # exclude wheel
-        self.events.robot_center_of_mass.params["com_distribution_params"] = ((-0.025, 0.025), (-0.025, 0.025), (-0.025, 0.025))
-        # self.events.add_base_mass = None
-        # self.events.robot_center_of_mass = None
-        # self.events.rigid_body_mass_inertia = Non
-        # self.events.robot_leg_actuator_gain = None
-        # self.events.robot_wheel_actuator_gain = None
-        # self.events.robot_center_of_mass = None
-
-        self.events.push_robot = None
-
-@configclass
-class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg):
-    def __post_init__(self):
-        super().__post_init__()
-        self.curriculum = None
-
-        # visualization
-        self.goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
-            prim_path="/Visuals/Command/velocity_goal"
-        )
-
-        self.current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
-            prim_path="/Visuals/Command/velocity_current"
-        )
-
-        # disable randomization
+        # Randomization
         self.events.add_base_mass = None
         self.events.add_link_mass = None
-        self.events.rigid_body_mass_inertia = None
-        self.events.robot_leg_actuator_gain = None
+        self.events.robot_base_center_of_mass = None
+        self.events.robot_link_center_of_mass = None 
+        self.events.robot_leg_physics_material = None
+        self.events.robot_wheel_physics_material = None
+        self.events.robot_hip_actuator_gain = None
+        self.events.robot_thigh_actuator_gain = None
+        self.events.robot_knee_actuator_gain = None
         self.events.robot_wheel_actuator_gain = None
-        self.events.robot_center_of_mass = None
-        # disable noise
         self.observation_noise_type = None
         self.observation_noise_params = None
 
-        self.goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
-        self.current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+        self.events.push_robot = EventTerm(
+            func=push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(3.0, 4.0),
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+                "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+        )
 
-        # plot
-        # self.plotter = PNGSavePlotter
+@configclass
+class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
+    """Play variant of the track environment.
+
+    The MRO is TrackPlay -> TrackEnvCfg -> StandPlayEnvCfg -> StandEnvCfg, so a single
+    super().__post_init__() applies the play-side deactivations first and the track-side
+    settings on top of them.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.curriculum = None
+        # TrackEnvCfg.__post_init__ runs after the play deactivations and re-enables the push
+        # event, so it has to be switched off again here.
+        self.events.push_robot = None

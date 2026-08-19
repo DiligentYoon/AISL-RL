@@ -65,7 +65,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["^(?!wheel_).*$"]) # exclude wheel
         self.link_id, _ = self._robot.find_bodies(["^(?!wheel_).*$"])
         self.illegal_force = torch.zeros((self.num_envs, len(self.contact_base_link_id)), dtype=torch.float32, device=self.device)
-        self.link_mass = self._robot.data.default_mass[:, self.link_id].to(self.device)
 
         # Commands for reference generator
         self.commands = UniformNonHolonomicCommand(self.cfg.commands, self._robot, self.device)
@@ -208,7 +207,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_height_weight * r_height                             +
             self.cfg.r_joint_tracking_weight * r_joint_tracking             +
-            self.cfg.r_velocity_tracking_weight * r_lin_vel_tracking        +
+            self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking         +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +

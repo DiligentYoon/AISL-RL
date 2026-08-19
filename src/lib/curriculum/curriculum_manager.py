@@ -21,14 +21,10 @@ class CurriculumManager:
         self.cfg = cfg
         self.env = env
         self.total_timesteps = self.env.cfg.total_timesteps
-        self.warmup_timesteps = self.total_timesteps * self.cfg.warmup
-        self.endup_timesteps = self.total_timesteps * self.cfg.endup
         self._difficulty: float = 0.0
         # (getter, setter, param_cfg) 튜플 목록
         self._resolvers: list[tuple[Callable, Callable, CurriculumParamCfg]] = []
         self._build_resolvers()
-
-    # ── 초기화 ────────────────────────────────────────────────────────────────
 
     def _build_resolvers(self):
         """Spawn getter/setter of CurriculumParamCfg and initialize by applying difficulty=0."""
@@ -82,26 +78,17 @@ class CurriculumManager:
         if total <= 0:
             return
 
-        if current_step < self.warmup_timesteps:
-            # warmup phase (difficulty = 0)
-            effective_t = 0.0
-        else:
-            # apply phase (difficulty = 0 -> 1)
-            effective_t = (current_step - self.warmup_timesteps) / (self.endup_timesteps - self.warmup_timesteps)
-            effective_t = min(effective_t, 1.0)
-
-        self._difficulty = effective_t
+        effective_t = current_step / self.total_timesteps
         self._apply(effective_t)
 
     def _apply(self, t: float):
         """apply curriculum by scheduling function"""
-        for getter, setter, param_cfg in self._resolvers:
+        for _, setter, param_cfg in self._resolvers:
             schedule_fn = SCHEDULE_REGISTRY[param_cfg.schedule]
             difficulty = schedule_fn(t, **param_cfg.schedule_kwargs)
             new_value = self._interpolate(param_cfg.start_value, param_cfg.end_value, difficulty)
             setter(new_value)
-
-    # ── 보간 ──────────────────────────────────────────────────────────────────
+            self._difficulty = difficulty
 
     def _interpolate(self, start: Any, end: Any, t: float) -> Any:
         """
@@ -120,8 +107,6 @@ class CurriculumManager:
             return start + (end - start) * t
         else:
             return end if t >= 0.5 else start
-
-    # ── 조회 ──────────────────────────────────────────────────────────────────
 
     def get_difficulty(self) -> float:
         """Current difficulty value (0.0 → 1.0)."""

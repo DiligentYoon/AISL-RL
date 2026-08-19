@@ -41,7 +41,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
     terminated_lin_vel_limit_z_start = 0.2
-    terminated_lin_vel_limit_z_end = 0.2
+    terminated_lin_vel_limit_z_end = 0.1
     terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
 
     height_reset_condition = 0.2 # meter (m)
@@ -50,7 +50,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     r_height_weight = 6.0
     r_upright_weight = 6.0
     r_joint_tracking_weight = 2.0
-    r_velocity_tracking_weight = 0.0
+    r_lin_vel_tracking_weight = 0.0
 
     p_illegal_contact_weight = 0.0
     p_joint_deviation_lr_weight = 2.0
@@ -97,6 +97,10 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     #             start_value=terminated_lin_vel_limit_z_start,
     #             end_value=terminated_lin_vel_limit_z_end,
     #             schedule="linear",
+    #             schedule_kwargs={
+    #                 "warmup": warmup,
+    #                 "endup": endup
+    #             },
     #         ),
     #     ]
     # )

@@ -69,8 +69,6 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     decay_factor_end = 0.7
 
     curriculum = CurriculumManagerCfg(
-        warmup=0.15,
-        endup=0.3,
         params=[
             CurriculumParamCfg(
                 name="decay_factor",
@@ -78,6 +76,10 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
                 start_value=decay_factor_start,
                 end_value=decay_factor_end,
                 schedule="linear",
+                schedule_kwargs={
+                    "warmup": 0.15,
+                    "endup":  0.3
+                }
             ),
         ]
     )

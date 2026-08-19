@@ -42,32 +42,46 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.termination_height = 0.2
 
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.2,
-            endup=0.4,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
                     attr_path="cfg/events/push_robot/params/velocity_range/x",
                     start_value=self.events.push_robot.params["velocity_range"]["x"],
-                    end_value=self.push_x_end
+                    end_value=self.push_x_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_y",
                     attr_path="cfg/events/push_robot/params/velocity_range/y",
                     start_value=self.events.push_robot.params["velocity_range"]["y"],
-                    end_value=self.push_y_end
+                    end_value=self.push_y_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_roll",
                     attr_path="cfg/events/push_robot/params/velocity_range/roll",
                     start_value=self.events.push_robot.params["velocity_range"]["roll"],
-                    end_value=self.push_roll_end
+                    end_value=self.push_roll_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_pitch",
                     attr_path="cfg/events/push_robot/params/velocity_range/pitch",
                     start_value=self.events.push_robot.params["velocity_range"]["pitch"],
-                    end_value=self.push_pitch_end
+                    end_value=self.push_pitch_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
             ]
         )
