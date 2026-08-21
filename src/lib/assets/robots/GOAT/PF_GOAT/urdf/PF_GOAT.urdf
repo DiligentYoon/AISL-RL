@@ -139,7 +139,6 @@
         </collision>
     </link>
 
-    <!-- Update required-->
     <link name="calf_L_Link">
         <inertial>
             <origin rpy="0 0 0" xyz="3.619E-03 -0.038E-03 -122.422E-03"/>
