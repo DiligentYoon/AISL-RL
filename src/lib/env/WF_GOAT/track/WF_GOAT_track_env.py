@@ -23,7 +23,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         self.is_release = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
         # Joint ids
-        self.hip_joint_ids, _ = self._robot.find_joints(["hip_.*"])
+        # self.hip_joint_ids, _ = self._robot.find_joints(["hip_.*"])
 
     def _debug_vis_callback(self, event):
         if not self._robot.is_initialized:
@@ -49,11 +49,11 @@ class WFGOATTrackEnv(WFGOATStandEnv):
     def _get_rewards(self) -> torch.Tensor:
         # Orientation Reward (Projected Gravity Alignment)
         upright_error = torch.sum(torch.square(self.gravity_vector[:, :2]), dim=1)
-        r_upright = torch.exp(-upright_error / 0.25)
+        r_upright = torch.exp(-upright_error / 0.05)
 
         # Height tracking Reward
         height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
-        r_height = torch.exp(-height_error / 0.15)
+        r_height = torch.exp(-height_error / 0.1)
 
         # Lin vel Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
@@ -65,7 +65,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :2], dim=-1)        
-        p_hip_deviation      = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=1)
+        # p_hip_deviation      = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=1)
         p_illegal_contact    = -torch.sum(self.illegal_force, dim=1)
         
         p_velocity_limit     = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1)     # wheel is not included
@@ -84,7 +84,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking         +
             self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking         +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
-            self.cfg.p_hip_deviation_weight * p_hip_deviation               +
+            # self.cfg.p_hip_deviation_weight * p_hip_deviation               +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
@@ -108,7 +108,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Ang_Vel"            : p_ang_vel,
-            "Task Penalty / Hip_Deviation"      : p_hip_deviation,
+            # "Task Penalty / Hip_Deviation"      : p_hip_deviation,
             "Task Penalty / Contact"            : p_illegal_contact,
             "Task Penalty / Torque_Limit"       : p_all_torque_limit,
             "Task Penalty / Torque"             : p_all_torque,
@@ -133,8 +133,9 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         tilt_fall = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.terminated_tilt,
                                      torch.abs(projected_gravity_y) >= self.cfg.terminated_tilt)
         exceed_joint_vel = torch.any(torch.abs(self.joint_vel[:, self.joint_ids]) > self.cfg.terminated_joint_vel_limit, dim=-1)
+        exceed_base_vel_z = torch.abs(self.base_lin_vel[:, 2]) > self.cfg.terminated_lin_vel_limit_z
         
-        terminated = base_fall | tilt_fall | exceed_joint_vel
+        terminated = base_fall | tilt_fall | exceed_joint_vel | exceed_base_vel_z
         truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
 
         return terminated, truncated

@@ -4,38 +4,42 @@ from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.domain_randomizer.noise_model import build_noise_uniform_vector
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-from lib.domain_randomizer.randomizer import push_by_setting_velocity
+from lib.domain_randomizer.randomizer import push_by_setting_velocity, reset_joints_by_offset
+
 
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
 from lib.env.WF_GOAT.track.mdp.commander import UniformVelocityHeightCommandCfg
-
-from lib.env.WF_GOAT.stand.mdp.randomizer import reset_joint_state_from_buffer
 
 
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    observation_space = 32                      # Observation space
-    state_space = 38                            # State space including privilege information
+    sim_dt = 0.01
+    action_space = 6 
+    observation_space = 26                      # Observation space
+    state_space = 32                            # State space including privilege information
+
+    torque_limits = [4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 10.0
+    r_height_weight = 12.0
     r_upright_weight = 2.0
     r_lin_vel_tracking_weight = 6.0
-    r_ang_vel_tracking_weight = 2.0
+    r_ang_vel_tracking_weight = 6.0
 
-    p_hip_deviation_weight = 1.0
+    p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 4.0
 
     p_joint_limit_weight = 10.0
     p_all_torque_weight = 0.01
 
-    terminated_joint_vel_limit = 6.0
+    terminated_joint_vel_limit = 4.0
+    terminated_lin_vel_limit_z = 0.25
 
     # Jig Delete Logic
-    jig_release_height = 0.39
-    jig_release_hold_step = 20
+    jig_release_height = 0.4
+    jig_release_hold_step = 50
     jig_release_depth = -5.0                  
 
 
@@ -44,9 +48,9 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
         "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
         "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
-        "joint_pos":         {"dim": 6,  "min": -0.01, "max": 0.01},
-        "joint_vel":         {"dim": 8,  "min": -1.5,  "max": 1.5},
-        "previous_actions":  {"dim": 8,  "min": 0.0,   "max": 0.0},
+        "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
+        "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
+        "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
     }
     obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
 
@@ -60,70 +64,60 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     
     ## ======================== Curriculum ======================= ##
 
-    # curriculum = CurriculumManagerCfg(
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="lin_vel_range",
-    #             attr_path="cfg/commands/ranges/lin_vel_x",
-    #             start_value=(0.0, 0.0),
-    #             end_value=(-0.5, 0.5),
-    #             schedule="step",
-    #             schedule_kwargs={
-    #                 "steps": [0.8],
-    #             }
-    #         ),
-    #         CurriculumParamCfg(
-    #             name="ang_vel_range",
-    #             attr_path="cfg/commands/ranges/ang_vel_z",
-    #             start_value=(0.0, 0.0),
-    #             end_value=(-0.5, 0.5),
-    #             schedule="step",
-    #             schedule_kwargs={
-    #                 "steps": [0.8],
-    #             }
-    #         ),
-    #     ]
-    # )
+    curriculum = CurriculumManagerCfg(
+        params=[
+            CurriculumParamCfg(
+                name="terminated_lin_vel_limit_z",
+                attr_path="cfg/terminated_lin_vel_limit_z",
+                start_value=0.3,
+                end_value=0.2,
+                schedule="linear",
+                schedule_kwargs={
+                    "warmup": 0.0,
+                    "endup": 0.3
+                }
+            )
+        ]
+    )
 
     # Command
     commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 5.0),
+        resampling_time_range=(3.0, 5.0),
         height_resampling_time_range=(3.0, 4.0),
         prob_standing_envs=0.1,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.4, 0.56)
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.42, 0.56)
         ),
     )
 
     def __post_init__(self):
         super().__post_init__()
         self.episode_length_s = 10.0
-        self.max_episode_length = self.episode_length_s / (self.sim_dt * self.decimation) 
+        self.max_episode_length = self.episode_length_s / (self.sim_dt * self.decimation)
+
+        self.GOAT_cfg.init_state.joint_pos = {
+            "thigh_L_Joint": 0.9756,
+            "thigh_R_Joint": -0.9756,
+            "knee_L_Joint": 2.0944,
+            "knee_R_Joint": -2.0944,
+            "wheel_L_Joint": 0.0,
+            "wheel_R_Joint": 0.0,
+        }
+
+        self.events.robot_hip_actuator_gain = None
+        self.events.robot_hip_joint_friction = None
 
         # Randomization
-        self.events.add_base_mass = None
-        self.events.add_link_mass = None
-        self.events.robot_base_center_of_mass = None
-        self.events.robot_link_center_of_mass = None 
-        self.events.robot_leg_physics_material = None
-        self.events.robot_wheel_physics_material = None
-        self.events.robot_hip_actuator_gain = None
-        self.events.robot_thigh_actuator_gain = None
-        self.events.robot_knee_actuator_gain = None
-        self.events.robot_wheel_actuator_gain = None
-        self.observation_noise_type = None
-        self.observation_noise_params = None
-
         self.events.reset_robot_joints = EventTerm(
-            func=reset_joint_state_from_buffer,
+            func=reset_joints_by_offset,
             mode="reset",
             params={
-                "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_track/joint_buffer/random_joint_pos.pt",
+                "position_range": (-0.05, 0.05),
+                "velocity_range": (-0.05, 0.05)
             }
         )
 
@@ -148,3 +142,4 @@ class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
+        self.events.robot_base_center_of_mass.params["com_distribution_params"] = ((-0.04, -0.04), (-0.02, 0.02), (-0.02, 0.02))

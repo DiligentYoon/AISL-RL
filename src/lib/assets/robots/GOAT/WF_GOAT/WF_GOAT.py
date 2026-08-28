@@ -80,54 +80,54 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
 
     # Actuators cfg
     actuators={
-        "hip": DelayedPDActuatorCfg(
-            joint_names_expr=["hip_.*",],
-            effort_limit=4.5,
-            velocity_limit=33.5,
-            min_delay=0,
-            max_delay=4,
-            stiffness={
-                "hip_L_Joint": 3.0,
-                "hip_R_Joint": 3.0,
-            },                                      
-            damping={
-                "hip_L_Joint": 0.1,
-                "hip_R_Joint": 0.1,
-            },
-            # friction={
-            #     "hip_L_Joint": 0.0,
-            #     "hip_R_Joint": 0.0,
-            # },
-            # dynamic_friction={
-            #     "hip_L_Joint": 0.0,
-            #     "hip_R_Joint": 0.0,
-            # },
-            # viscous_friction={
-            #     "hip_L_Joint": 0.0,
-            #     "hip_R_Joint": 0.0,
-            # },             
-            # armature={
-            #     "hip_L_Joint": 0.0,
-            #     "hip_R_Joint": 0.0,
-            # }
+        # "hip": DelayedPDActuatorCfg(
+        #     joint_names_expr=["hip_.*",],
+        #     effort_limit=4.5,
+        #     velocity_limit=33.5,
+        #     min_delay=0,
+        #     max_delay=4,
+        #     stiffness={
+        #         "hip_L_Joint": 3.0,
+        #         "hip_R_Joint": 3.0,
+        #     },                                      
+        #     damping={
+        #         "hip_L_Joint": 0.1,
+        #         "hip_R_Joint": 0.1,
+        #     },
+        #     # friction={
+        #     #     "hip_L_Joint": 0.0,
+        #     #     "hip_R_Joint": 0.0,
+        #     # },
+        #     # dynamic_friction={
+        #     #     "hip_L_Joint": 0.0,
+        #     #     "hip_R_Joint": 0.0,
+        #     # },
+        #     # viscous_friction={
+        #     #     "hip_L_Joint": 0.0,
+        #     #     "hip_R_Joint": 0.0,
+        #     # },             
+        #     # armature={
+        #     #     "hip_L_Joint": 0.0,
+        #     #     "hip_R_Joint": 0.0,
+        #     # }
 
-            friction={
-                "hip_L_Joint": 0.07,
-                "hip_R_Joint": 0.07,
-            },
-            dynamic_friction={
-                "hip_L_Joint": 0.05,
-                "hip_R_Joint": 0.05,
-            },
-            viscous_friction={
-                "hip_L_Joint": 0.06,
-                "hip_R_Joint": 0.06,
-            },             
-            armature={
-                "hip_L_Joint": 0.0,
-                "hip_R_Joint": 0.0,
-            }       
-        ),
+        #     friction={
+        #         "hip_L_Joint": 0.07,
+        #         "hip_R_Joint": 0.07,
+        #     },
+        #     dynamic_friction={
+        #         "hip_L_Joint": 0.05,
+        #         "hip_R_Joint": 0.05,
+        #     },
+        #     viscous_friction={
+        #         "hip_L_Joint": 0.06,
+        #         "hip_R_Joint": 0.06,
+        #     },             
+        #     armature={
+        #         "hip_L_Joint": 0.0,
+        #         "hip_R_Joint": 0.0,
+        #     }       
+        # ),
 
         "thigh": DelayedPDActuatorCfg(
             joint_names_expr=["thigh_.*",],
@@ -173,8 +173,8 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "thigh_R_Joint": 0.05,
             },             
             armature={
-                "thigh_L_Joint": 0.0,
-                "thigh_R_Joint": 0.0,
+                "thigh_L_Joint": 2.02e-03,
+                "thigh_R_Joint": 2.02e-03,
             }     
         ),
 
@@ -271,8 +271,8 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "wheel_R_Joint": 0.002,
             },       
             armature={
-                "wheel_L_Joint": 0.0,
-                "wheel_R_Joint": 0.0,
+                "wheel_L_Joint": 1.4e-03,
+                "wheel_R_Joint": 1.4e-03,
             }             
         ),
     }

@@ -22,7 +22,8 @@ class WFGOATBaseEnv(Env):
         # Joint Torque Limits
         self.torque_limits = torch.tensor(self.cfg.torque_limits, device=self.device).unsqueeze(0).expand(self.num_envs, -1) # Isaac sim cannot bring torque limits from urdf
         # Joint Ids
-        self.joint_ids, _ = self._robot.find_joints(["hip_.*", "thigh_.*", "knee_.*"])
+        # self.joint_ids, _ = self._robot.find_joints(["hip_.*", "thigh_.*", "knee_.*"])
+        self.joint_ids, _ = self._robot.find_joints(["thigh_.*", "knee_.*"])
         self.wheel_ids, _ = self._robot.find_joints(["wheel_.*"])
         
     # Create scene
