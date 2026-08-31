@@ -50,8 +50,6 @@ parser.add_argument("--model",
 # evaluation control
 parser.add_argument("--num_eval_falls", type=int, default=2000, help="Target number of fall episodes.")
 parser.add_argument("--num_eval_safe", type=int, default=2000, help="Target number of safe episodes.")
-parser.add_argument("--sustain_k", type=int, default=1,
-                    help="Consecutive steps above the threshold required for an alarm (1 = deployment latch rule).")
 parser.add_argument("--threshold", type=float, default=None,
                     help="Decision threshold. Defaults to the predictor's cfg value (ra.eval / safe_fall.eval).")
 
@@ -126,9 +124,7 @@ class SafeFallScore:
 def main():
     """Main evaluation routine."""
 
-    # ============================= Config Parsing ===============================
-    env_cfg = parse_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric)
+    env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric)
     try:
         cfg = load_cfg_from_registry(args_cli.task, f"rl_{algorithm}_cfg_entry_point")
         ra_cfg = load_cfg_from_registry(args_cli.task, "ra_cfg_entry_point")
@@ -303,24 +299,20 @@ def main():
         threshold = float(pred_cfg["eval"]["threshold"])
 
     # ======================= Evaluator ============================
-    evaluator = FallPredictorEvaluator(
-        num_envs=env.num_envs,
-        device=env.device,
-        max_episode_steps=max_episode_steps,
-        sustain_k=args_cli.sustain_k,
-        max_fall=args_cli.num_eval_falls,
-        max_safe=args_cli.num_eval_safe,
-    )
+    evaluator = FallPredictorEvaluator(dt = env.step_dt,
+                                       num_envs=env.num_envs,
+                                       device=env.device,
+                                       max_episode_steps=max_episode_steps,
+                                       max_fall=args_cli.num_eval_falls,
+                                       max_safe=args_cli.num_eval_safe
+                                    )
 
     # ======================= Evaluation Loop ============================
     obs, states, infos = env.reset()
     timestep = 0
     start_time = time.time()
 
-    while simulation_app.is_running() and (
-        evaluator.count_fall < args_cli.num_eval_falls
-        or evaluator.count_safe < args_cli.num_eval_safe
-    ):
+    while simulation_app.is_running() and (evaluator.count_fall < args_cli.num_eval_falls or evaluator.count_safe < args_cli.num_eval_safe):
         with torch.no_grad():
             # danger score for the current state, then step the nominal policy
             scores = score_fn(infos)
@@ -345,29 +337,20 @@ def main():
     elapsed = time.time() - start_time
 
     print("\n" + "=" * 72)
-    print(f" Fall Predictor Evaluation : {predictor}  (tau = {threshold}, sustain_k = {evaluator.sustain_k})")
+    print(f" Fall Predictor Evaluation : {predictor}  (tau = {threshold})")
     print("=" * 72)
-    print(f"  Episodes        : fall {metrics['n_fall']} | safe {metrics['n_safe']}")
-    print(f"  Confusion       : TP {metrics['TP']} | FN {metrics['FN']} "
-          f"| FP {metrics['FP']} | TN {metrics['TN']}")
-    print(f"  Detection Rate  : {metrics['detection_rate']:.4f}")
-    print(f"  False Alarm Rate: {metrics['FAR']:.4f}")
-    print(f"  Elapsed         : {elapsed:.1f} s ({timestep} steps)")
+    print(f"  Episodes  : fall {metrics['n_fall']} | safe {metrics['n_safe']}")
+    print(f"  Confusion : TP {metrics['TP']} | FN {metrics['FN']} | FP {metrics['FP']} | TN {metrics['TN']}")
+    print(f"  Lead Time : {metrics['LT']:.4f}")
+    print(f"  Detection Rate   : {metrics['DR']:.4f}")
+    print(f"  False Alarm Rate : {metrics['FAR']:.4f}")
+    print(f"  Elapsed          : {elapsed:.1f} s ({timestep} steps)")
     print("=" * 72 + "\n")
-
-    # raw records for offline re-analysis
-    raw_path = os.path.join(log_dir, f"raw_{predictor}.pt")
-    evaluator.save_raw(raw_path, threshold)
-    print(f"[INFO] Raw records saved to {raw_path}")
 
     # append one row to the shared comparison CSV
     csv_path = os.path.join(log_dir, "metrics_summary.csv")
-    header = ["predictor", "threshold", "sustain_k", "TP", "FN", "FP", "TN",
-              "detection_rate", "FAR", "n_fall", "n_safe"]
-    row = [predictor, threshold, evaluator.sustain_k,
-           metrics["TP"], metrics["FN"], metrics["FP"], metrics["TN"],
-           metrics["detection_rate"], metrics["FAR"],
-           metrics["n_fall"], metrics["n_safe"]]
+    header = ["predictor", "threshold", "DR", "FAR"]
+    row = [predictor, threshold, metrics["DR"], metrics["FAR"]]
     write_header = not os.path.exists(csv_path)
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
