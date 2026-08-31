@@ -138,20 +138,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_hip_actuator_gain = None
         self.events.robot_hip_joint_friction = None
 
-        # Renew randomization
-        self.events.robot_hip_joint_friction = EventTerm(
-            func=randomize_joint_parameters,
-            mode="reset",
-            params={
-                "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-                "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.03, 0.06),
-                "viscous_distribution_params": (0.03, 0.08),
-                "operation": "abs",
-                "distribution": "uniform",
-            }
-        )       
-
+        # Renew randomization     
         self.events.robot_thigh_joint_friction = EventTerm(
             func=randomize_joint_parameters,
             mode="reset",
