@@ -146,7 +146,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         """
         observation = torch.cat((self.base_ang_vel,                                                              # [E, 3]
                                  self.gravity_vector,                                                            # [E, 3]
-                                 self.command_inputs_b[:, -1],                                                   # [E, 1]
+                                 self.command_inputs_b[:, 3:],                                                   # [E, 1]
                                  self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
                                  self.joint_vel,                                                                 # [E, 6]
                                  self.previous_actions,                                                          # [E, 6]
@@ -163,7 +163,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         """
         observation = torch.cat((self.base_ang_vel,                                                               # [E, 3]
                                  self.gravity_vector,                                                             # [E, 3]
-                                 self.command_inputs_b[:, -1],                                                    # [E, 1]
+                                 self.command_inputs_b[:, 3:],                                                    # [E, 1]
                                  self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],   # [E, 4]
                                  self.joint_vel,                                                                  # [E, 6]
                                  self.previous_actions,                                                           # [E, 6]
