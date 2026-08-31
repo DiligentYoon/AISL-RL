@@ -9,10 +9,9 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer.noise_model import build_noise_uniform_vector
-from lib.domain_randomizer.randomizer import push_by_setting_velocity, reset_joints_by_offset
-from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG
+from lib.utils.plot_utils import PNGSavePlotter
 from lib.env.WF_GOAT.stand.mdp.commander import UniformVelocityHeightCommandCfg
 
 from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform,  randomize_joint_parameters
@@ -192,15 +191,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             }
         )
 
-        self.events.reset_robot_joints = EventTerm(
-            func=reset_joints_by_offset,
-            mode="reset",
-            params={
-                "position_range": (-0.1, 0.1),
-                "velocity_range": (-0.05, 0.05)
-            }
-        )
-
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
             func=reset_robot_and_object_root_state_uniform,
@@ -224,15 +214,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
                 "object_relative_pos": (-0.057, 0.0, 0.0),  # Collision Mesh friendly setting
                 "object_relative_yaw": 0.0,          
             }
-        )
-
-        self.events.push_robot = EventTerm(
-            func=push_by_setting_velocity,
-            mode="interval",
-            interval_range_s=(4.0, 6.0),
-            params={
-                "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-                "velocity_range": {"x": (-1.0, 1.0), "pitch": (-0.5, 0.5)}},
         )
 
 @configclass

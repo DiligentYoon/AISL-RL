@@ -197,23 +197,23 @@ class EventCfg:
         },
     )
     reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "position_range": (1.0, 1.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+            func=randomizer.reset_joints_by_offset,
+            mode="reset",
+            params={
+                "position_range": (-0.1, 0.1),
+                "velocity_range": (-0.05, 0.05)
+            }
+        )
 
     # interval
     push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(3.0, 4.0),
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
-    )
+            func=randomizer.push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(4.0, 6.0),
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+                "velocity_range": {"x": (-1.0, 1.0), "pitch": (-0.5, 0.5)}},
+        )
 
 
 

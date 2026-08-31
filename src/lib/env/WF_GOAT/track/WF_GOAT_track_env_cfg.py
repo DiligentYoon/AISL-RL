@@ -11,12 +11,8 @@ from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOA
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    sim_dt = 0.01
-    action_space = 6 
     observation_space = 26                      # Observation space
     state_space = 32                            # State space including privilege information
-
-    torque_limits = [4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ======================= Reward Shaping ====================== ##
     r_height_weight = 12.0
@@ -46,24 +42,6 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         "max": obs_noise_max,
         "operation": "add",
     }
-    
-    ## ======================== Curriculum ======================= ##
-
-    curriculum = CurriculumManagerCfg(
-        params=[
-            CurriculumParamCfg(
-                name="terminated_lin_vel_limit_z",
-                attr_path="cfg/terminated_lin_vel_limit_z",
-                start_value=0.3,
-                end_value=0.2,
-                schedule="linear",
-                schedule_kwargs={
-                    "warmup": 0.0,
-                    "endup": 0.3
-                }
-            )
-        ]
-    )
 
     def __post_init__(self):
         super().__post_init__()
