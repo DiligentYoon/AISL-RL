@@ -17,7 +17,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA agent config === #
-    ra_state_space = 10
+    ra_state_space = 39
     body_hist_length = 4
 
     # === SafeFall baseline config === #
@@ -113,14 +113,8 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         )
 
         # ==== Viz data ==== #
-        self.viz_data = {
-            "risk_value": 0,               # scalar
-            "icp_ankle_dist_hist": 0,      # scalar
-        }
-
-        self.scene.num_envs = 1
-
         self.plotter: PNGSavePlotter = PNGSavePlotter
+        self.viz_data = {"risk_value": 0}
 
 
 # Data Collection Environment for Initial dataset construction
@@ -145,8 +139,6 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
 
 
 # Data Collection Environment for disturbance region analysis.
-# One env carries one disturbance condition, so the push must be logged and must
-# fire exactly once per episode.
 @configclass
 class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
     def __post_init__(self):

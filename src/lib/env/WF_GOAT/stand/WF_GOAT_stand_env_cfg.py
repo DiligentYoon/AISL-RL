@@ -1,4 +1,3 @@
-
 import isaaclab.sim as sim_utils
 
 from isaaclab.utils import configclass
@@ -10,68 +9,71 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from lib.domain_randomizer.noise_model import build_noise_uniform_vector
+from lib.domain_randomizer.randomizer import push_by_setting_velocity, reset_joints_by_offset
 from lib.utils.plot_utils import PNGSavePlotter
 from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
 from lib.assets.objects.Jig.object import JIGCFG
-from lib.domain_randomizer.commander import UniformVelocityCommandCfg
+from lib.env.WF_GOAT.stand.mdp.commander import UniformVelocityHeightCommandCfg
 
-from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform, reset_joint_state_from_buffer, randomize_joint_parameters
+from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_state_uniform,  randomize_joint_parameters
 
 @configclass
 class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    episode_length_s = 5.0
-    sim_dt = 0.005                              # 200Hz torque controller
+    episode_length_s = 10.0
+    sim_dt = 0.01                              # 200Hz torque controller
     decimation = 2                              # 50Hz policy
-    action_space = 8                            # [L + R, joint pos + wheel velocity]
-    observation_space = 31                      # Observation space
-    state_space = 37                            # State space including privilege information
+    action_space = 6                            # [L + R, joint pos + wheel velocity]
+    observation_space = 23                      # Observation space
+    state_space = 29                            # State space including privilege information
     max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
                            "wheel" : [10.0, ()]}
 
-    torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
+    torque_limits = [4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
     ## ======================= Reward Shaping ====================== ##
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
-    terminated_tilt = 0.7
-    terminated_joint_vel_limit = 2.0 * joint_vel_limit  # rad/s
 
-    terminated_lin_vel_limit_z_start = 0.2
-    terminated_lin_vel_limit_z_end = 0.1
-    terminated_lin_vel_limit_z = terminated_lin_vel_limit_z_end
+    terminated_tilt = 0.7
+    terminated_joint_vel_limit = 5.0
+    terminated_lin_vel_limit_z = 0.2
 
     height_reset_condition = 0.2 # meter (m)
     target_height = 0.389
 
-    r_height_weight = 6.0
-    r_upright_weight = 6.0
-    r_joint_tracking_weight = 2.0
-    r_lin_vel_tracking_weight = 0.0
+    r_height_weight = 20.0
+    r_upright_weight = 5.0
 
-    p_illegal_contact_weight = 0.0
-    p_joint_deviation_lr_weight = 2.0
+    p_illegal_contact_weight = 2.0
+    p_joint_deviation_lr_weight = 4.0
+    p_lin_vel_weight = 1.0
     p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.05
+    p_all_torque_weight = 0.01
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.005
     p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
+    # Jig Delete Logic
+    jig_release_height = 0.4
+    jig_release_hold_step = 30
+    jig_release_depth = -5.0  
+
     # Per-axis observation noise groups
     obs_noise_groups_end = {
         "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
         "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
-        "command":           {"dim": 3,  "min": 0.0,   "max": 0.0},
-        "joint_pos":         {"dim": 6,  "min": -0.01, "max": 0.01},
-        "joint_vel":         {"dim": 8,  "min": -1.5,  "max": 1.5},
-        "previous_actions":  {"dim": 8,  "min": 0.0,   "max": 0.0},
+        "command":           {"dim": 1,  "min": 0.0,   "max": 0.0},
+        "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
+        "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
+        "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
     }
     obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
 
@@ -84,37 +86,33 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     }
     
     ## ======================== Curriculum ======================= ##
-    # warmup = 0.05
-    # endup = 0.9
+    curriculum = CurriculumManagerCfg(
+        params=[
+            CurriculumParamCfg(
+                name="terminated_lin_vel_limit_z",
+                attr_path="cfg/terminated_lin_vel_limit_z",
+                start_value=0.3,
+                end_value=0.2,
+                schedule="linear",
+                schedule_kwargs={
+                    "warmup": 0.0,
+                    "endup": 0.3
+                }
+            )
+        ]
+    )
 
-    # curriculum = CurriculumManagerCfg(
-    #     warmup=warmup,
-    #     endup=endup,
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="lin_vel_limit",
-    #             attr_path="cfg/terminated_lin_vel_limit_z",
-    #             start_value=terminated_lin_vel_limit_z_start,
-    #             end_value=terminated_lin_vel_limit_z_end,
-    #             schedule="linear",
-    #             schedule_kwargs={
-    #                 "warmup": warmup,
-    #                 "endup": endup
-    #             },
-    #         ),
-    #     ]
-    # )
-
-    ## ======================== Command ======================= ##
-    commands: UniformVelocityCommandCfg = UniformVelocityCommandCfg(
+    # Command
+    commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
         asset_name="robot",
-        resampling_time_range=(5.0, 5.0),
-        prob_standing_envs=1.0,
+        resampling_time_range=(3.0, 5.0),
+        height_resampling_time_range=(3.0, 4.0),
+        prob_standing_envs=0.0,
         prob_heading_envs=0.0,
         heading_command=False,
         heading_control_stiffness=0.0,
-        ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0)
+        ranges=UniformVelocityHeightCommandCfg.Ranges(
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.42, 0.56)
         ),
     )
 
@@ -130,8 +128,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.scene.replicate_physics = False
         self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.389)
         self.GOAT_cfg.init_state.joint_pos = {
-            "hip_L_Joint": 0.0,
-            "hip_R_Joint": 0.0,
             "thigh_L_Joint": 0.9756,
             "thigh_R_Joint": -0.9756,
             "knee_L_Joint": 2.0944,
@@ -140,6 +136,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             "wheel_R_Joint": 0.0,
         }
         
+        self.events.robot_hip_actuator_gain = None
+        self.events.robot_hip_joint_friction = None
+
         # Renew randomization
         self.events.robot_hip_joint_friction = EventTerm(
             func=randomize_joint_parameters,
@@ -194,11 +193,11 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         )
 
         self.events.reset_robot_joints = EventTerm(
-            func=reset_joint_state_from_buffer,
+            func=reset_joints_by_offset,
             mode="reset",
             params={
-                "asset_cfg": SceneEntityCfg("robot"),
-                "dataset_path":"logs/GOAT_stand/joint_buffer/new_random_joint_pos_2.pt",
+                "position_range": (-0.1, 0.1),
+                "velocity_range": (-0.05, 0.05)
             }
         )
 
@@ -227,7 +226,14 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             }
         )
 
-        self.events.push_robot = None
+        self.events.push_robot = EventTerm(
+            func=push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(4.0, 6.0),
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+                "velocity_range": {"x": (-1.0, 1.0), "pitch": (-0.5, 0.5)}},
+        )
 
 @configclass
 class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
