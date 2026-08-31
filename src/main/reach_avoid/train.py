@@ -223,17 +223,6 @@ def main():
                           buffer=buffers,
                           device=env.device,
                           cfg=cfg["agent"])
-            
-        elif model_manager.model_type == "communet":
-            from lib.agent.communet_mappo import CommunetMAPPO
-            agent = CommunetMAPPO(observation_space=env.observation_space,
-                                    state_space=env.state_space,
-                                    action_space=env.action_space,
-                                    possible_agents=possible_agents,
-                                    model=models,
-                                    buffer=buffers,
-                                    device=env.device,
-                                    cfg=cfg["agent"])
         
         elif model_manager.model_type == "shared":
             from lib.agent.cooperative_mappo import CooperativeMAPPO

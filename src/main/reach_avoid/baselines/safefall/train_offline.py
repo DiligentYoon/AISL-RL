@@ -24,15 +24,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-# Repo root: this file is .../src/main/reach_avoid/baselines/safefall/train_offline.py
-# Add src to sys.path so `lib.*` imports resolve when running as a module from elsewhere.
-# import sys
-# _THIS = os.path.abspath(os.path.dirname(__file__))
-# _SRC_ROOT = os.path.abspath(os.path.join(_THIS, "..", "..", "..", ".."))
-# if _SRC_ROOT not in sys.path:
-#     sys.path.insert(0, _SRC_ROOT)
-
-
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Offline training for the SafeFall GRU predictor.")
@@ -50,16 +41,6 @@ simulation_app = app_launcher.app
 
 from lib.buffer.baselines.recurrent_replay import RecurrentReplayBuffer
 from lib.model.Baselines.SafeFall.safe_fall import GRU
-
-# def parse_args() -> argparse.Namespace:
-#     parser = argparse.ArgumentParser(description="Offline training for the SafeFall GRU predictor.")
-#     parser.add_argument("--dataset_dir", type=str, required=True,
-#                         help="Path to a dataset directory produced by collect_offline.py.")
-#     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
-#                         help="Compute device.")
-#     parser.add_argument("--seed", type=int, default=None, help="Override seed from cfg snapshot.")
-#     return parser.parse_args()
-
 
 def _load_dataset_meta(dataset_dir: str) -> Dict[str, Any]:
     meta_path = os.path.join(dataset_dir, "meta.json")
@@ -98,7 +79,7 @@ def evaluate(model: nn.Module,
         return {"val_loss": float("nan"), "val_acc": float("nan"),
                 "val_false_alarm": float("nan"), "val_lead_time_s": float("nan")}
 
-    # 1) Loss / accuracy / false alarm over fixed-length sequences.
+    # Loss / accuracy / false alarm over fixed-length sequences.
     total_loss = 0.0
     total_correct = 0
     total_valid = 0
@@ -127,7 +108,7 @@ def evaluate(model: nn.Module,
         n_safe_tokens += int(safe_mask.sum())
         n_safe_false_pos += int((safe_mask & (preds == 1)).sum())
 
-    # 2) Lead time on terminated episodes (full sequence per episode).
+    # Lead time on terminated episodes (full sequence per episode).
     lead_times_steps = []
     for ep in val_buf.closed_episodes:
         if not ep.get("terminated", False):

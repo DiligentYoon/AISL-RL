@@ -1,6 +1,4 @@
 """
-Stage 1 of the SafeFall baseline pipeline.
-
 Roll out a nominal locomotion policy and dump per-episode `safe_fall_obs`
 sequences to .pt shards under ``Safe_Fall/dataset_<timestamp>/``. Labels are
 not persisted; ``train_offline.py`` regenerates them from `fall_lead_seconds`
@@ -107,14 +105,6 @@ def _build_policy_agent(env, cfg, multi_agent, possible_agents):
                           possible_agents=possible_agents,
                           model=models, buffer=buffers,
                           device=env.device, cfg=cfg["agent"])
-        elif model_manager.model_type == "communet":
-            from lib.agent.communet_mappo import CommunetMAPPO
-            agent = CommunetMAPPO(observation_space=env.observation_space,
-                                  state_space=env.state_space,
-                                  action_space=env.action_space,
-                                  possible_agents=possible_agents,
-                                  model=models, buffer=buffers,
-                                  device=env.device, cfg=cfg["agent"])
         elif model_manager.model_type == "shared":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
             agent = CooperativeMAPPO(observation_space=env.observation_space,
@@ -188,9 +178,6 @@ def main():
     obs_dim = env._unwrapped.cfg.safe_fall_obs_dim
     max_ep_steps = int(env._unwrapped.max_episode_length)
 
-    # Sync seq_len with the env's actual max_episode_length so that downstream
-    # full-episode training (train_offline.py) uses the right window. The yaml
-    # value is treated as an upper-bound hint and overridden here.
     cfg_seq_len = sf_cfg["buffer"].get("seq_len")
     if cfg_seq_len != max_ep_steps:
         print(f"[INFO] Overriding safe_fall.buffer.seq_len ({cfg_seq_len}) "
@@ -201,10 +188,6 @@ def main():
     train_val_split = tuple(collection_cfg["train_val_split"])
     shard_size = int(collection_cfg["shard_size"])
 
-    # buffer_size is the number of circular-buffer rows (timesteps); each row
-    # already stores num_envs samples in parallel. Size it so that the worst
-    # case (all envs survive to max_ep_steps) closes `target` trajectories
-    # without wrap-around overwriting still-referenced closed_episodes rows.
     episodes_per_env = math.ceil(target / env.num_envs) + 1
     buffer_rows = max_ep_steps * episodes_per_env
 
