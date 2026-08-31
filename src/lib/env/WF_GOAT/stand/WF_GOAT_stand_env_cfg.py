@@ -30,7 +30,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
-                           "wheel" : [5.0, ()]}
+                           "wheel" : [10.0, ()]}
 
     torque_limits = [4.5, 4.5, 4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
@@ -61,7 +61,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.005
     p_joint_accel_weight = 5.0e-6
-    p_action_rate_weight = 0.01
+    p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
     # Per-axis observation noise groups
@@ -236,21 +236,21 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         self.curriculum = None
 
         # disable randomization
-        self.events.add_base_mass = None
-        self.events.add_link_mass = None
+        # self.events.add_base_mass = None
+        # self.events.add_link_mass = None
         # self.events.robot_base_center_of_mass = None
-        self.events.robot_link_center_of_mass = None 
-        self.events.robot_leg_physics_material = None
-        self.events.robot_wheel_physics_material = None
-        self.events.robot_hip_actuator_gain = None
-        self.events.robot_thigh_actuator_gain = None
-        self.events.robot_knee_actuator_gain = None
-        self.events.robot_wheel_actuator_gain = None
-        self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
+        # self.events.robot_link_center_of_mass = None 
+        # self.events.robot_leg_physics_material = None
+        # self.events.robot_wheel_physics_material = None
+        # self.events.robot_hip_actuator_gain = None
+        # self.events.robot_thigh_actuator_gain = None
+        # self.events.robot_knee_actuator_gain = None
+        # self.events.robot_wheel_actuator_gain = None
+        # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        self.observation_noise_type = None
-        self.observation_noise_params = None
+        # self.observation_noise_type = None
+        # self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {

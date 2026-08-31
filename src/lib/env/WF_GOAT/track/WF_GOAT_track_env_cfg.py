@@ -23,9 +23,9 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     r_height_weight = 12.0
-    r_upright_weight = 2.0
-    r_lin_vel_tracking_weight = 6.0
-    r_ang_vel_tracking_weight = 6.0
+    r_upright_weight = 1.0
+    r_lin_vel_tracking_weight = 8.0
+    r_ang_vel_tracking_weight = 8.0
 
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
@@ -34,12 +34,12 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     p_joint_limit_weight = 10.0
     p_all_torque_weight = 0.01
 
-    terminated_joint_vel_limit = 4.0
-    terminated_lin_vel_limit_z = 0.25
+    terminated_joint_vel_limit = 5.0
+    terminated_lin_vel_limit_z = 0.2
 
     # Jig Delete Logic
     jig_release_height = 0.4
-    jig_release_hold_step = 50
+    jig_release_hold_step = 30
     jig_release_depth = -5.0                  
 
 
@@ -116,7 +116,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
             func=reset_joints_by_offset,
             mode="reset",
             params={
-                "position_range": (-0.05, 0.05),
+                "position_range": (-0.1, 0.1),
                 "velocity_range": (-0.05, 0.05)
             }
         )
@@ -142,4 +142,3 @@ class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
-        self.events.robot_base_center_of_mass.params["com_distribution_params"] = ((-0.04, -0.04), (-0.02, 0.02), (-0.02, 0.02))

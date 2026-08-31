@@ -53,15 +53,15 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Height tracking Reward
         height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
-        r_height = torch.exp(-height_error / 0.1)
+        r_height = torch.exp(-height_error / 0.05)
 
         # Lin vel Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.2)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.05)
 
         # Ang vel Tracking Reward
         ang_vel_error = torch.abs(self.base_ang_vel[:, 2] - self.command_inputs_b[:, 2])
-        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.2)
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.1)
 
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :2], dim=-1)        
