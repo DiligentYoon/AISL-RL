@@ -30,6 +30,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         self.gravity_vector = torch.zeros((self.num_envs, 3), dtype=torch.float32, device=self.device)                  
         self.joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.joint_vel = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.wheel_pos = torch.zeros((self.num_envs, 2, 3), dtype=torch.float32, device=self.device)
 
         # Privileged data
         self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float32, device=self.device)
@@ -64,6 +65,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         # Contact sensor
         self.contact_base_link_id, _ = self.contact_sensors.find_bodies(["^(?!wheel_).*$"]) # exclude wheel
         self.link_id, _ = self._robot.find_bodies(["^(?!wheel_).*$"])
+        self.wheel_link_id, _ = self._robot.find_bodies(["wheel_.*"])
         self.illegal_force = torch.zeros((self.num_envs, len(self.contact_base_link_id)), dtype=torch.float32, device=self.device)
 
         # Commands for reference generator
@@ -186,6 +188,11 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
         r_height = torch.exp(-height_error / 0.05)
 
+        # COM align Reward
+        wheel_xy = torch.mean(self.wheel_pos[:, :, :2], dim=1)
+        align_error = torch.sum(torch.square(self.base_pos_w[:, :2] - wheel_xy), dim=1)
+        r_com_align = torch.exp(-align_error / 0.05)
+
         # Regularization Penalty
         p_lin_vel            = -torch.norm(self.base_lin_vel[:, :3], dim=-1)
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :3], dim=-1)        
@@ -204,6 +211,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_height_weight * r_height                             +
+            self.cfg.r_com_align_weight * r_com_align                       +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
             self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
@@ -223,6 +231,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             # ==========================================
             "Task Reward / Upright"             : r_upright,
             "Task Reward / Height"              : r_height,
+            "Task Reward / COM_Align"           : r_com_align,
             # ==========================================
             # Task Penalty (-)
             # ==========================================
@@ -283,6 +292,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         self.gravity_vector[i] = self._robot.data.projected_gravity_b[i]                  
         self.joint_pos[i] = self._robot.data.joint_pos[i]
         self.joint_vel[i] = self._robot.data.joint_vel[i]
+        self.wheel_pos[i] = self._robot.data.body_link_pos_w[i][:, self.wheel_link_id]
         # Privileged data
         self.base_height[i] = self._robot.data.root_pos_w[i, 2].unsqueeze(-1)
         material_property = self._robot.root_physx_view.get_material_properties().to(self.device)[i] # device is "cpu" not "cuda" 

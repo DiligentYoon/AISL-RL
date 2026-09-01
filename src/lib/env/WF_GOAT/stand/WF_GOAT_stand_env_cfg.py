@@ -29,7 +29,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
-                           "wheel" : [10.0, ()]}
+                           "wheel" : [5.0, ()]}
 
     torque_limits = [4.5, 4.5, 9.0, 9.0, 2.5, 2.5]
 
@@ -40,16 +40,15 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     terminated_tilt = 0.7
     terminated_joint_vel_limit = 5.0
     terminated_lin_vel_limit_z = 0.2
-
     height_reset_condition = 0.2 # meter (m)
-    target_height = 0.389
 
     r_height_weight = 20.0
-    r_upright_weight = 5.0
+    r_upright_weight = 9.0
+    r_com_align_weight = 5.0
 
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 4.0
-    p_lin_vel_weight = 1.0
+    p_lin_vel_weight = 4.0
     p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0

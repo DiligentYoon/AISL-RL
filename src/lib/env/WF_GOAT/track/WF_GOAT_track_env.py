@@ -75,11 +75,15 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Ang vel Tracking Reward
         ang_vel_error = torch.abs(self.base_ang_vel[:, 2] - self.command_inputs_b[:, 2])
-        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.1)
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.05)
+
+        # COM align Reward
+        wheel_xy = torch.mean(self.wheel_pos[:, :, :2], dim=1)
+        align_error = torch.sum(torch.square(self.base_pos_w[:, :2] - wheel_xy), dim=1)
+        r_com_align = torch.exp(-align_error / 0.02)
 
         # Regularization Penalty
         p_ang_vel            = -torch.norm(self.base_ang_vel[:, :2], dim=-1)        
-        # p_hip_deviation      = -torch.sum(torch.abs(self.joint_deviation[:, self.hip_joint_ids]), dim=1)
         p_illegal_contact    = -torch.sum(self.illegal_force, dim=1)
         
         p_velocity_limit     = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1)     # wheel is not included
@@ -97,8 +101,8 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             self.cfg.r_height_weight * r_height                             +
             self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking         +
             self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking         +
+            self.cfg.r_com_align_weight * r_com_align                       +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
-            # self.cfg.p_hip_deviation_weight * p_hip_deviation               +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
@@ -118,11 +122,11 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             "Task Reward / Height"              : r_height,
             "Task Reward / Lin_Vel_Tracking"    : r_lin_vel_tracking,
             "Task Reward / Ang_Vel_Tracking"    : r_ang_vel_tracking,
+            "Task Rweard / COM_Align"           : r_com_align, 
             # ==========================================
             # Task Penalty (-)
             # ==========================================
             "Task Penalty / Ang_Vel"            : p_ang_vel,
-            # "Task Penalty / Hip_Deviation"      : p_hip_deviation,
             "Task Penalty / Contact"            : p_illegal_contact,
             "Task Penalty / Torque_Limit"       : p_all_torque_limit,
             "Task Penalty / Torque"             : p_all_torque,

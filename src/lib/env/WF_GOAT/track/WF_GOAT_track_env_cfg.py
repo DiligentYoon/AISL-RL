@@ -15,7 +15,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     state_space = 32                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 12.0
+    r_height_weight = 10.0
     r_upright_weight = 1.0
     r_lin_vel_tracking_weight = 8.0
     r_ang_vel_tracking_weight = 8.0
@@ -29,7 +29,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
         "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
         "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
-        "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
+        "joint_pos":         {"dim": 4,  "min": -0.03, "max": 0.03},
         "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
         "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
     }
