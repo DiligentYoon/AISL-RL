@@ -6,17 +6,24 @@ from isaaclab.utils.math import quat_apply
 
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env import WFGOATStandEnv
 from lib.env.WF_GOAT.track.WF_GOAT_track_env_cfg import WFGOATTrackEnvCfg, WFGOATTrackPlayEnvCfg
-from lib.env.WF_GOAT.track.mdp.commander import UniformVelocityHeightCommand
 
 class WFGOATTrackEnv(WFGOATStandEnv):
     cfg: WFGOATTrackEnvCfg | WFGOATTrackPlayEnvCfg
 
     def __init__(self, cfg: WFGOATTrackEnvCfg | WFGOATTrackPlayEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
-        # Jig release
-        self.stand_up_counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-        self.jig_release = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self.is_release = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        # Joint position bias
+        self.joint_pos_bias = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+        self.biased_joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
+
+    def _apply_action(self):
+        # Current state (biased position)
+        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids] - self.biased_joint_pos[:, self.joint_ids]
+        cmd_wheel_vel = self.processed_actions[:, self.wheel_ids]
+        
+        # Apply command
+        self._robot.set_joint_position_target(cmd_joint_pos, joint_ids=self.joint_ids)
+        self._robot.set_joint_velocity_target(cmd_wheel_vel, joint_ids=self.wheel_ids)
 
     def _get_observations(self) -> torch.Tensor:
         """
@@ -25,12 +32,12 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_ang_vel,                                                              # [E, 3]
-                                 self.gravity_vector,                                                            # [E, 3]
-                                 self.command_inputs_b,                                                          # [E, 4]
-                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
-                                 self.joint_vel,                                                                 # [E, 6]
-                                 self.previous_actions,                                                          # [E, 6]
+        observation = torch.cat((self.base_ang_vel,                                                                     # [E, 3]
+                                 self.gravity_vector,                                                                   # [E, 3]
+                                 self.command_inputs_b,                                                                 # [E, 4]
+                                 self.biased_joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
+                                 self.joint_vel,                                                                        # [E, 6]
+                                 self.previous_actions,                                                                 # [E, 6]
                                 ), dim=1) 
 
         return observation
@@ -52,13 +59,12 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         
         privileged_info = torch.cat((self.base_lin_vel,                                      # [E, 3]
                                      self.base_height,                                       # [E, 1]
+                                     self.joint_pos_bias[:, self.joint_ids],                 # [E, 4]
                                      self.friction_coefficient), dim=1)                      # [E, 2]
         
         state = torch.cat([observation, privileged_info], dim=-1)
 
         return state
-
-
 
     def _get_rewards(self) -> torch.Tensor:
         # Orientation Reward (Projected Gravity Alignment)
@@ -140,3 +146,11 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         self.previous_actions = self.actions.clone()
 
         return total_reward
+
+    def _compute_intermediate_values(self, env_ids = None):
+        super()._compute_intermediate_values(env_ids)
+        i = env_ids if env_ids is not None else self._robot._ALL_INDICES
+
+        self.biased_joint_pos[i] = self.joint_pos[i] + self.joint_pos_bias[i]
+
+        
