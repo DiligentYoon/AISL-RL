@@ -27,23 +27,19 @@ class G1FallEnv(G1RecoveryEnv):
         self.dist_from_icp_to_stance = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
 
         # Collision link
-        self.arm_collision_link_ids, _ = self.contact_sensors.find_bodies([
-            r"waist_.*_link",
-            r"torso_link",
-            r".*_shoulder_.*_link",
-            r".*_elbow_link",
-            r".*_wrist_(roll|pitch)_link",
-        ])
+        self.arm_collision_link_ids, _ = self.contact_sensors.find_bodies([r"waist_.*_link",
+                                                                           r"torso_link",
+                                                                           r".*_shoulder_.*_link",
+                                                                           r".*_elbow_link",
+                                                                           r".*_wrist_(roll|pitch)_link"])
 
-    # Single definition of the RA state layout, shared by _get_states and any caller
-    # that needs the RA state at a different point in the step (e.g. before auto-reset).
     def _build_ra_state(self) -> torch.Tensor:
         return torch.cat([self.root_lin_vel_b,                                  # [E, 3]
                           self.root_ang_vel_b,                                  # [E, 3]
                           self.projected_gravity,                               # [E, 3]
                           self.phase.unsqueeze(-1),                             # [E, 1]
-                        #   self.dist_from_icp_to_stance,                       # [E, 1]
-                        #   self.root_state_buffer.reshape(self.num_envs, -1)   # [E, body_hist_length*8]
+                          self.prev_actions["leg"],                             # [E, 12]
+                          self.prev_actions["arm"]                              # [E, 17]
                         ], dim=-1)
 
     # Overriding to add RA states
@@ -51,23 +47,19 @@ class G1FallEnv(G1RecoveryEnv):
         states = super()._get_states()
 
         # Reach-Avoid information
-        self.extras["ra_states"] = self._build_ra_state()
-
         base_tilt = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
-        # is_fall = ((self.capturable_boundary - self.dist_from_icp_to_stance) <= 0).float().squeeze(-1)
 
+        self.extras["ra_states"] = self._build_ra_state()
         self.extras["l_values"] = torch.tanh(torch.log(base_tilt / self.cfg.target_set_threshold**2))
         self.extras["g_values"] = 2 * self.reset_terminated.float() - 1
-        # self.extras["g_values"] = 2 * is_fall - 1
 
         # SafeFall baseline observation (gravity_xy, root_ang_vel, joint_pos, joint_vel)
         total_joint_ids = self.total_leg_joint_ids + self.total_arm_joint_ids
-        self.extras["safe_fall_obs"] = torch.cat([
-            self.projected_gravity[:, :2],          # [E, 2]
-            self.root_ang_vel_b,                    # [E, 3]
-            self.joint_pos[:, total_joint_ids],     # [E, 29]
-            self.joint_vel[:, total_joint_ids],     # [E, 29]
-        ], dim=-1)                                  # [E, 63]
+        self.extras["safe_fall_obs"] = torch.cat([self.projected_gravity[:, :2],          # [E, 2]
+                                                  self.root_ang_vel_b,                    # [E, 3]
+                                                  self.joint_pos[:, total_joint_ids],     # [E, 29]
+                                                  self.joint_vel[:, total_joint_ids],     # [E, 29]
+                                                ], dim=-1)                                         
 
         return states
 
@@ -138,16 +130,4 @@ class G1FallEnv(G1RecoveryEnv):
         
     def _update_viz_data(self):
         extras = copy.deepcopy(self.extras)
-
-        dist_from_icp_to_ankle = self.dist_from_icp_to_stance[0, 0]
-
-        # extras["viz_data"]["com_pos"]               = self.CoM[0]
-        # extras["viz_data"]["left_foot_pos"]         = self.foot_pos_w[0, 0, :]
-        # extras["viz_data"]["right_foot_pos"]        = self.foot_pos_w[0, 1, :]
-        # extras["viz_data"]["icp_pos"]               = self.ICP_pos_w[0]
-        # extras["viz_data"]["capture_region_center"] = self.support_foot_pos[0, :2]
-        # extras["viz_data"]["capture_region_radius"] = self.capturable_boundary[0, 0]
-        # extras["viz_data"]["time_hist"]             = self.episode_length_buf[0] * self.step_dt
-        extras["viz_data"]["icp_ankle_dist_hist"]   = dist_from_icp_to_ankle
-
         return extras

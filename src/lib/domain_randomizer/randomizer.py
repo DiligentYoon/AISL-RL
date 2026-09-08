@@ -1263,8 +1263,15 @@ def push_by_setting_velocity(
     # sample random velocities
     range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
     ranges = torch.tensor(range_list, device=asset.device)
-    vel_w += math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], vel_w.shape, device=asset.device)
+    delta_b = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], vel_w.shape, device=asset.device) 
+
+    # frame transformation (Body -> World)
+    root_quat = asset.data.root_quat_w[env_ids]
+    delta_w_lin = math_utils.quat_apply(root_quat, delta_b[:, :3])
+    delta_w_ang = math_utils.quat_apply(root_quat, delta_b[:, 3:])
+
     # set the velocities into the physics simulation
+    vel_w += torch.cat([delta_w_lin, delta_w_ang], dim=-1)
     asset.write_root_velocity_to_sim(vel_w, env_ids=env_ids)
 
 

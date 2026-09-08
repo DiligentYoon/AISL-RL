@@ -409,9 +409,6 @@ class Env(gym.Env):
         if self.curriculum_manager is not None:
             self.curriculum_manager.update(self.common_step_counter)
 
-        if self.cfg.commands is not None and hasattr(self, "commands"):
-            self.commands.update()
-
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
         self.reward_buf = self._get_rewards()
@@ -424,6 +421,9 @@ class Env(gym.Env):
             if self.sim.has_rtx_sensors() and self.cfg.num_rerenders_on_reset > 0:
                 for _ in range(self.cfg.num_rerenders_on_reset):
                     self.sim.render()
+
+        if self.cfg.commands is not None and hasattr(self, "commands"):
+            self.commands.update()
 
         # post-step: step interval event
         if self.cfg.events:

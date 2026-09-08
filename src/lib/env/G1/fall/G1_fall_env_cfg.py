@@ -17,7 +17,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA agent config === #
-    ra_state_space = 10
+    ra_state_space = 39
     body_hist_length = 4
 
     # === SafeFall baseline config === #
@@ -42,32 +42,46 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
         self.termination_height = 0.2
 
         self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            warmup=0.2,
-            endup=0.4,
             params=[
                 CurriculumParamCfg(
                     name="push_range_x",
                     attr_path="cfg/events/push_robot/params/velocity_range/x",
                     start_value=self.events.push_robot.params["velocity_range"]["x"],
-                    end_value=self.push_x_end
+                    end_value=self.push_x_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_y",
                     attr_path="cfg/events/push_robot/params/velocity_range/y",
                     start_value=self.events.push_robot.params["velocity_range"]["y"],
-                    end_value=self.push_y_end
+                    end_value=self.push_y_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_roll",
                     attr_path="cfg/events/push_robot/params/velocity_range/roll",
                     start_value=self.events.push_robot.params["velocity_range"]["roll"],
-                    end_value=self.push_roll_end
+                    end_value=self.push_roll_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
                 CurriculumParamCfg(
                     name="push_range_pitch",
                     attr_path="cfg/events/push_robot/params/velocity_range/pitch",
                     start_value=self.events.push_robot.params["velocity_range"]["pitch"],
-                    end_value=self.push_pitch_end
+                    end_value=self.push_pitch_end,
+                    schedule_kwargs={
+                        "warmup": 0.2,
+                        "endup": 0.4,
+                    }
                 ),
             ]
         )
@@ -99,14 +113,8 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         )
 
         # ==== Viz data ==== #
-        self.viz_data = {
-            "risk_value": 0,               # scalar
-            "icp_ankle_dist_hist": 0,      # scalar
-        }
-
-        self.scene.num_envs = 1
-
         self.plotter: PNGSavePlotter = PNGSavePlotter
+        self.viz_data = {"risk_value": 0}
 
 
 # Data Collection Environment for Initial dataset construction
@@ -131,8 +139,6 @@ class G1FallCollectEnvCfg(G1FallEnvCfg):
 
 
 # Data Collection Environment for disturbance region analysis.
-# One env carries one disturbance condition, so the push must be logged and must
-# fire exactly once per episode.
 @configclass
 class G1FallRegionCollectEnvCfg(G1FallCollectEnvCfg):
     def __post_init__(self):

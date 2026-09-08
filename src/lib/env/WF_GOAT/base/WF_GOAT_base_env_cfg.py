@@ -49,7 +49,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["^(?!wheel_).*$"]),
-            "static_friction_range": (0.4, 1.2),
+            "static_friction_range": (0.7, 1.1),
             "dynamic_friction_range": (0.7, 0.9),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 1000,
@@ -61,8 +61,8 @@ class EventCfg:
       mode='startup',
       params={
           "asset_cfg": SceneEntityCfg("robot", body_names="wheel_.*"),
-          "static_friction_range": (0.4, 1.2),
-          "dynamic_friction_range": (0.7, 0.9),
+          "static_friction_range": (0.3, 0.8),
+          "dynamic_friction_range": (0.3, 0.7),
           "restitution_range": (0.0, 0.0),
           "num_buckets": 1000,
           "make_consistent": True,
@@ -74,7 +74,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "com_distribution_params": ((-0.03, 0.03), (-0.03, 0.03), (-0.03, 0.03)),
+            "com_distribution_params": ((-0.05, 0.02), (-0.02, 0.02), (-0.02, 0.02)),
             "operation": "add",
             "distribution": "uniform",
         },
@@ -197,23 +197,23 @@ class EventCfg:
         },
     )
     reset_robot_joints = EventTerm(
-        func=randomizer.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "position_range": (1.0, 1.0),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+            func=randomizer.reset_joints_by_offset,
+            mode="reset",
+            params={
+                "position_range": (-0.1, 0.1),
+                "velocity_range": (-0.05, 0.05)
+            }
+        )
 
     # interval
     push_robot = EventTerm(
-        func=randomizer.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(3.0, 4.0),
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
-    )
+            func=randomizer.push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(4.0, 6.0),
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
+                "velocity_range": {"x": (-1.0, 1.0), "pitch": (-0.5, 0.5)}},
+        )
 
 
 

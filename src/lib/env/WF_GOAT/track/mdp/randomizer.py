@@ -10,14 +10,12 @@ from isaaclab.managers import SceneEntityCfg
 from lib.env.env import Env
 
 
-def reset_joints_by_scale_and_bias(
-    env: Env,
-    env_ids: torch.Tensor,
-    position_range: tuple[float, float],
-    velocity_range: tuple[float, float],
-    bias_range: tuple[float, float],
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-):
+def reset_joints_by_scale_and_bias(env: Env,
+                                   env_ids: torch.Tensor,
+                                   position_range: tuple[float, float],
+                                   velocity_range: tuple[float, float],
+                                   bias_range: tuple[float, float],
+                                   asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     """Reset the robot joints with scales and bias around the default position and velocity by the given ranges.
 
     This function samples random values from the given ranges and biases the default joint positions and velocities
@@ -50,3 +48,20 @@ def reset_joints_by_scale_and_bias(
 
     # set into the physics simulation
     asset.write_joint_state_to_sim(joint_pos, joint_vel, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
+
+def reset_joint_offset_bias(env: Env,
+                            env_ids: torch.Tensor,
+                            bias_range: tuple[float, float],
+                            asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    # cast env_ids to allow broadcasting
+    if asset_cfg.joint_ids != slice(None):
+        iter_env_ids = env_ids[:, None]
+    else:
+        iter_env_ids = env_ids
+    num_envs = iter_env_ids.shape[0]
+
+    # Assign in env
+    joint_pos_bias = math_utils.sample_uniform(*bias_range, (num_envs, asset.num_joints), env.device)
+    env.joint_pos_bias[iter_env_ids] = joint_pos_bias

@@ -273,7 +273,7 @@ class UniformVelocityCommand():
         default_scale = scale
         # arrow-scale
         arrow_scale = torch.tensor(default_scale, device=self.device).repeat(xy_velocity.shape[0], 1)
-        arrow_scale[:, 0] *= torch.linalg.norm(xy_velocity, dim=1) * 3.0
+        arrow_scale[:, 0] *= torch.clip(torch.linalg.norm(xy_velocity, dim=1), min=1e-3) * 3.0
         # arrow-direction
         heading_angle = torch.atan2(xy_velocity[:, 1], xy_velocity[:, 0])
         zeros = torch.zeros_like(heading_angle)

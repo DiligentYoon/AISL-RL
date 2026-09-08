@@ -244,17 +244,6 @@ def main():
                                   buffer=buffers,
                                   device=env.device,
                                   cfg=cfg_nominal["agent"])
-            
-        elif model_manager.model_type == "communet":
-            from lib.agent.communet_mappo import CommunetMAPPO
-            nominal_agent = CommunetMAPPO(observation_space=env.observation_space,
-                                          state_space=env.state_space,
-                                          action_space=env.action_space,
-                                          possible_agents=nominal_agents,
-                                          model=nominal_models,
-                                          buffer=buffers,
-                                          device=env.device,
-                                          cfg=cfg_nominal["agent"])
         
         elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
@@ -360,17 +349,6 @@ def main():
                                       buffer=buffers,
                                       device=env.device,
                                       cfg=cfg_adversarial["agent"])
-            
-        elif model_manager.model_type == "communet":
-            from lib.agent.communet_mappo import CommunetMAPPO
-            adversarial_agent = CommunetMAPPO(observation_space=env.observation_space,
-                                              state_space=env.state_space,
-                                              action_space=env.action_space,
-                                              possible_agents=adversarial_agents,
-                                              model=adversarial_models,
-                                              buffer=buffers,
-                                              device=env.device,
-                                              cfg=cfg_adversarial["agent"])
         
         elif model_manager.model_type == "shared" or model_manager.model_type == "superconnected":
             from lib.agent.cooperative_mappo import CooperativeMAPPO
