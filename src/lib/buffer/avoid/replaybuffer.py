@@ -15,7 +15,7 @@ class HindSightReplayBuffer(Buffer):
         buffer_size: int = 1,
         num_envs: int = 1,
         device: Optional[Union[str, torch.device]] = None,
-        hindsight_window: int = 10,
+        hindsight_window: int = 20,
         hindsight_min_value: float = -0.8,
         hindsight_max_value: float = 1.0,
     ) -> None:

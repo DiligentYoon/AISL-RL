@@ -18,7 +18,7 @@ parser.add_argument("--disable_fabric", type=bool, default=False, help="Disable 
 parser.add_argument("--num_envs", type=int, default=2048, help="Number of environments (overrides cfg default if given).")
 parser.add_argument("--task", type=str, default="G1-fall-collect", help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, required=True, help="Path to nominal policy checkpoint.")
-parser.add_argument("--ra_checkpoint", type=str, required=True, help="Path to trained Reach-Avoid value checkpoint.")
+parser.add_argument("--predictor_checkpoint", type=str, required=True, help="Path to trained Reach-Avoid value checkpoint.")
 
 parser.add_argument("--algorithm",
                     type=str,
@@ -29,7 +29,7 @@ parser.add_argument("--algorithm",
 parser.add_argument("--model",
                     type=str,
                     default="Shared",
-                    choices=["MLP", "Shared", "Communet"],
+                    choices=["MLP", "Shared"],
                     help="The NN model of the nominal policy.")
 
 # append AppLauncher cli args
@@ -151,12 +151,12 @@ def main():
         print(e)
         return
     
-    C = ra_cfg["collection"]
+    collection_cfg = ra_cfg["collection"]
 
-    # save_dir = next to ra_checkpoint
+    # save_dir = next to predictor_checkpoint
     save_dir = os.path.join(
-        os.path.dirname(os.path.abspath(args_cli.ra_checkpoint)),
-        C.get("save_subdir", "collected"),)
+        os.path.dirname(os.path.abspath(args_cli.predictor_checkpoint)),
+        collection_cfg.get("save_subdir", "collected"),)
 
     # ============================ Env & Wrapper Spawn ================================
     seed = args_cli.seed if args_cli.seed is not None else ra_cfg.get("seed", 42)
@@ -276,8 +276,8 @@ def main():
     # Load checkpoints (both required)
     agent.load(os.path.abspath(args_cli.checkpoint))
     print(f"[INFO] Loaded nominal policy from {args_cli.checkpoint}")
-    ra_agent.load(os.path.abspath(args_cli.ra_checkpoint))
-    print(f"[INFO] Loaded RA critic from {args_cli.ra_checkpoint}")
+    ra_agent.load(os.path.abspath(args_cli.predictor_checkpoint))
+    print(f"[INFO] Loaded RA critic from {args_cli.predictor_checkpoint}")
 
     agent.set_running_mode("eval")
     ra_agent.set_running_mode("eval")
@@ -285,17 +285,17 @@ def main():
     # ============= Risk-classified buffer ===============
     joint_dim = env._unwrapped._robot.data.joint_pos.shape[-1]
     risk_buffer = RiskClassifiedBuffer(
-        capacity_per_bucket=int(C["capacity_per_bucket"]),
-        thresholds=(float(C["thresholds"]["low_high"]),
-                    float(C["thresholds"]["mid_high"])),
+        capacity_per_bucket=int(collection_cfg["capacity_per_bucket"]),
+        thresholds=(float(collection_cfg["thresholds"]["low_high"]),
+                    float(collection_cfg["thresholds"]["mid_high"])),
         joint_dim=joint_dim,
         device=env.device,
     )
 
     # ============= Collection loop ===============
-    warmup_skip = int(C.get("warmup_skip_steps", 4))
-    subsample_stride = max(1, int(C.get("subsample_stride", 1)))
-    max_timestep = int(C["max_timestep"])
+    warmup_skip = int(collection_cfg.get("warmup_skip_steps", 4))
+    subsample_stride = max(1, int(collection_cfg.get("subsample_stride", 1)))
+    max_timestep = int(collection_cfg["max_timestep"])
     log_interval = 500
 
     skip_remaining = torch.full((env.num_envs,), warmup_skip,
