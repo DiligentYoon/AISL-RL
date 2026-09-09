@@ -23,7 +23,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 4.0         
+    p_joint_deviation_lr_weight = 6.0         
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
@@ -47,13 +47,13 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.events.reset_joint_pos_bias = EventTerm(
-            func=reset_joint_offset_bias,
-            mode="reset",
-            params={
-                "bias_range": (-0.05, 0.05),
-            },
-        )
+        # self.events.reset_joint_pos_bias = EventTerm(
+        #     func=reset_joint_offset_bias,
+        #     mode="reset",
+        #     params={
+        #         "bias_range": (-0.01, 0.01),
+        #     },
+        # )
 
 
 @configclass

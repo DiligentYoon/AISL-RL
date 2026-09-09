@@ -17,8 +17,7 @@ from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamC
 class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     # === RA agent config === #
-    ra_state_space = 39
-    body_hist_length = 4
+    ra_state_space = 67
 
     # === SafeFall baseline config === #
     safe_fall_obs_dim = 63
@@ -30,8 +29,8 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     # === Curriculum === #
     push_x_end = (-2.0, 2.0)
     push_y_end = (-2.0, 2.0)
-    push_roll_end = (-4.0, 4.0)
-    push_pitch_end = (-4.0, 4.0)
+    push_roll_end = (-3.0, 3.0)
+    push_pitch_end = (-3.0, 3.0)
 
     def __post_init__(self):
         super().__post_init__()

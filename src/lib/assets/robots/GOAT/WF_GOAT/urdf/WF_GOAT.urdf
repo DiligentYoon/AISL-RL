@@ -191,7 +191,7 @@
     <!-- BFW -->
     <link name="wheel_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="0.00E-03 30.66E-03 -0.00E-03" />
+            <origin rpy="0 0 0" xyz="0.00E-03 30.66E-03 0.00E-03" />
             <mass value="0.985" />
             <inertia ixx="3366E-06" ixy="0.00E-06" ixz="0.00E-06" 
                     iyy="6306E-06" iyz="0.00E-06" izz="3366E-06" />

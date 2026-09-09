@@ -3,7 +3,7 @@ import gymnasium as gym
 
 from typing import Union, Any
 
-from lib.model.MLP import Actor, Critic, SharedActor, CommunetActor
+from lib.model.MLP import Actor, Critic, SharedActor
 from lib.utils.graph_utils import Mapping
 from lib.model.Baselines.BodyTransformer.body_transformer import BodyLevelActor, BodyLevelCritic
 from lib.model.Baselines.BodyTransformer.linear_components import ObsTokenizer, ValueDetokenizer, ActionDetokenizer

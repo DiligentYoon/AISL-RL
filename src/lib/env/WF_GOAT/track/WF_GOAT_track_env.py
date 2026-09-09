@@ -18,7 +18,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
     def _apply_action(self):
         # Current state (biased position)
-        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids] - self.biased_joint_pos[:, self.joint_ids]
+        cmd_joint_pos = self._robot.data.default_joint_pos[:, self.joint_ids] + self.processed_actions[:, self.joint_ids] - self.joint_pos_bias[:, self.joint_ids]
         cmd_wheel_vel = self.processed_actions[:, self.wheel_ids]
         
         # Apply command
@@ -73,7 +73,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Height tracking Reward
         height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
-        r_height = torch.exp(-height_error / 0.05)
+        r_height = torch.exp(-height_error / 0.1)
 
         # Lin vel Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
@@ -96,6 +96,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         p_all_torque_limit   = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque         = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity     = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1)    # wheel is not included
+        p_wheel_velocity     = -torch.sum(torch.square(self.joint_vel[:, self.wheel_ids]), dim=1)
         p_joint_accel        = -torch.sum(torch.square(self.joint_acc), dim=1)                       # [NOTE] wheel is included
         p_joint_deviation_lr = -torch.sum(torch.abs(self.joint_deviation_lr), dim=-1)
         p_action_rate        = -torch.sum(torch.abs((self.actions - self.previous_actions)), dim=1)
@@ -114,6 +115,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
+            self.cfg.p_wheel_velocity_weight * p_wheel_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
             self.cfg.p_joint_deviation_lr_weight * p_joint_deviation_lr     +
             self.cfg.p_action_rate_weight * p_action_rate                   +
@@ -128,7 +130,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             "Task Reward / Height"              : r_height,
             "Task Reward / Lin_Vel_Tracking"    : r_lin_vel_tracking,
             "Task Reward / Ang_Vel_Tracking"    : r_ang_vel_tracking,
-            "Task Rweard / COM_Align"           : r_com_align, 
+            "Task Reward / COM_Align"           : r_com_align, 
             # ==========================================
             # Task Penalty (-)
             # ==========================================
@@ -138,6 +140,7 @@ class WFGOATTrackEnv(WFGOATStandEnv):
             "Task Penalty / Torque"             : p_all_torque,
             "Task Penalty / Vel_Limit"          : p_velocity_limit, 
             "Task Penalty / Joint_Vel"          : p_joint_velocity,
+            "Task Penalty / Wheel_Vel"          : p_wheel_velocity,
             "Task Penalty / Joint_Acc"          : p_joint_accel,
             "Task Penalty / Joint_Deviation_LR" : p_joint_deviation_lr,
             "Task Penalty / Action_Rate"        : p_action_rate,

@@ -39,12 +39,12 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
     terminated_tilt = 0.7
     terminated_joint_vel_limit = 5.0
-    terminated_lin_vel_limit_z = 0.2
+    terminated_lin_vel_limit_z = 0.25
     height_reset_condition = 0.2 # meter (m)
 
     r_height_weight = 20.0
     r_upright_weight = 9.0
-    r_com_align_weight = 5.0
+    r_com_align_weight = 2.0
 
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 4.0
@@ -55,17 +55,18 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_all_torque_weight = 0.01
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.005
+    p_wheel_velocity_weight = 5.0e-5
     p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
 
     # Jig Delete Logic
-    jig_release_height = 0.4
+    jig_release_height = 0.395
     jig_release_hold_step = 30
     jig_release_depth = -5.0  
 
     # Per-axis observation noise groups
-    obs_noise_groups_end = {
+    obs_noise_groups = {
         "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
         "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
         "command":           {"dim": 1,  "min": 0.0,   "max": 0.0},
@@ -73,7 +74,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
         "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
     }
-    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
+    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups)    # list
 
     # Noise Model
     observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
@@ -84,21 +85,21 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     }
     
     ## ======================== Curriculum ======================= ##
-    curriculum = CurriculumManagerCfg(
-        params=[
-            CurriculumParamCfg(
-                name="terminated_lin_vel_limit_z",
-                attr_path="cfg/terminated_lin_vel_limit_z",
-                start_value=0.3,
-                end_value=0.2,
-                schedule="linear",
-                schedule_kwargs={
-                    "warmup": 0.0,
-                    "endup": 0.3
-                }
-            )
-        ]
-    )
+    # curriculum = CurriculumManagerCfg(
+    #     params=[
+    #         CurriculumParamCfg(
+    #             name="terminated_lin_vel_limit_z",
+    #             attr_path="cfg/terminated_lin_vel_limit_z",
+    #             start_value=0.3,
+    #             end_value=0.2,
+    #             schedule="linear",
+    #             schedule_kwargs={
+    #                 "warmup": 0.0,
+    #                 "endup": 0.3
+    #             }
+    #         )
+    #     ]
+    # )
 
     # Command
     commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
@@ -110,7 +111,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.42, 0.56)
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.39, 0.56)
         ),
     )
 
@@ -144,12 +145,12 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
                 "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.12, 0.17),
-                "viscous_distribution_params": (0.05, 0.12),
+                "coulomb_distribution_params": (0.03, 0.07),
+                "viscous_distribution_params": (0.05, 0.1),
                 "operation": "abs",
                 "distribution": "uniform",
             }
-        )       
+        )      
 
         self.events.robot_knee_joint_friction = EventTerm(
             func=randomize_joint_parameters,
@@ -169,9 +170,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-                "friction_distribution_params": (0.01, 0.05),
-                "coulomb_distribution_params": (0.01, 0.03),
-                "viscous_distribution_params": (0.001, 0.0035),
+                "friction_distribution_params": (0.05, 0.1),
+                "coulomb_distribution_params": (0.01, 0.05),
+                "viscous_distribution_params": (0.001, 0.005),
                 "operation": "abs",
                 "distribution": "uniform",
             }
@@ -222,8 +223,8 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        # self.observation_noise_type = None
-        # self.observation_noise_params = None
+        self.observation_noise_type = None
+        self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
@@ -254,7 +255,9 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
             "base_lin_x_velocity (m/s)": 0.0,
             "base_lin_y_velocity (m/s)": 0.0,
             "base_lin_z_velocity (m/s)": 0.0,
-            "base_ang_velocity (deg/s)": 0.0,
+            "base_ang_roll_velocity (deg/s)": 0.0,
+            "base_ang_pitch_velocity (deg/s)": 0.0,
+            "base_ang_yaw_velocity (deg/s)": 0.0,
             "effective_contact_force (N)": 0.0
             }
 

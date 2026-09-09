@@ -39,7 +39,7 @@ parser.add_argument("--algorithm",
 parser.add_argument("--model",
                     type=str,
                     default="MLP",
-                    choices=["MLP", "Shared", "Communet"],
+                    choices=["MLP", "Shared"],
                     help="The NN model used for training the agent.")
 
 # append AppLauncher cli args
