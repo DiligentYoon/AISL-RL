@@ -248,18 +248,20 @@ def main():
 
     # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
     from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
+    from lib.buffer.avoid.replaybuffer import ReplayBuffer
     from lib.model.MLP import RA_Critic
     from lib.agent.reach_avoid import ReachAvoid
+    from lib.agent.avoid import Avoid
 
     if not hasattr(env._unwrapped.cfg, "ra_state_space"):
         raise RuntimeError("Explicit state space is not defined.")
 
-    pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
-                                        env.num_envs, device=env.device)
+    pred_buffer = ReplayBuffer(pred_cfg["buffer"]["buffer_size"], env.num_envs, device=env.device)
     pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
+
     pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-    pred_agent = ReachAvoid(pred_model, pred_buffer,
-                            device=env.device, cfg=pred_cfg["agent"])
+
+    pred_agent = Avoid(pred_model, pred_buffer, device=env.device, cfg=pred_cfg["agent"])
 
     # Checkpoint (Policy)
     if args_cli.checkpoint is not None:
@@ -284,7 +286,7 @@ def main():
     # Tensorboard Wrtier
     writer = SummaryWriter(log_dir=log_dir)
     tracking_data = collections.defaultdict(list)
-    CLI_step_reward_means = collections.deque(maxlen=env.num_envs)
+    CLI_accuracy = collections.deque(maxlen=env.num_envs)
     CLI_value_loss = collections.deque(maxlen=env.num_envs)
 
     # Reset environment
@@ -310,6 +312,17 @@ def main():
                                    terminated=terminated,
                                    truncated=truncated)
 
+        # Accuracy metrics
+        real_risk = infos["g_values"] > 0 # [E]
+        num_real_risk = torch.sum(real_risk.float())
+        pred_risk = pred_agent.critic(infos["ra_states"])[0] # [E]
+        pred_risk = pred_risk[real_risk]
+        num_pred_risk = torch.sum(pred_risk.float())
+        
+        accuracy = (num_pred_risk / num_real_risk).item()
+        CLI_accuracy.append(accuracy)
+        tracking_data[f"Accuracy / {predictor}"].append(accuracy)
+
         # Parameter update
         if timestep >= pred_cfg["agent"]["learning_starts"]:
             value_loss = pred_agent.update()
@@ -334,6 +347,9 @@ def main():
             per_update_value_loss = float(np.mean(CLI_value_loss)) if len(CLI_value_loss) else float("nan")
             per_value_loss =  "-" if np.isnan(per_update_value_loss) else f"{per_update_value_loss:6.5f}"
 
+            per_accuracy = float(np.mean(CLI_accuracy)) if len(CLI_accuracy) else float ("nan")
+            per_accuracy = "-" if np.isnan(per_accuracy) else f"{per_accuracy:6.5f}"
+
             elapsed_time = time.time() - start_time
             elapsed_time_per_step = elapsed_time / timestep if timestep > 0 else 0
             complete_time = elapsed_time_per_step * (pred_train_timesteps - timestep)
@@ -350,6 +366,7 @@ def main():
             line_header = f"Step Progress {timestep} / {pred_train_timesteps}"
             line_time_header = f"Time Progress  {e_h:02d}:{e_m:02d}:{e_s:02d}/{c_h:02d}:{c_m:02d}:{c_s:02d}"
             line_value_loss = f"{predictor} Loss        : {per_value_loss}"
+            line_accuracy = f"{predictor} Accuracy      : {per_accuracy}"
 
             print(f" ________________________________________________________________")
             print(f"|                                                                |")
@@ -358,6 +375,7 @@ def main():
             print(f"|________________________________________________________________|")
             print(f"|                                                                |")
             print(f"| {line_value_loss:<{content_width-1}}|")
+            print(f"| {line_accuracy:<{content_width-1}}|")
             print(f"|________________________________________________________________|")
 
         # Checkpoint save

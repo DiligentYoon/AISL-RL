@@ -414,20 +414,19 @@ class G1RecoveryEnv(G1BaseEnv):
         self._compute_intermediate_values()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        critical_contact_forces = self.contact_sensors.data.net_forces_w[:, self.denied_collision_link_ids]
+        critical_contact_forces = self.contact_sensors.data.net_forces_w_history[:, :, self.denied_collision_link_ids]
 
         projected_gravity_x = self.projected_gravity[:, 0]
         projected_gravity_y = self.projected_gravity[:, 1]
         z_c = self.CoM[:, 2]
 
         died_fall   = z_c <= self.cfg.termination_height
-        died_fall_2 = torch.logical_or(torch.abs(projected_gravity_x) >= self.cfg.termination_gravity,
-                                       torch.abs(projected_gravity_y) >= self.cfg.termination_gravity)
+        died_collision = torch.any(torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=-1), dim=-1)
         died_ang = torch.norm(self.root_ang_vel_b[:, :3], dim=-1) >= self.cfg.termination_ang_vel
-        died_collision = torch.any(torch.norm(critical_contact_forces, dim=-1) > 1.0, dim=-1)
         
-        died = died_fall | died_fall_2 | died_ang | died_collision
+        died = (died_fall & died_collision) | died_ang
         return died, time_out
+
 
 
     def _reset_idx(self, env_ids: torch.Tensor | None):

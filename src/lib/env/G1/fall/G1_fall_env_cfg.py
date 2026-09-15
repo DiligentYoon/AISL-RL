@@ -25,6 +25,7 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
     # === RA Setting === #
     l_max = 1.0
     target_set_threshold = 0.1
+    phi_max = 3.14/4
 
     # === Curriculum === #
     push_x_end = (-2.0, 2.0)
@@ -34,58 +35,20 @@ class G1FallEnvCfg(G1RecoveryEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        self.episode_length_s = 50.0
 
         # self collision off for deleting fishy and chaotic collisions
         self.robot.spawn.articulation_props.enabled_self_collisions = False
 
         self.termination_height = 0.2
 
-        self.curriculum: CurriculumManagerCfg = CurriculumManagerCfg(
-            params=[
-                CurriculumParamCfg(
-                    name="push_range_x",
-                    attr_path="cfg/events/push_robot/params/velocity_range/x",
-                    start_value=self.events.push_robot.params["velocity_range"]["x"],
-                    end_value=self.push_x_end,
-                    schedule_kwargs={
-                        "warmup": 0.2,
-                        "endup": 0.4,
-                    }
-                ),
-                CurriculumParamCfg(
-                    name="push_range_y",
-                    attr_path="cfg/events/push_robot/params/velocity_range/y",
-                    start_value=self.events.push_robot.params["velocity_range"]["y"],
-                    end_value=self.push_y_end,
-                    schedule_kwargs={
-                        "warmup": 0.2,
-                        "endup": 0.4,
-                    }
-                ),
-                CurriculumParamCfg(
-                    name="push_range_roll",
-                    attr_path="cfg/events/push_robot/params/velocity_range/roll",
-                    start_value=self.events.push_robot.params["velocity_range"]["roll"],
-                    end_value=self.push_roll_end,
-                    schedule_kwargs={
-                        "warmup": 0.2,
-                        "endup": 0.4,
-                    }
-                ),
-                CurriculumParamCfg(
-                    name="push_range_pitch",
-                    attr_path="cfg/events/push_robot/params/velocity_range/pitch",
-                    start_value=self.events.push_robot.params["velocity_range"]["pitch"],
-                    end_value=self.push_pitch_end,
-                    schedule_kwargs={
-                        "warmup": 0.2,
-                        "endup": 0.4,
-                    }
-                ),
-            ]
-        )
-
-        self.events.push_robot.interval_range_s = (2.0, 4.0)
+        self.events.push_robot.params["velocity_range"] = {
+            "x": self.push_x_end,
+            "y": self.push_y_end,
+            "roll": self.push_roll_end,
+            "pitch": self.push_pitch_end,
+        }
+        self.events.push_robot.interval_range_s = (1.0, 2.0)
 
 # Environment for eveluating Reach-avoid network
 @configclass
@@ -96,7 +59,7 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
         # curriculum
         self.curriculum = None
         self.events.push_robot.params["velocity_range"] = {
-            "x": self.push_x_end,
+            "x": (-2.0, -2.0),
             "y": self.push_y_end,
             "roll": self.push_roll_end,
             "pitch": self.push_pitch_end,
@@ -121,9 +84,6 @@ class G1FallPlayEnvCfg(G1FallEnvCfg):
 class G1FallCollectEnvCfg(G1FallEnvCfg):
     def __post_init__(self):
         super().__post_init__()
-        # Episode
-        self.episode_length_s = 5.0
-
         # curriculum
         self.curriculum = None
 

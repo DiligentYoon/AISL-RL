@@ -55,9 +55,9 @@ class G1RecoveryEnvCfg(G1BaseEnvCfg):
     w_action_rate:       float = 1.0e-3
 
     w_termination: float = 200
-    termination_height: float = 0.3
+    termination_height: float = 0.35
     termination_gravity: float = 0.8
-    termination_ang_vel: float = 15.0
+    termination_ang_vel: float = 20.0
 
     # ===== Gait guidance ===== #
     time_period = 0.35

@@ -238,17 +238,19 @@ def main():
     # ============= Fall Predictor Buffer/Model/Agent Spawn ===============
     if predictor == "ra":
         from lib.buffer.reach_avoid.replaybuffer import HindSightReplayBuffer
+        from lib.buffer.avoid.replaybuffer import ReplayBuffer
         from lib.model.MLP import RA_Critic
         from lib.agent.reach_avoid import ReachAvoid
+        from lib.agent.avoid import Avoid
 
         if not hasattr(env._unwrapped.cfg, "ra_state_space"):
             raise RuntimeError("Explicit state space is not defined.")
 
-        pred_buffer = HindSightReplayBuffer(pred_cfg["buffer"]["buffer_size"],
+        pred_buffer = ReplayBuffer(pred_cfg["buffer"]["buffer_size"],
                                             env.num_envs, device=env.device)
         pred_buffer.init_buffer(env._unwrapped.cfg.ra_state_space)
         pred_model = {"critic": RA_Critic(env._unwrapped.cfg.ra_state_space, env.device)}
-        pred_agent = ReachAvoid(pred_model, pred_buffer,
+        pred_agent = Avoid(pred_model, pred_buffer,
                                 device=env.device, cfg=pred_cfg["agent"])
 
     elif predictor == "safefall":

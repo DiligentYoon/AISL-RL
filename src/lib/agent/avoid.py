@@ -10,12 +10,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from lib.agent.agent import Agent
-from lib.buffer.avoid.replaybuffer import HindSightReplayBuffer
+from lib.buffer.avoid.replaybuffer import ReplayBuffer
 
 class Avoid(Agent):
     def __init__(self,
                  model: Dict[str, nn.Module],
-                 buffer: Optional[HindSightReplayBuffer],
+                 buffer: Optional[ReplayBuffer],
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
         """Safety value function (Avoid Problem)
@@ -47,6 +47,16 @@ class Avoid(Agent):
 
         self.grad_norm_clip = self.cfg["grad_norm_clip"]
         self.learning_stars = self.cfg["learning_starts"]
+
+        # Target critic
+        self.target_critic = copy.deepcopy(self.critic).to(self.device)
+        self.target_critic.eval()
+        self.checkpoint_modules["target_critic"] = self.target_critic
+
+        for param in self.target_critic.parameters():
+            param.requires_grad_(False)
+
+        self.target_tau = self.cfg.get("tau", 0.005)
 
         # Set up Adam optimizer
         self.optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.learning_rate)
@@ -92,24 +102,17 @@ class Avoid(Agent):
 
 
     def _compute_target(self,
-                           next_states: torch.Tensor,
-                           g_values: torch.Tensor,
-                           truncated: torch.Tensor,
-                           terminated: torch.Tensor) -> torch.Tensor:
+                        next_states: torch.Tensor,
+                        g_values: torch.Tensor,
+                        truncated: torch.Tensor,
+                        terminated: torch.Tensor) -> torch.Tensor:
         """
         Compute discounted Reach-Avoid Bellman target:
 
             y = gamma * max(g(s), V(next)) + (1 - gamma) * g(s)
         """
         with torch.no_grad():
-            next_values, _, _ = self.critic(next_states, update_rms=False)
-
-            done = torch.logical_or(truncated.bool(), terminated.bool())
-
-            # V(next)=+inf for episode end
-            inf_value = torch.full_like(next_values, float("inf"))
-            next_values = torch.where(done, inf_value, next_values)
-
+            next_values, _, _ = self.target_critic(next_states, update_rms=False)
             targets = (1.0 - self.discount_factor) * g_values + self.discount_factor * torch.max(g_values, next_values)
 
         return targets
@@ -117,7 +120,7 @@ class Avoid(Agent):
     
     def update(self) -> float:
         """
-        Main update step for RA value approximation.
+        Main update step for safety value approximation.
         """
         self.set_running_mode("train")
 
@@ -130,11 +133,13 @@ class Avoid(Agent):
                 batch_size=self.batch_size
             )
 
-            (sampled_states,
-            sampled_next_states,
-            sampled_g_values,
-            sampled_truncated,
-            sampled_terminated) = batch
+            (
+                sampled_states,
+                sampled_next_states,
+                sampled_g_values,
+                sampled_truncated,
+                sampled_terminated
+            ) = batch
 
             # Predict V(s)
             predicted_values, _, _ = self.critic(
@@ -160,10 +165,18 @@ class Avoid(Agent):
 
             self.optimizer.step()
 
+            # Update Target network
+            with torch.no_grad():
+                for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
+                    target_param.data.lerp_(param.data, self.target_tau)
+
             cumulative_value_loss += value_loss.item()
             num_updates += 1
 
         self.set_running_mode("eval")
+
+        # Updaet RMS of Target network (not Polyak)
+        self.target_critic.critic_standardizer.load_state_dict(self.critic.critic_standardizer.state_dict())
 
         mean_value_loss = cumulative_value_loss / max(num_updates, 1)
         return mean_value_loss

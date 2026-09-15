@@ -12,6 +12,8 @@ from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
+    sim_dt = 0.002
+    decimation_apply = 5
     observation_space = 26                      # Observation space
     state_space = 36                            # State space including privilege information
 
@@ -46,14 +48,8 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-
-        # self.events.reset_joint_pos_bias = EventTerm(
-        #     func=reset_joint_offset_bias,
-        #     mode="reset",
-        #     params={
-        #         "bias_range": (-0.01, 0.01),
-        #     },
-        # )
+        self.sim.dt = self.sim_dt
+        self.sim.render_interval = self.decimation_apply
 
 
 @configclass

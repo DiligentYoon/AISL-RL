@@ -45,6 +45,8 @@ class EnvCfg:
     This means that the control action is updated every 10 simulation steps.
     """
 
+    decimation_apply: int = 1
+
     is_finite_horizon: bool = False
     """Whether the learning task is treated as a finite or infinite horizon problem for the agent.
     Defaults to False, which means the task is treated as an infinite horizon problem.

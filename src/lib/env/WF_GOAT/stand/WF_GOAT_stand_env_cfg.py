@@ -170,7 +170,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-                "friction_distribution_params": (0.05, 0.1),
+                "friction_distribution_params": (0.01, 0.05),
                 "coulomb_distribution_params": (0.01, 0.05),
                 "viscous_distribution_params": (0.001, 0.005),
                 "operation": "abs",
@@ -223,8 +223,8 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        self.observation_noise_type = None
-        self.observation_noise_params = None
+        # self.observation_noise_type = None
+        # self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
