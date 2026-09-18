@@ -12,8 +12,8 @@ from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    sim_dt = 0.002
-    decimation_apply = 5
+    sim_dt = 0.001
+    decimation_apply = 10
     observation_space = 26                      # Observation space
     state_space = 36                            # State space including privilege information
 
@@ -50,6 +50,11 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         super().__post_init__()
         self.sim.dt = self.sim_dt
         self.sim.render_interval = self.decimation_apply
+
+        self.is_torque_delayed = True # TorqueDelayedPDActuator
+        self.GOAT_cfg.actuators["thigh"].decimation = self.decimation_apply
+        self.GOAT_cfg.actuators["knee"].decimation  = self.decimation_apply
+        self.GOAT_cfg.actuators["wheel"].decimation = self.decimation_apply
 
 
 @configclass

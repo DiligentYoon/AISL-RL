@@ -23,7 +23,6 @@ class GOATStandTerrainEnvCfg(GOATBaseEnvCfg):
     action_space = 8                            # [L + R, joint pos + wheel velocity]
     observation_space = 29                      # Observation space
     state_space = 41                            # State space including privilege information
-    max_episode_length = episode_length_s/sim_dt 
 
     ## ==================== Controller gain ==================== ##
     joint_kp = torch.tensor([[3.3, 2.7, 14.0]])

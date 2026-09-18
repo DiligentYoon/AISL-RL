@@ -244,3 +244,9 @@ class EnvCfg:
 
     erfi_enabled: bool = False
     """Whether apply Extened Random Force Injection (ERFI) Domain Randomization or not"""
+
+    is_torque_delayed: bool = False
+    """Whether apply torque delay or not for narrowing sim2real gap."""
+
+    torque_delay_step: int = 0
+    """The number of delay steps."""

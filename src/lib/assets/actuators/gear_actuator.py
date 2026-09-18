@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import MISSING
+from typing import TYPE_CHECKING
 from isaaclab.actuators import DelayedPDActuator
 from isaaclab.utils.types import ArticulationActions
+
+if TYPE_CHECKING:
+    from .gear_actuator_cfg import (
+        GearDelayedPDActuatorCfg
+    )
 
 
 class GearDelayedPDActuator(DelayedPDActuator):
     """Delayed PD actuator with an additional gear ratio and gamma scaling on applied torques."""
 
-    cfg: "GearDelayedPDActuatorCfg"
+    cfg: GearDelayedPDActuatorCfg
 
     def compute(
         self, control_action: ArticulationActions, joint_pos, joint_vel

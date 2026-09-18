@@ -271,9 +271,9 @@ class Env(gym.Env):
         return self.cfg.episode_length_s
 
     @property
-    def max_episode_length(self):
-        """The maximum episode length in steps adjusted from s."""
-        return math.ceil(self.max_episode_length_s / (self.cfg.sim.dt * self.cfg.decimation))
+    def max_episode_length(self) -> int:
+        """The maximum episode length, in policy steps, derived from :attr:`max_episode_length_s`."""
+        return math.ceil(self.max_episode_length_s / self.step_dt)
 
     """
     Operations.
@@ -385,21 +385,37 @@ class Env(gym.Env):
 
         # perform physics stepping
         for _ in range(self.cfg.decimation):
-            # set actions into buffers
+            # set actions into buffers (Target position, velocity, feed-forward effort)
             self._apply_action()
-            # set actions into simulator
-            self.scene.write_data_to_sim()
-            for _ in range(self.cfg.decimation_apply):
-                self._sim_step_counter += 1
-                # simulate
-                self.sim.step(render=False)
-                # render between steps only if the GUI or an RTX sensor needs it
-                # note: we assume the render interval to be the shortest accepted rendering interval.
-                #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
-                if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
-                    self.sim.render()
-                # update buffers at sim dt
-                self.scene.update(dt=self.physics_dt)
+
+            if self.cfg.is_torque_delayed:
+                for _ in range(self.cfg.decimation_apply):
+                    self._sim_step_counter += 1
+                    # set actions into simulator (Compute Final Torque and Apply to Sim)
+                    self.scene.write_data_to_sim()
+                    # simulate
+                    self.sim.step(render=False)
+                    # render between steps only if the GUI or an RTX sensor needs it
+                    # note: we assume the render interval to be the shortest accepted rendering interval.
+                    #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
+                    if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
+                        self.sim.render()
+                    # update buffers at sim dt
+                    self.scene.update(dt=self.physics_dt)
+            else:
+                # set actions into simulator (Compute Final Torque and Apply to Sim)
+                self.scene.write_data_to_sim()
+                for _ in range(self.cfg.decimation_apply):
+                    self._sim_step_counter += 1
+                    # simulate
+                    self.sim.step(render=False)
+                    # render between steps only if the GUI or an RTX sensor needs it
+                    # note: we assume the render interval to be the shortest accepted rendering interval.
+                    #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
+                    if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
+                        self.sim.render()
+                    # update buffers at sim dt
+                    self.scene.update(dt=self.physics_dt)
 
         # post-step:
         # -- update env counters (used for curriculum generation)
@@ -655,7 +671,9 @@ class Env(gym.Env):
             self.event_manager.reset(env_ids)
             # Reset mode apply
             if "reset" in self.event_manager.available_modes:
-                env_step_count = self._sim_step_counter // self.cfg.decimation
+                # _sim_step_counter ticks once per physics step, so the policy-step count
+                # divides by the full decimation chain (see step_dt).
+                env_step_count = self._sim_step_counter // (self.cfg.decimation * self.cfg.decimation_apply)
                 self.event_manager.apply(mode="reset", env_ids=env_ids, global_env_step_count=env_step_count)
 
         # reset the episode length buffer

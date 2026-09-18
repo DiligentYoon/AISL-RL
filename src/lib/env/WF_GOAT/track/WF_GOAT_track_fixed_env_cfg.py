@@ -23,7 +23,6 @@ class WFGOATTrackFixedEnvCfg(WFGOATBaseEnvCfg):
     decimation = 2                              # 100Hz policy
     action_space = 6                            # [L + R, joint pos]
     observation_space = 24                      # Observation space
-    max_episode_length = episode_length_s / (sim_dt * decimation)
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],

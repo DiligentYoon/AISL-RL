@@ -2,7 +2,7 @@ import os
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import DelayedPDActuatorCfg
-from lib.assets.actuators.actuator_cfg import GearDelayedPDActuatorCfg
+from lib.assets.actuators.gear_actuator_cfg import GearDelayedPDActuatorCfg
 
 
 # Robot asset paths

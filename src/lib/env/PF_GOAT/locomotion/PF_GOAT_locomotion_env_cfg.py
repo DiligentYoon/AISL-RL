@@ -22,7 +22,6 @@ class PFGOATLocomotionEnvCfg(PFGOATBaseEnvCfg):
     action_space = 6   
     observation_space = 28                   
     state_space = 32                     
-    max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()]}
