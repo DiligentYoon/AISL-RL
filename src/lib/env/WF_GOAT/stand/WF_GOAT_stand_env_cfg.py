@@ -25,7 +25,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     action_space = 6                            # [L + R, joint pos + wheel velocity]
     observation_space = 23                      # Observation space
     state_space = 29                            # State space including privilege information
-    max_episode_length = episode_length_s / (sim_dt * decimation) 
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],

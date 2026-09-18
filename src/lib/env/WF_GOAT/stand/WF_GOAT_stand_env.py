@@ -264,7 +264,7 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         exceed_base_vel_z = torch.abs(self.base_lin_vel[:, 2]) > self.cfg.terminated_lin_vel_limit_z
         
         terminated = base_fall | tilt_fall | exceed_joint_vel | exceed_base_vel_z
-        truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
+        truncated = self.episode_length_buf >= (self.max_episode_length - 1)
 
         return terminated, truncated
 
