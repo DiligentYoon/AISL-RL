@@ -260,7 +260,7 @@ def main():
 
     agent.set_running_mode("eval")
     obs, states, infos = env.reset()
-    write_interval = int(env._unwrapped.cfg.episode_length_s / (env._unwrapped.cfg.sim_dt * env._unwrapped.cfg.decimation))
+    write_interval = int(env._unwrapped.max_episode_length)
     timestep = 0
     tracking_data = collections.defaultdict(list)
     track_cumulative_rewards   = collections.deque(maxlen=500)

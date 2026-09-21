@@ -12,13 +12,13 @@ from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    sim_dt = 0.001
-    decimation_apply = 10
+    sim_dt = 0.002
+    decimation_apply = 5
     observation_space = 26                      # Observation space
-    state_space = 36                            # State space including privilege information
+    state_space = 32                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 10.0
+    r_height_weight = 12.0
     r_upright_weight = 1.0
     r_lin_vel_tracking_weight = 8.0
     r_ang_vel_tracking_weight = 8.0

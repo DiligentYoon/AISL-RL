@@ -54,7 +54,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_all_torque_weight = 0.01
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.005
-    p_wheel_velocity_weight = 5.0e-5
+    p_wheel_velocity_weight = 1.0e-4
     p_joint_accel_weight = 5.0e-6
     p_action_rate_weight = 0.05
     p_terminated_weight = 200.0
