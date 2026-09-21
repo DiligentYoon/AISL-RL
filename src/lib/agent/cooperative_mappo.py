@@ -594,9 +594,9 @@ class CooperativeMAPPO(MAPPO):
                 kl_arm = torch.tensor(kl_divergences["arm"], device=self.device).mean()
                 kl_leg = torch.tensor(kl_divergences["leg"], device=self.device).mean()
                 self.optimizer_schedulers["actor"]["arm"].step(kl_arm.item())
-                self.optimizer_schedulers["critic"]["arm"].step(kl_arm.item())
-                self.optimizer_schedulers["actor"]["shared"].step((kl_arm.item() + kl_leg.item()) / 2)
                 self.optimizer_schedulers["actor"]["leg"].step(kl_leg.item())
+                self.optimizer_schedulers["actor"]["shared"].step((kl_arm.item() + kl_leg.item()) / 2)
+                self.optimizer_schedulers["critic"]["arm"].step(kl_arm.item())
                 self.optimizer_schedulers["critic"]["leg"].step(kl_leg.item())
 
 
