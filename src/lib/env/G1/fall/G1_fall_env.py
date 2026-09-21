@@ -35,7 +35,7 @@ class G1FallEnv(G1RecoveryEnv):
         return torch.cat([self.root_lin_vel_b,                                  # [E, 3]
                           self.root_ang_vel_b,                                  # [E, 3]
                           self.projected_gravity,                               # [E, 3]
-                          self.joint_pos                                        # [E, 29]
+                          self.joint_pos,                                       # [E, 29]
                           self.joint_vel                                        # [E, 29]
                         ], dim=-1)
 
