@@ -194,7 +194,7 @@ class WFGOATTrackFixedEnv(WFGOATBaseEnv):
         terminated = exceed_vel
         # if torch.any(terminated):
         #     print(f"Excced velocity : {self.joint_vel[:, self.joint_ids]}")
-        truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
+        truncated = self.episode_length_buf >= (self.max_episode_length - 1)
 
         return terminated, truncated
 

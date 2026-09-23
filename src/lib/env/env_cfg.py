@@ -45,6 +45,8 @@ class EnvCfg:
     This means that the control action is updated every 10 simulation steps.
     """
 
+    decimation_apply: int = 1
+
     is_finite_horizon: bool = False
     """Whether the learning task is treated as a finite or infinite horizon problem for the agent.
     Defaults to False, which means the task is treated as an infinite horizon problem.
@@ -242,3 +244,9 @@ class EnvCfg:
 
     erfi_enabled: bool = False
     """Whether apply Extened Random Force Injection (ERFI) Domain Randomization or not"""
+
+    is_torque_delayed: bool = False
+    """Whether apply torque delay or not for narrowing sim2real gap."""
+
+    torque_delay_step: int = 0
+    """The number of delay steps."""

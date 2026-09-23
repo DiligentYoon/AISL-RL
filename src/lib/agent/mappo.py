@@ -216,7 +216,7 @@ class MAPPO(MultiAgent):
                 
             # time-limit (truncation) bootstrapping
             if self.time_limit_bootstrap:
-                buffer_rewards += self.discount_factor * value_preds * truncated # [E, 1]
+                buffer_rewards[:, i:i+1] += self.discount_factor * value_preds * truncated # [E, 1]
 
             if self.is_async_actor_critic:
                 self.buffer[uid].add_samples(observations=observations[uid],

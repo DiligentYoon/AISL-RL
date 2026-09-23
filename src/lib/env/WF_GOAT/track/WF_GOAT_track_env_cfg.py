@@ -12,18 +12,20 @@ from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
+    sim_dt = 0.002
+    decimation_apply = 5
     observation_space = 26                      # Observation space
-    state_space = 36                            # State space including privilege information
+    state_space = 32                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 10.0
+    r_height_weight = 12.0
     r_upright_weight = 1.0
     r_lin_vel_tracking_weight = 8.0
     r_ang_vel_tracking_weight = 8.0
 
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 4.0         
+    p_joint_deviation_lr_weight = 6.0         
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
@@ -46,14 +48,13 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        self.sim.dt = self.sim_dt
+        self.sim.render_interval = self.decimation_apply
 
-        self.events.reset_joint_pos_bias = EventTerm(
-            func=reset_joint_offset_bias,
-            mode="reset",
-            params={
-                "bias_range": (-0.05, 0.05),
-            },
-        )
+        self.is_torque_delayed = True # TorqueDelayedPDActuator
+        self.GOAT_cfg.actuators["thigh"].decimation = self.decimation_apply
+        self.GOAT_cfg.actuators["knee"].decimation  = self.decimation_apply
+        self.GOAT_cfg.actuators["wheel"].decimation = self.decimation_apply
 
 
 @configclass

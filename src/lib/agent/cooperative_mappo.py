@@ -79,11 +79,12 @@ class CooperativeMAPPO(MAPPO):
         self.optimizers["critic"]["arm"] = torch.optim.Adam(self.critics["arm"].parameters(), lr=self.learning_rate)
         self.optimizers["critic"]["leg"] = torch.optim.Adam(self.critics["leg"].parameters(), lr=self.learning_rate)
 
-        # self.optimizer_schedulers["actor"]["arm"] = KLAdaptiveLR(self.optimizers["actor"]["arm"])
-        # self.optimizer_schedulers["actor"]["leg"] = KLAdaptiveLR(self.optimizers["actor"]["leg"])
-        # self.optimizer_schedulers["actor"]["shared"] = KLAdaptiveLR(self.optimizers["actor"]["shared"])
-        # self.optimizer_schedulers["critic"]["arm"] = KLAdaptiveLR(self.optimizers["critic"]["arm"])
-        # self.optimizer_schedulers["critic"]["leg"] = KLAdaptiveLR(self.optimizers["critic"]["leg"])
+        if self.learning_rate_scheduler is not None:
+            self.optimizer_schedulers["actor"]["arm"] = KLAdaptiveLR(self.optimizers["actor"]["arm"])
+            self.optimizer_schedulers["actor"]["leg"] = KLAdaptiveLR(self.optimizers["actor"]["leg"])
+            self.optimizer_schedulers["actor"]["shared"] = KLAdaptiveLR(self.optimizers["actor"]["shared"])
+            self.optimizer_schedulers["critic"]["arm"] = KLAdaptiveLR(self.optimizers["critic"]["arm"])
+            self.optimizer_schedulers["critic"]["leg"] = KLAdaptiveLR(self.optimizers["critic"]["leg"])
 
 
         # Checkpoint Modules
@@ -588,6 +589,16 @@ class CooperativeMAPPO(MAPPO):
                 cumulative_value_loss += value_total.item()
                 if self.entropy_loss_scale:
                     cumulative_entropy_loss += (entropy_losses["arm"] + entropy_losses["leg"]).item()
+
+            if self.learning_rate_scheduler is not None:
+                kl_arm = torch.tensor(kl_divergences["arm"], device=self.device).mean()
+                kl_leg = torch.tensor(kl_divergences["leg"], device=self.device).mean()
+                self.optimizer_schedulers["actor"]["arm"].step(kl_arm.item())
+                self.optimizer_schedulers["actor"]["leg"].step(kl_leg.item())
+                self.optimizer_schedulers["actor"]["shared"].step((kl_arm.item() + kl_leg.item()) / 2)
+                self.optimizer_schedulers["critic"]["arm"].step(kl_arm.item())
+                self.optimizer_schedulers["critic"]["leg"].step(kl_leg.item())
+
 
         self.set_running_mode("eval")
         mean_policy_loss = cumulative_policy_loss / (self.learning_epochs * self.mini_batches * self.num_agents)

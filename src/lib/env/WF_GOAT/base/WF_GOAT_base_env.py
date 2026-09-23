@@ -34,7 +34,7 @@ class WFGOATBaseEnv(Env):
         # sensor
         self.scene.sensors["contact_sensor"] = ContactSensor(self.cfg.contact_sensors)
         self.contact_sensors = self.scene.sensors["contact_sensor"]
-        self.contact_sensors.update_period = self.cfg.sim_dt
+        self.contact_sensors.update_period = self.step_dt
         # clone env
         self.scene.clone_environments(copy_from_source=True)         
 

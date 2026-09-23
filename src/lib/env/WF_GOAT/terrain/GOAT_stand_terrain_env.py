@@ -220,7 +220,7 @@ class GOATStandTerrainEnv(GOATBaseEnv):
         
         r_terminated = - self.reset_terminated.float()
 
-        r_alive = self.cfg.r_alive_weight * current_time/(self.cfg.max_episode_length)
+        r_alive = self.cfg.r_alive_weight * current_time/(self.max_episode_length)
 
         # Total Reward Summation
         total_reward = (
@@ -247,7 +247,7 @@ class GOATStandTerrainEnv(GOATBaseEnv):
         terminated = (self.base_height < self.cfg.height_reset_condition) | (base_tilt < cos_threshold).unsqueeze(-1)
         terminated = terminated.squeeze(-1)
 
-        truncated = self.episode_length_buf >= (self.cfg.max_episode_length - 1)
+        truncated = self.episode_length_buf >= (self.max_episode_length - 1)
 
         return terminated, truncated
 
