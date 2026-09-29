@@ -46,10 +46,10 @@
 
     <link name="hip_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-47.5E-03 -38.265E-03 0.247E-03"/>
-            <mass value="0.326"/>
-            <inertia ixx="153.8E-06" ixy="-13.84168E-06" ixz="-7.365016E-06"
-                    iyy="232.6E-06" iyz="-0.923815E-06" izz="209.3E-06"/>
+            <origin rpy="0 0 0" xyz="-47.762E-03 -38.810E-03 0.471E-03"/>
+            <mass value="0.321"/>
+            <inertia ixx="143.9E-06" ixy="-5.3768E-06" ixz="-10.335937E-06"
+                    iyy="227.69E-06" iyz="-1.391116E-06" izz="195.37E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -70,10 +70,10 @@
 
     <link name="hip_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-47.5E-03 38.265E-03 0.247E-03"/>
-            <mass value="0.326"/>
-            <inertia ixx="153.8E-06" ixy="13.84168E-06" ixz="-7.365016E-06"
-                    iyy="232.6E-06" iyz="0.923815E-06" izz="209.3E-06"/>
+            <origin rpy="0 0 0" xyz="-47.762E-03 38.810E-03 0.471E-03"/>
+            <mass value="0.321"/>
+            <inertia ixx="143.9E-06" ixy="5.3768E-06" ixz="-10.335937E-06"
+                    iyy="227.69E-06" iyz="1.391116E-06" izz="195.37E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
