@@ -14,6 +14,7 @@
     <!-- ****************************************** Link ******************************************************** -->
 
     <link name="base_Link">
+        <!-- No Hip motor version -->
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
             <mass value="2.804789"/>
@@ -299,23 +300,27 @@
     <!-- ****************************************** Joint ******************************************************** -->
     
     <joint name="hip_L_Joint" type="fixed">
-        <origin xyz="51.079E-03 96.336E-03 -87.088E-03" rpy="0 0 0"/>
+        <origin xyz="51.079E-03 96.336E-03 -87.088E-03" rpy="0.034906585 0 0"/>
         <parent link="base_Link"/>
         <child link="hip_L_Link"/>
+        <!--
         <axis xyz="-1 0 0"/>
         <limit effort="4.5" lower="-1.7453" upper="1.0123" velocity="33.5"/>
         <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
+        -->
     </joint>
     
     <joint name="hip_R_Joint" type="fixed">
-        <origin xyz="51.079E-03 -96.336E-03 -87.088E-03" rpy="0 0 0"/>
+        <origin xyz="51.079E-03 -96.336E-03 -87.088E-03" rpy="-0.034906585 0 0"/>
         <parent link="base_Link"/>
         <child link="hip_R_Link"/>
+        <!--
         <axis xyz="-1 0 0"/>
         <limit effort="4.5" lower="-1.0123" upper="1.7453" velocity="33.5"/>
         <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
+        -->
     </joint>
     
     <joint name="thigh_L_Joint" type="revolute">
