@@ -23,12 +23,12 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_ang_vel,                                                                     # [E, 3]
-                                 self.gravity_vector,                                                                   # [E, 3]
-                                 self.command_inputs_b,                                                                 # [E, 4]
-                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
-                                 self.joint_vel,                                                                        # [E, 6]
-                                 self.previous_actions,                                                                 # [E, 6]
+        observation = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
+                                 self._robot.data.projected_gravity_b,                                                       # [E, 3]
+                                 self.commands.command_b,                                                                    # [E, 4]
+                                 self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
+                                 self._robot.data.joint_vel,                                                                 # [E, 6]
+                                 self.previous_actions,                                                                      # [E, 6]
                                 ), dim=1) 
 
         return observation
@@ -40,16 +40,16 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_ang_vel,                                                               # [E, 3]
-                                 self.gravity_vector,                                                             # [E, 3]
-                                 self.command_inputs_b,                                                           # [E, 4]
-                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],   # [E, 4]
-                                 self.joint_vel,                                                                  # [E, 6]
-                                 self.previous_actions,                                                           # [E, 6]
-                                 ), dim=1)                             
+        observation = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
+                                 self._robot.data.projected_gravity_b,                                                       # [E, 3]
+                                 self.commands.command_b,                                                                    # [E, 4]
+                                 self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
+                                 self._robot.data.joint_vel,                                                                 # [E, 6]
+                                 self.previous_actions,                                                                      # [E, 6]
+                                ), dim=1)                       
         
-        privileged_info = torch.cat((self.base_lin_vel,                                      # [E, 3]
-                                     self.base_height,                                       # [E, 1]
+        privileged_info = torch.cat((self._robot.data.root_lin_vel_b,                        # [E, 3]
+                                     self._robot.data.root_pos_w[:, 2:],                     # [E, 1]
                                      self.friction_coefficient), dim=1)                      # [E, 2]        
         
         state = torch.cat([observation, privileged_info], dim=-1)

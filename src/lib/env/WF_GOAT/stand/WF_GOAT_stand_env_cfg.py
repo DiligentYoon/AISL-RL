@@ -110,7 +110,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.39, 0.56)
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.4, 0.56)
         ),
     )
 
@@ -124,7 +124,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.389)
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.39)
         self.GOAT_cfg.init_state.joint_pos = {
             "thigh_L_Joint": 0.9756,
             "thigh_R_Joint": -0.9756,

@@ -3,10 +3,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.domain_randomizer.noise_model import build_noise_uniform_vector
-from lib.curriculum.curriculum_cfg import CurriculumManagerCfg, CurriculumParamCfg
-
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
-from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 
 
 @configclass
