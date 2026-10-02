@@ -23,7 +23,7 @@ class MAPPO(MultiAgent):
                  action_space: gym.Space,
                  possible_agents: Sequence[str],
                  model: Dict[str, Union[nn.Module, Dict[str, nn.Module]]],
-                 buffer: Dict[str, RolloutBuffer],
+                 buffer: Dict[str, RolloutBuffer] | None,
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
         """Multi Agent Proximal Policy Optimization (MAPPO)
@@ -48,7 +48,10 @@ class MAPPO(MultiAgent):
         self.value_standardizers = {uid: RunningMeanStd(shape=1, device=device) for uid in self.possible_agents}
         
         # Buffers
-        self.buffer = {uid: buffer[uid] for uid in self.possible_agents}
+        if buffer is not None:
+            self.buffer = {uid: buffer[uid] for uid in self.possible_agents}
+        else:
+            self.buffer = None
 
         # Checkpoint models
         for uid in self.possible_agents:

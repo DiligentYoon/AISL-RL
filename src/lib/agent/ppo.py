@@ -17,7 +17,7 @@ from lib.utils.Learning_rate_scheduler import KLAdaptiveLR
 class PPO(Agent):
     def __init__(self,
                  model: Dict[str, nn.Module],
-                 buffer: RolloutBuffer,
+                 buffer: RolloutBuffer | None,
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
         """Proximal Policy Optimization (PPO)
