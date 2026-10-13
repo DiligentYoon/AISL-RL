@@ -222,8 +222,8 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        # self.observation_noise_type = None
-        # self.observation_noise_params = None
+        self.observation_noise_type = None
+        self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
