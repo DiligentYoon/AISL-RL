@@ -48,10 +48,11 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         self.sim.dt = self.sim_dt
         self.sim.render_interval = self.decimation_apply
 
-        self.is_torque_delayed = True # TorqueDelayedPDActuator
-        self.GOAT_cfg.actuators["thigh"].decimation = self.decimation_apply
-        self.GOAT_cfg.actuators["knee"].decimation  = self.decimation_apply
-        self.GOAT_cfg.actuators["wheel"].decimation = self.decimation_apply
+        # only for TorqueDelayedPDActuator class
+        # self.is_torque_delayed = False 
+        # self.GOAT_cfg.actuators["thigh"].decimation = self.decimation_apply
+        # self.GOAT_cfg.actuators["knee"].decimation  = self.decimation_apply
+        # self.GOAT_cfg.actuators["wheel"].decimation = self.decimation_apply
 
 
 @configclass
