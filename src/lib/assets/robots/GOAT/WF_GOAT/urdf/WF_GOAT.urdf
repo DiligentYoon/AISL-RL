@@ -17,9 +17,9 @@
         <!-- No Hip motor version -->
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-            <mass value="2.804789"/>
-            <inertia ixx="14400E-06" ixy="-11.025405E-06" ixz="4077E-06"
-                    iyy="19820E-06" iyz="3.222145E-06" izz="17400E-06"/>
+            <mass value="2.810462"/>
+            <inertia ixx="14480E-06" ixy="-37.700908E-06" ixz="4110E-06"
+                    iyy="19890E-06" iyz="18.913079E-06" izz="17430E-06"/>
         </inertial>
         <visual>
             <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
