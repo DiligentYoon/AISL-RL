@@ -143,10 +143,10 @@
         
     <link name="calf_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="2.231E-03 0.979E-03 -153.756E-03"/>
-            <mass value="0.320988"/>
-            <inertia ixx="1952E-06" ixy="0.326882E-06" ixz="-35.279353E-06"
-                    iyy="1995E-06" iyz="11.323218E-06" izz="106.9E-06"/>
+            <origin rpy="0 0 0" xyz="2.229E-03 0.879E-03 -153.549E-03"/>
+            <mass value="0.326882"/>
+            <inertia ixx="1948E-06" ixy="0.336927E-06" ixz="-35.309161E-06"
+                    iyy="1991E-06" iyz="10.159437E-06" izz="105.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -167,10 +167,10 @@
 
     <link name="calf_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="2.2310E-03 -0.979E-03 -153.756E-03"/>
-            <mass value="0.320988"/>
-            <inertia ixx="1952E-06" ixy="-0.326882E-06" ixz="-35.279353E-06"
-                    iyy="1995E-06" iyz="-11.323218E-06" izz="106.9E-06"/>
+            <origin rpy="0 0 0" xyz="2.229E-03 -0.879E-03 -153.549E-03"/>
+            <mass value="0.326882"/>
+            <inertia ixx="1948E-06" ixy="-0.336927E-06" ixz="-35.309161E-06"
+                    iyy="1991E-06" iyz="-10.159437E-06" izz="105.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -344,7 +344,7 @@
     </joint>
 
     <joint name="knee_L_Joint" type="revolute">
-        <origin xyz="0 18E-03 -205E-03" rpy="0 0 0"/>
+        <origin xyz="0 23E-03 -205E-03" rpy="0 0 0"/>
         <parent link="thigh_L_Link"/>
         <child link="calf_L_Link"/>
         <axis xyz="0 -1 0"/>
@@ -354,7 +354,7 @@
     </joint>
 
     <joint name="knee_R_Joint" type="revolute">
-        <origin xyz="0 -18E-03 -205E-03" rpy="0 0 0"/>
+        <origin xyz="0 -23E-03 -205E-03" rpy="0 0 0"/>
         <parent link="thigh_R_Link"/>
         <child link="calf_R_Link"/>
         <axis xyz="0 1 0"/>
@@ -364,7 +364,7 @@
     </joint>
 
     <joint name="wheel_L_Joint" type="revolute">
-        <origin xyz="0 16.555E-03 -200E-03" rpy="0 0 0"/>
+        <origin xyz="0 20.7E-03 -200E-03" rpy="0 0 0"/>
         <parent link="calf_L_Link" />
         <child link="wheel_L_Link" />
         <axis xyz="0 1 0" />
@@ -374,7 +374,7 @@
     </joint>
     
     <joint name="wheel_R_Joint" type="revolute">
-        <origin xyz="0 -16.555E-03 -200E-03" rpy="0 0 0"/>
+        <origin xyz="0 -20.7E-03 -200E-03" rpy="0 0 0"/>
         <parent link="calf_R_Link" />
         <child link="wheel_R_Link" />
         <axis xyz="0 -1 0" />
