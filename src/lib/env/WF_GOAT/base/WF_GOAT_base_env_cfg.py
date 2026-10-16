@@ -200,7 +200,7 @@ class EventCfg:
             func=randomizer.reset_joints_by_offset,
             mode="reset",
             params={
-                "position_range": (-0.1, 0.1),
+                "position_range": (-0.2, 0.2),
                 "velocity_range": (-0.05, 0.05)
             }
         )
