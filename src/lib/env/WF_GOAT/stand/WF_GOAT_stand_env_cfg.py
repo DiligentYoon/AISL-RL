@@ -36,7 +36,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
 
-    terminated_tilt = 0.7
+    terminated_tilt = 0.5
     terminated_joint_vel_limit = 5.0
     terminated_lin_vel_limit_z = 0.25
     height_reset_condition = 0.2 # meter (m)
@@ -156,26 +156,13 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.3, 0.6),
-                "coulomb_distribution_params": (0.3, 0.6),
-                "viscous_distribution_params": (0.08, 0.2),
+                "friction_distribution_params": (0.03, 0.07),
+                "coulomb_distribution_params": (0.03, 0.07),
+                "viscous_distribution_params": (0.05, 0.1),
                 "operation": "abs",
                 "distribution": "uniform",
             }
-        )     
-
-        # self.events.robot_knee_joint_friction = EventTerm(
-        #     func=randomize_joint_parameters,
-        #     mode="reset",
-        #     params={
-        #         "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-        #         "friction_distribution_params": (0.03, 0.07),
-        #         "coulomb_distribution_params": (0.03, 0.07),
-        #         "viscous_distribution_params": (0.05, 0.1),
-        #         "operation": "abs",
-        #         "distribution": "uniform",
-        #     }
-        # )     
+        )      
 
         self.events.robot_wheel_joint_friction = EventTerm(
             func=randomize_joint_parameters,
