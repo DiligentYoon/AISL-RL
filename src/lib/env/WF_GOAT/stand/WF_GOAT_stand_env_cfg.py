@@ -156,9 +156,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.2, 0.35),
-                "coulomb_distribution_params": (0.2, 0.3),
-                "viscous_distribution_params": (0.08, 0.2),
+                "friction_distribution_params": (0.03, 0.07),
+                "coulomb_distribution_params": (0.03, 0.07),
+                "viscous_distribution_params": (0.05, 0.1),
                 "operation": "abs",
                 "distribution": "uniform",
             }

@@ -260,6 +260,7 @@ def main():
     t2_rollout = 0
     t1_update = 0
     t2_update = 0
+    CLI_logging_interval = min(512, max(128, buffer.buffer_size))
 
     # Reset environment
     obs, states, infos = env.reset()
@@ -375,7 +376,7 @@ def main():
             tracking_data.clear()
 
         # CLI Logging about the training process at each parameter update
-        if timestep % buffer.buffer_size == 0 and buffer.memory_index == 0:
+        if timestep % CLI_logging_interval == 0:
             per_step_reward = float(np.mean(CLI_step_reward_means)) if len(CLI_step_reward_means) else float("nan")
             avg_ep_step = float(np.mean(CLI_track_timesteps)) if len(CLI_track_timesteps) else float("nan")
             avg_ep_reward = float(np.mean(CLI_track_rewards)) if len(CLI_track_rewards) else float("nan")
@@ -388,7 +389,7 @@ def main():
             e_h = int(elapsed_time // 3600)
             e_m = int((elapsed_time % 3600) // 60)
             e_s = int(elapsed_time % 60)
-            total_rollout = int(cfg["train"]["timesteps"] // buffer.buffer_size)
+            total_rollout = int(cfg["train"]["timesteps"] // CLI_logging_interval)
             complete_time = (t2_rollout + t2_update - t1_rollout - t1_update) * (total_rollout - rollout)
             c_h = int(complete_time // 3600)
             c_m = int((complete_time % 3600) // 60)

@@ -9,8 +9,9 @@ from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOA
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     ## ==================== Environment parameters ==================== ##
-    sim_dt = 0.002
-    decimation_apply = 5
+    sim_dt = 0.01
+    decimation = 2
+    decimation_apply = 1
     observation_space = 26                      # Observation space
     state_space = 32                            # State space including privilege information
 
