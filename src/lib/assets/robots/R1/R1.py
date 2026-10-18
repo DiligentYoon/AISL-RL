@@ -5,6 +5,17 @@ from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 
 
+# =========================================
+# =============== Joint =================== 
+# =========================================
+
+# left_hip_joint, left_hip_roll_link, left_hip_yaw_joint, left_knee_joint, left_ankle_pitch_joint, left_ankle_roll_joint
+# right_hip_joint, right_hip_roll_link, right_hip_yaw_joint, right_knee_joint, right_ankle_pitch_joint, right_ankle_roll_joint
+# waist_roll_joint, waist_yaw_joint
+# left_shoulder_pitch_joint, left_shoulder_roll_joint, left_shoulder_yaw_joint, left_elbow_joint, left_writs_roll_joint
+# right_shoulder_pitch_joint, right_shoulder_roll_joint, right_shoulder_yaw_joint, right_elbow_joint, right_writs_roll_joint
+
+
 # -----------------------------------------------------------------------------
 # Asset paths
 # -----------------------------------------------------------------------------
