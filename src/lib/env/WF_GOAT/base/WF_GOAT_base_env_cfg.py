@@ -97,8 +97,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -108,8 +108,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -119,8 +119,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },
@@ -130,8 +130,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
+            "stiffness_distribution_params": (0.7, 1.2),
+            "damping_distribution_params": (0.7, 1.2),
             "operation": "scale",
             "distribution": "uniform",
         },

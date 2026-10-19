@@ -144,35 +144,34 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "thigh_L_Joint": 0.1,
                 "thigh_R_Joint": 0.1,
             },
-            # friction={
-            #     "thigh_L_Joint": 0.0,
-            #     "thigh_R_Joint": 0.0,
-            # },              
-            # dynamic_friction={
-            #     "thigh_L_Joint": 0.0,
-            #     "thigh_R_Joint": 0.0,
-            # },
-            # viscous_friction={
-            #     "thigh_L_Joint": 0.0,
-            #     "thigh_R_Joint": 0.0,
-            # },             
+            friction={
+                "thigh_L_Joint": 0.0,
+                "thigh_R_Joint": 0.0,
+            },              
+            dynamic_friction={
+                "thigh_L_Joint": 0.0,
+                "thigh_R_Joint": 0.0,
+            },
+            viscous_friction={
+                "thigh_L_Joint": 0.0,
+                "thigh_R_Joint": 0.0,
+            },             
             # armature={
             #     "thigh_L_Joint": 0.0,
             #     "thigh_R_Joint": 0.0,
             # }   
-
-            friction={
-                "thigh_L_Joint": 0.07,
-                "thigh_R_Joint": 0.07,
-            },              
-            dynamic_friction={
-                "thigh_L_Joint": 0.05,
-                "thigh_R_Joint": 0.05,
-            },
-            viscous_friction={
-                "thigh_L_Joint": 0.05,
-                "thigh_R_Joint": 0.05,
-            },             
+            # friction={
+            #     "thigh_L_Joint": 0.07,
+            #     "thigh_R_Joint": 0.07,
+            # },              
+            # dynamic_friction={
+            #     "thigh_L_Joint": 0.05,
+            #     "thigh_R_Joint": 0.05,
+            # },
+            # viscous_friction={
+            #     "thigh_L_Joint": 0.05,
+            #     "thigh_R_Joint": 0.05,
+            # },             
             armature={
                 "thigh_L_Joint": 2.02e-03,
                 "thigh_R_Joint": 2.02e-03,
@@ -194,35 +193,34 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "knee_L_Joint": 0.1,
                 "knee_R_Joint": 0.1,
             },
-            # friction={
-            #     "knee_L_Joint": 0.0,
-            #     "knee_R_Joint": 0.0,
-            # },        
-            # dynamic_friction={
-            #     "knee_L_Joint": 0.0,
-            #     "knee_R_Joint": 0.0,
-            # },
-            # viscous_friction={
-            #     "knee_L_Joint": 0.0,
-            #     "knee_R_Joint": 0.0,
-            # },                   
+            friction={
+                "knee_L_Joint": 0.0,
+                "knee_R_Joint": 0.0,
+            },        
+            dynamic_friction={
+                "knee_L_Joint": 0.0,
+                "knee_R_Joint": 0.0,
+            },
+            viscous_friction={
+                "knee_L_Joint": 0.0,
+                "knee_R_Joint": 0.0,
+            },                   
             # armature={
             #     "knee_L_Joint": 0.0,
             #     "knee_R_Joint": 0.0,
             # }    
-
-            friction={
-                "knee_L_Joint": 0.2,
-                "knee_R_Joint": 0.2,
-            },        
-            dynamic_friction={
-                "knee_L_Joint": 0.2,
-                "knee_R_Joint": 0.2,
-            },
-            viscous_friction={
-                "knee_L_Joint": 0.1,
-                "knee_R_Joint": 0.1,
-            },                   
+            # friction={
+            #     "knee_L_Joint": 0.2,
+            #     "knee_R_Joint": 0.2,
+            # },        
+            # dynamic_friction={
+            #     "knee_L_Joint": 0.2,
+            #     "knee_R_Joint": 0.2,
+            # },
+            # viscous_friction={
+            #     "knee_L_Joint": 0.1,
+            #     "knee_R_Joint": 0.1,
+            # },                   
             armature={
                 "knee_L_Joint": 2.02e-03,
                 "knee_R_Joint": 2.02e-03,
@@ -244,34 +242,34 @@ GOAT_CFG: ArticulationCfg = ArticulationCfg(
                 "wheel_L_Joint": 0.02,
                 "wheel_R_Joint": 0.02,
             },
-            # friction={
-            #     "wheel_L_Joint": 0.0,
-            #     "wheel_R_Joint": 0.0,
-            # },      
-            # dynamic_friction={
-            #     "wheel_L_Joint": 0.0,
-            #     "wheel_R_Joint": 0.0,
-            # },
-            # viscous_friction={
-            #     "wheel_L_Joint": 0.0,
-            #     "wheel_R_Joint": 0.0,
-            # },       
+            friction={
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+            },      
+            dynamic_friction={
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+            },
+            viscous_friction={
+                "wheel_L_Joint": 0.0,
+                "wheel_R_Joint": 0.0,
+            },       
             # armature={
             #     "wheel_L_Joint": 0.0,
             #     "wheel_R_Joint": 0.0,
             # }        
-            friction={
-                "wheel_L_Joint": 0.05,
-                "wheel_R_Joint": 0.05,
-            },      
-            dynamic_friction={
-                "wheel_L_Joint": 0.025,
-                "wheel_R_Joint": 0.025,
-            },
-            viscous_friction={
-                "wheel_L_Joint": 0.002,
-                "wheel_R_Joint": 0.002,
-            },       
+            # friction={
+            #     "wheel_L_Joint": 0.05,
+            #     "wheel_R_Joint": 0.05,
+            # },      
+            # dynamic_friction={
+            #     "wheel_L_Joint": 0.025,
+            #     "wheel_R_Joint": 0.025,
+            # },
+            # viscous_friction={
+            #     "wheel_L_Joint": 0.002,
+            #     "wheel_R_Joint": 0.002,
+            # },       
             armature={
                 "wheel_L_Joint": 1.4e-03,
                 "wheel_R_Joint": 1.4e-03,

@@ -136,46 +136,49 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         
         self.events.robot_hip_actuator_gain = None
         self.events.robot_hip_joint_friction = None
+        self.events.robot_thigh_joint_friction = None
+        self.events.robot_knee_joint_friction = None
+        self.events.robot_wheel_joint_friction = None
 
         # Renew randomization     
-        self.events.robot_thigh_joint_friction = EventTerm(
-            func=randomize_joint_parameters,
-            mode="reset",
-            params={
-                "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-                "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.03, 0.07),
-                "viscous_distribution_params": (0.05, 0.1),
-                "operation": "abs",
-                "distribution": "uniform",
-            }
-        )      
+        # self.events.robot_thigh_joint_friction = EventTerm(
+        #     func=randomize_joint_parameters,
+        #     mode="reset",
+        #     params={
+        #         "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+        #         "friction_distribution_params": (0.03, 0.07),
+        #         "coulomb_distribution_params": (0.03, 0.07),
+        #         "viscous_distribution_params": (0.05, 0.1),
+        #         "operation": "abs",
+        #         "distribution": "uniform",
+        #     }
+        # )      
 
         self.events.robot_knee_joint_friction = EventTerm(
             func=randomize_joint_parameters,
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.03, 0.07),
-                "coulomb_distribution_params": (0.03, 0.07),
-                "viscous_distribution_params": (0.05, 0.1),
+                "friction_distribution_params": (0.35, 0.7),
+                "coulomb_distribution_params": (0.3, 0.5),
+                "viscous_distribution_params": (0.1, 0.3),
                 "operation": "abs",
                 "distribution": "uniform",
             }
         )      
 
-        self.events.robot_wheel_joint_friction = EventTerm(
-            func=randomize_joint_parameters,
-            mode="reset",
-            params={
-                "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-                "friction_distribution_params": (0.01, 0.05),
-                "coulomb_distribution_params": (0.01, 0.05),
-                "viscous_distribution_params": (0.001, 0.005),
-                "operation": "abs",
-                "distribution": "uniform",
-            }
-        )
+        # self.events.robot_wheel_joint_friction = EventTerm(
+        #     func=randomize_joint_parameters,
+        #     mode="reset",
+        #     params={
+        #         "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
+        #         "friction_distribution_params": (0.01, 0.05),
+        #         "coulomb_distribution_params": (0.01, 0.05),
+        #         "viscous_distribution_params": (0.001, 0.005),
+        #         "operation": "abs",
+        #         "distribution": "uniform",
+        #     }
+        # )
 
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
