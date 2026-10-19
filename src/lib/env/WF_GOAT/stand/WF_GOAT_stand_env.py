@@ -330,8 +330,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         joint_velocity = torch.rad2deg(self._robot.data.joint_vel)
         
         extras = copy.deepcopy(self.extras)
-        # extras["viz_data"]["left_hip_torque (Nm)"]    = applied_torque[:, 0]
-        # extras["viz_data"]["right_hip_torque (Nm)"]   = applied_torque[:, 1]
         extras["viz_data"]["left_thigh_torque (Nm)"]  = applied_torque[:, 0]
         extras["viz_data"]["right_thigh_torque (Nm)"] = applied_torque[:, 1]
         extras["viz_data"]["left_knee_torque (Nm)"]   = applied_torque[:, 2]
@@ -339,8 +337,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["left_wheel_torque (Nm)"]  = applied_torque[:, 4]
         extras["viz_data"]["right_wheel_torque (Nm)"] = applied_torque[:, 5]
 
-        # extras["viz_data"]["left_hip_velocity (deg/s)"]    = joint_velocity[:, 0]
-        # extras["viz_data"]["right_hip_velocity (deg/s)"]   = joint_velocity[:, 1]
         extras["viz_data"]["left_thigh_velocity (deg/s)"]  = joint_velocity[:, 0]
         extras["viz_data"]["right_thigh_velocity (deg/s)"] = joint_velocity[:, 1]
         extras["viz_data"]["left_knee_velocity (deg/s)"]   = joint_velocity[:, 2]
@@ -348,8 +344,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 4]
         extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 5]
 
-        # extras["viz_data"]["left_hip_action"]      = self.actions[:, 0]
-        # extras["viz_data"]["right_hip_action"]     = self.actions[:, 1]
         extras["viz_data"]["left_thigh_action"]    = self.actions[:, 0]
         extras["viz_data"]["right_thigh_action"]   = self.actions[:, 1]
         extras["viz_data"]["left_knee_action"]     = self.actions[:, 2]

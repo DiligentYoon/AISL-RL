@@ -27,7 +27,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     # Per-axis observation noise groups
     obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
+        "base_ang_vel":      {"dim": 3,  "min": -0.2,  "max": 0.2},
         "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
         "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
         "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},

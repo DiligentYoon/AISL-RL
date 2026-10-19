@@ -137,7 +137,6 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.events.robot_hip_actuator_gain = None
         self.events.robot_hip_joint_friction = None
         self.events.robot_thigh_joint_friction = None
-        self.events.robot_knee_joint_friction = None
         self.events.robot_wheel_joint_friction = None
 
         # Renew randomization     
@@ -159,7 +158,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.35, 0.7),
+                "friction_distribution_params": (0.3, 0.6),
                 "coulomb_distribution_params": (0.3, 0.5),
                 "viscous_distribution_params": (0.1, 0.3),
                 "operation": "abs",
@@ -230,24 +229,18 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
-            "left_hip_torque (Nm)": 0.0,
-            "right_hip_torque (Nm)": 0.0,
             "left_thigh_torque (Nm)": 0.0,
             "right_thigh_torque (Nm)": 0.0,
             "left_knee_torque (Nm)": 0.0,
             "right_knee_torque (Nm)": 0.0,
             "left_wheel_torque (Nm)": 0.0,
             "right_wheel_torque (Nm)": 0.0,
-            "left_hip_velocity (deg/s)": 0.0,
-            "right_hip_velocity (deg/s)": 0.0,
             "left_thigh_velocity (deg/s)": 0.0,
             "right_thigh_velocity (deg/s)": 0.0,
             "left_knee_velocity (deg/s)": 0.0,
             "right_knee_velocity (deg/s)": 0.0,
             "left_wheel_velocity (deg/s)": 0.0,
             "right_wheel_velocity (deg/s)": 0.0,
-            "left_hip_action": 0.0,
-            "right_hip_action": 0.0,
             "left_thigh_action": 0.0,
             "right_thigh_action": 0.0,
             "left_knee_action": 0.0,
