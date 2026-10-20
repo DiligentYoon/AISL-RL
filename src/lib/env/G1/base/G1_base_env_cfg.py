@@ -22,8 +22,7 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 
 from lib.env.env_cfg import EnvCfg
 from lib.domain_randomizer import randomizer
-from lib.assets.robots.G1.G1_hand.G1_hand import G1CFG
-from lib.assets.robots.G1.G1_hand.G1_hand_box_foot import G1_BOX_FOOT_CFG
+from lib.assets.robots.G1.G1_standard import G1CFG
 
 @configclass
 class EventCfg:
