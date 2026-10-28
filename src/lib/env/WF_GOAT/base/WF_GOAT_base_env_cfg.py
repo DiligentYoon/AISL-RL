@@ -74,7 +74,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base_Link"),
-            "com_distribution_params": ((-0.02, 0.02), (-0.02, 0.02), (-0.02, 0.02)),
+            "com_distribution_params": ((-0.04, 0.04), (-0.02, 0.02), (-0.04, 0.04)),
             "operation": "add",
             "distribution": "uniform",
         },
@@ -200,7 +200,7 @@ class EventCfg:
             func=randomizer.reset_joints_by_offset,
             mode="reset",
             params={
-                "position_range": (-0.2, 0.2),
+                "position_range": (-0.1, 0.1),
                 "velocity_range": (-0.05, 0.05)
             }
         )

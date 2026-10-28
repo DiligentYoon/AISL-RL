@@ -22,7 +22,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     r_ang_vel_tracking_weight = 6.0
 
     p_hip_deviation_weight = 2.0
-    p_wheel_velocity_weight = 0.0
+    # p_wheel_velocity_weight = 0.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
 

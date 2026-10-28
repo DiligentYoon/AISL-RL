@@ -67,11 +67,11 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Lin vel Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.2)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.1)
 
         # Ang vel Tracking Reward
         ang_vel_error = torch.abs(self.base_ang_vel[:, 2] - self.command_inputs_b[:, 2])
-        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.2)
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.1)
 
         # COM align Reward
         wheel_xy = torch.mean(self.wheel_pos[:, :, :2], dim=1)
