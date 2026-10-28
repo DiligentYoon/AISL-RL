@@ -355,6 +355,9 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["base_lin_x_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 0])
         extras["viz_data"]["base_lin_y_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 1])
         extras["viz_data"]["base_lin_z_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 2])
+        extras["viz_data"]["base_proj_grav_x (-)"] = self.gravity_vector[:, 0]
+        extras["viz_data"]["base_proj_grav_y (-)"] = self.gravity_vector[:, 1]
+        extras["viz_data"]["base_proj_grav_z (-)"] = self.gravity_vector[:, 2]
         extras["viz_data"]["base_ang_roll_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 0])
         extras["viz_data"]["base_ang_pitch_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 1])
         extras["viz_data"]["base_ang_yaw_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 2])
