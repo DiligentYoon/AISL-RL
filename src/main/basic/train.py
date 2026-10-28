@@ -260,7 +260,7 @@ def main():
     t2_rollout = 0
     t1_update = 0
     t2_update = 0
-    CLI_logging_interval = min(512, max(128, buffer.buffer_size))
+    CLI_logging_interval = min(512, max(256, buffer.buffer_size))
 
     # Reset environment
     obs, states, infos = env.reset()
