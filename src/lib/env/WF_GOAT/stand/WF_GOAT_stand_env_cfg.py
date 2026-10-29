@@ -110,7 +110,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0), height=(0.41, 0.56)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
         ),
     )
 
@@ -136,22 +136,22 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         
         self.events.robot_hip_actuator_gain = None
         self.events.robot_hip_joint_friction = None
-        self.events.robot_thigh_joint_friction = None
-        self.events.robot_wheel_joint_friction = None
+        # self.events.robot_thigh_joint_friction = None
+        # self.events.robot_wheel_joint_friction = None
 
         # Renew randomization     
-        # self.events.robot_thigh_joint_friction = EventTerm(
-        #     func=randomize_joint_parameters,
-        #     mode="reset",
-        #     params={
-        #         "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
-        #         "friction_distribution_params": (0.03, 0.07),
-        #         "coulomb_distribution_params": (0.03, 0.07),
-        #         "viscous_distribution_params": (0.05, 0.1),
-        #         "operation": "abs",
-        #         "distribution": "uniform",
-        #     }
-        # )      
+        self.events.robot_thigh_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="thigh_.*"),
+                "friction_distribution_params": (0.03, 0.07),
+                "coulomb_distribution_params": (0.03, 0.07),
+                "viscous_distribution_params": (0.05, 0.1),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )      
 
         self.events.robot_knee_joint_friction = EventTerm(
             func=randomize_joint_parameters,
@@ -166,18 +166,18 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             }
         )      
 
-        # self.events.robot_wheel_joint_friction = EventTerm(
-        #     func=randomize_joint_parameters,
-        #     mode="reset",
-        #     params={
-        #         "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
-        #         "friction_distribution_params": (0.01, 0.05),
-        #         "coulomb_distribution_params": (0.01, 0.05),
-        #         "viscous_distribution_params": (0.001, 0.005),
-        #         "operation": "abs",
-        #         "distribution": "uniform",
-        #     }
-        # )
+        self.events.robot_wheel_joint_friction = EventTerm(
+            func=randomize_joint_parameters,
+            mode="reset",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names="wheel_.*"),
+                "friction_distribution_params": (0.01, 0.05),
+                "coulomb_distribution_params": (0.01, 0.05),
+                "viscous_distribution_params": (0.001, 0.005),
+                "operation": "abs",
+                "distribution": "uniform",
+            }
+        )
 
         # robot must be syncronized with jig object. 
         self.events.reset_body = EventTerm(
@@ -217,15 +217,14 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         # self.events.robot_link_center_of_mass = None 
         # self.events.robot_leg_physics_material = None
         # self.events.robot_wheel_physics_material = None
-        # self.events.robot_hip_actuator_gain = None
         # self.events.robot_thigh_actuator_gain = None
         # self.events.robot_knee_actuator_gain = None
         # self.events.robot_wheel_actuator_gain = None
         # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        # self.observation_noise_type = None
-        # self.observation_noise_params = None
+        self.observation_noise_type = None
+        self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
