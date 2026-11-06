@@ -6,6 +6,8 @@ from lib.domain_randomizer.noise_model import build_noise_uniform_vector
 from lib.env.WF_GOAT.stand.mdp.commander import UniformVelocityHeightCommandCfg
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
 
+from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
+
 
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
@@ -22,8 +24,8 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
+    # p_wheel_velocity_weight = 0.0
     p_hip_deviation_weight = 2.0
-    p_wheel_velocity_weight = 0.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
 
@@ -56,7 +58,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0), height=(0.41, 0.56)
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
         ),
     )
 
@@ -84,3 +86,13 @@ class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
+
+        # self.events.reset_joint_bias = EventTerm(
+        #     func=reset_joint_offset_bias,
+        #     mode="reset",
+        #     params={
+        #         "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+        #         "bias_range": (-0.05, -0.05),
+        #     }
+
+        # )
