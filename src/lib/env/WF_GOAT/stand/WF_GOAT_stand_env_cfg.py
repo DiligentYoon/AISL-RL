@@ -128,8 +128,10 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         self.GOAT_cfg.init_state.joint_pos = {
             "thigh_L_Joint": 0.9756,
             "thigh_R_Joint": -0.9756,
-            "knee_L_Joint": 2.0944,
-            "knee_R_Joint": -2.0944,
+            "knee_L_Joint": 2.0071,
+            "knee_R_Joint": -2.0071,
+            # "knee_L_Joint": 2.0944,
+            # "knee_R_Joint": -2.0944,
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
         }
@@ -158,9 +160,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.3, 0.7),
-                "coulomb_distribution_params": (0.3, 0.6),
-                "viscous_distribution_params": (0.05, 0.2),
+                "friction_distribution_params": (0.05, 0.3),
+                "coulomb_distribution_params": (0.05, 0.3),
+                "viscous_distribution_params": (0.05, 0.1),
                 "operation": "abs",
                 "distribution": "uniform",
             }

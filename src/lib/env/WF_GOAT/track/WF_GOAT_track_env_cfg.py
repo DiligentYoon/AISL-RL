@@ -19,12 +19,12 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     state_space = 32                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 15.0
+    r_height_weight = 20.0
     r_upright_weight = 3.0
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
-    # p_wheel_velocity_weight = 0.0
+    p_wheel_velocity_weight = 0.0
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
@@ -58,7 +58,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0), height=(0.41, 0.56)
         ),
     )
 
