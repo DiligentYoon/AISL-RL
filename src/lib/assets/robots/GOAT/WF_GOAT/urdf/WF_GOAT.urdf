@@ -300,7 +300,7 @@
     <!-- ****************************************** Joint ******************************************************** -->
     
     <joint name="hip_L_Joint" type="fixed">
-        <origin xyz="57.472E-03 95.508E-03 -101.356E-03" rpy="0.034906585 0 0"/>
+        <origin xyz="57.5927E-03 96.3302E-03 -99.20596E-03" rpy="0.034906585 0 0"/>
         <parent link="base_Link"/>
         <child link="hip_L_Link"/>
         <!--
@@ -312,7 +312,7 @@
     </joint>
     
     <joint name="hip_R_Joint" type="fixed">
-        <origin xyz="57.472E-03 -95.508E-03 -101.356E-03" rpy="-0.034906585 0 0"/>
+        <origin xyz="57.5927E-03 -96.3302E-03 -99.20596E-03" rpy="-0.034906585 0 0"/>
         <parent link="base_Link"/>
         <child link="hip_R_Link"/>
         <!--
