@@ -3,7 +3,10 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 
 from lib.domain_randomizer.noise_model import build_noise_uniform_vector
+from lib.env.WF_GOAT.stand.mdp.commander import UniformVelocityHeightCommandCfg
 from lib.env.WF_GOAT.stand.WF_GOAT_stand_env_cfg import WFGOATStandEnvCfg, WFGOATStandPlayEnvCfg
+
+from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 
 
 @configclass
@@ -21,8 +24,8 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
-    p_hip_deviation_weight = 2.0
     # p_wheel_velocity_weight = 0.0
+    p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
 
@@ -44,6 +47,20 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         "max": obs_noise_max,
         "operation": "add",
     }
+
+    # Command
+    commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(3.0, 5.0),
+        height_resampling_time_range=(3.0, 4.0),
+        prob_standing_envs=0.0,
+        prob_heading_envs=0.0,
+        heading_command=False,
+        heading_control_stiffness=0.0,
+        ranges=UniformVelocityHeightCommandCfg.Ranges(
+            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
+        ),
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -69,3 +86,13 @@ class WFGOATTrackPlayEnvCfg(WFGOATTrackEnvCfg, WFGOATStandPlayEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.curriculum = None
+
+        # self.events.reset_joint_bias = EventTerm(
+        #     func=reset_joint_offset_bias,
+        #     mode="reset",
+        #     params={
+        #         "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
+        #         "bias_range": (-0.05, -0.05),
+        #     }
+
+        # )

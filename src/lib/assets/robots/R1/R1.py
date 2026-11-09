@@ -143,10 +143,6 @@ R1_CFG: ArticulationCfg = ArticulationCfg(
             ".*_shoulder_yaw_joint": 0.0,
             ".*_elbow_joint": 1.5010,
             ".*_wrist_roll_joint": 0.0,
-            # -----------------------------------------------------------------
-            # Head
-            # -----------------------------------------------------------------
-            "head_.*_joint": 0.0,
         },
 
         joint_vel={
@@ -251,26 +247,6 @@ R1_CFG: ArticulationCfg = ArticulationCfg(
                 ".*_shoulder_yaw_joint": 3.0,
                 ".*_elbow_joint": 3.0,
                 ".*_wrist_roll_joint": 2.0,
-            },
-        ),
-
-        # ---------------------------------------------------------------------
-        # Head
-        # ---------------------------------------------------------------------
-        "head": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "head_pitch_joint",
-                "head_yaw_joint",
-            ],
-
-            stiffness={
-                "head_pitch_joint": 20.0,
-                "head_yaw_joint": 20.0,
-            },
-
-            damping={
-                "head_pitch_joint": 2.0,
-                "head_yaw_joint": 2.0,
             },
         ),
     },
