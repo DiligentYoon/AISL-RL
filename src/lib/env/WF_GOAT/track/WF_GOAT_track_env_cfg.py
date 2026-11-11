@@ -20,7 +20,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
     ## ======================= Reward Shaping ====================== ##
     r_height_weight = 15.0
-    r_upright_weight = 3.0
+    r_upright_weight = 5.0
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
