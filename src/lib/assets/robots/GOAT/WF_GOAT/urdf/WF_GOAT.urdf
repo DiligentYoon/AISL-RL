@@ -248,7 +248,7 @@
     <!-- ****************************************** Joint ******************************************************** -->
     
     <joint name="thigh_L_Joint" type="revolute">
-        <origin xyz="0.0089 0.079358 -0.104734" rpy="0.034907 0 0"/>
+        <origin xyz="8.9E-03 79.358E-03 -104.734E-03" rpy="0.034907 0 0"/>
         <parent link="base_Link"/>
         <child link="thigh_L_Link"/>
         <axis xyz="0 1 0"/>
@@ -258,7 +258,7 @@
     </joint>
 
     <joint name="thigh_R_Joint" type="revolute">
-        <origin xyz="0.0089 -0.079314 -0.104734" rpy="-0.034907 0 0"/>
+        <origin xyz="8.9E-03 -79.314E-03 -104.734E-03" rpy="-0.034907 0 0"/>
         <parent link="base_Link"/>
         <child link="thigh_R_Link"/>
         <axis xyz="0 -1 0"/>
