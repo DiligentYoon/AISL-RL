@@ -9,8 +9,8 @@ class CurriculumParamCfg:
     """Curriculum variable class controlled by CurriculumManager.
 
     where is the params(attr_path), 
-    easy level (start_value),
-    hard value(end_value), 
+    params range's start value (start_value),
+    params range's end value (end_value), 
     curriculum scheduling (schedule).
 
         Examples:
@@ -20,7 +20,7 @@ class CurriculumParamCfg:
             "commands/cfg/ranges/lin_vel_x"
                 env.commands  →  .cfg  →  .ranges  →  .lin_vel_x
 
-    schedule:
+    schedule (episode percentage):
         "linear" : difficulty = t  (0 → 1 linear)
         "step"   : discrete jump at the threshold values  (schedule_kwargs에 steps 지정)
     """
