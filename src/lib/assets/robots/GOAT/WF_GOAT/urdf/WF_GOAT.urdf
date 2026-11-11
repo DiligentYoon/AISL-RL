@@ -1,28 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <robot name="wheel_GOAT">
-    <!-- Enable when Base link is fixed -->
-    
-    <!-- 
-    <link name="world"/>
-    <joint name="base_static_Joint" type="fixed">
-        <origin rpy="0 0 0" xyz="0 0 0.3"/>
-        <parent link="world"/>
-        <child link="base_Link"/>
-    </joint>
-    -->
 
     <!-- ****************************************** Link ******************************************************** -->
 
     <link name="base_Link">
         <!-- No Hip motor version -->
         <inertial>
-            <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-            <mass value="2.810462"/>
-            <inertia ixx="14480E-06" ixy="-37.700908E-06" ixz="4110E-06"
-                    iyy="19890E-06" iyz="18.913079E-06" izz="17430E-06"/>
+            <origin rpy="0 0 0" xyz="6.437E-03 0.0 -23.804E-03"/>
+            <mass value="3.447078"/>
+            <inertia ixx="22030E-06" ixy="-11.169679E-06" ixz="4618E-06"
+                    iyy="25560E-06" iyz="4.397211E-06" izz="19970E-06"/>
         </inertial>
         <visual>
-            <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/base_Link.stl"/>
             </geometry>
@@ -31,61 +21,19 @@
             </material>
         </visual>
         <collision>
-            <origin xyz="-11E-03 0E-03 41E-03" rpy="0 0 0"/>
+            <origin xyz="0.00065 0 0.03643" rpy="0 0 0"/>
             <geometry>
-                <box size="0.214 0.200 0.182"/>
+                <box size="0.213 0.200 0.190"/>
             </geometry>
         </collision>
-        <!-- <collision>
-            <origin xyz="0.07 0.0 -0.078" rpy="0 0 0"/>
-            <geometry>
-                <box size="0.07 0.25 0.08"/>
-            </geometry>
-        </collision> -->
-    </link>
-
-    <link name="hip_L_Link">
-        <inertial>
-            <origin rpy="0 0 0" xyz="-47.762E-03 -38.810E-03 0.471E-03"/>
-            <mass value="0.320539"/>
-            <inertia ixx="143.9E-06" ixy="-5.376781E-06" ixz="-10.335937E-06"
-                    iyy="227.7E-06" iyz="-1.391116E-06" izz="195.4E-06"/>
-        </inertial>
-        <visual>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <geometry>
-                <mesh filename="../meshes/hip_L_Link.stl"/>
-            </geometry>
-            <material name="white">
-                <color rgba="1.0 1.0 1.0 1.0"/>
-            </material>
-        </visual>
         <collision>
-            <origin xyz="-53.5E-03 0 0" rpy="1.57 0 0"/>
+            <origin xyz="0.0094 0.096358 -0.104734" rpy="1.57 0 0"/>
             <geometry>
                 <cylinder length="135E-03" radius="42E-03"/>
             </geometry>
         </collision>
-    </link>
-
-    <link name="hip_R_Link">
-        <inertial>
-            <origin rpy="0 0 0" xyz="-47.762E-03 38.810E-03 0.471E-03"/>
-            <mass value="0.320539"/>
-            <inertia ixx="143.9E-06" ixy="5.376781E-06" ixz="-10.335937E-06"
-                    iyy="227.7E-06" iyz="1.391116E-06" izz="195.4E-06"/>
-        </inertial>
-        <visual>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <geometry>
-                <mesh filename="../meshes/hip_R_Link.stl"/>
-            </geometry>
-            <material name="white">
-                <color rgba="1.0 1.0 1.0 1.0"/>
-            </material>
-        </visual>
         <collision>
-            <origin xyz="-53.5E-03 0 0" rpy="1.57 0 0"/>
+            <origin xyz="0.0094 -0.096314 -0.104734" rpy="1.57 0 0"/>
             <geometry>
                 <cylinder length="135E-03" radius="42E-03"/>
             </geometry>
@@ -94,10 +42,10 @@
 
     <link name="thigh_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-2.656E-03 48.26E-03 -41.71E-03"/>
-            <mass value="0.520075"/>
-            <inertia ixx="2950E-06" ixy="-30.788885E-06" ixz="-120.3E-06"
-                    iyy="2808E-06" iyz="-490E-06" izz="489.2E-06"/>
+            <origin rpy="0 0 0" xyz="-2.375E-03 48.343E-03 -40.231E-03"/>
+            <mass value="0.520216"/>
+            <inertia ixx="2807E-06" ixy="-27.029E-06" ixz="-91.143E-06"
+                     iyy="2659E-06" iyz="-472.6E-06" izz="492.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -118,11 +66,10 @@
 
     <link name="thigh_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-2.656E-03 -48.26E-03 -41.71E-03"/>
-            <mass value="0.520075"/>
-            <inertia ixx="2950E-06" ixy="30.788885E-06" ixz="-120.3E-06"
-                    iyy="2808E-06" iyz="490E-06" izz="489.2E-06"/>
-                    
+            <origin rpy="0 0 0" xyz="-2.375E-03 -48.343E-03 -40.231E-03"/>
+            <mass value="0.520212"/>
+            <inertia ixx="2807E-06" ixy="-27.037E-06" ixz="-92.629E-06"
+                     iyy="2659E-06" iyz="-472.6E-06" izz="492.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -143,10 +90,10 @@
         
     <link name="calf_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="2.229E-03 0.879E-03 -153.549E-03"/>
-            <mass value="0.326882"/>
-            <inertia ixx="1948E-06" ixy="0.336927E-06" ixz="-35.309161E-06"
-                    iyy="1991E-06" iyz="10.159437E-06" izz="105.7E-06"/>
+            <origin rpy="0 0 0" xyz="2.088E-03 5.472E-03 -153.929E-03"/>
+            <mass value="0.325665"/>
+            <inertia ixx="1934E-06" ixy="0.351E-06" ixz="-35.208E-06"
+                     iyy="1977E-06" iyz="10.246E-06" izz="105E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -167,10 +114,10 @@
 
     <link name="calf_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="2.229E-03 -0.879E-03 -153.549E-03"/>
-            <mass value="0.326882"/>
-            <inertia ixx="1948E-06" ixy="-0.336927E-06" ixz="-35.309161E-06"
-                    iyy="1991E-06" iyz="-10.159437E-06" izz="105.7E-06"/>
+            <origin rpy="0 0 0" xyz="2.088E-03 5.472E-03 -153.929E-03"/>
+            <mass value="0.325671"/>
+            <inertia ixx="1934E-06" ixy="-0.349E-06" ixz="-35.250E-06"
+                     iyy="1977E-06" iyz="-10.228E-06" izz="105E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -214,12 +161,13 @@
         </collision>
     </link>
 
+
     <!-- <link name="wheel_L_Link">
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 8.265E-03 0.0" />
             <mass value="0.220" />
-            <inertia ixx="352.7E-06" ixy="0.0" ixz="0.0" 
-                    iyy="674E-06" iyz="0.0" izz="352.7E-06" />
+            <inertia ixx="352.7E-06" ixy="0.0E-06" ixz="0.0E-06" 
+                    iyy="674E-06" iyz="0.0E-06" izz="352.7E-06" />
         </inertial>
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -267,8 +215,8 @@
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 -8.265E-03 0.0" />
             <mass value="0.220" />
-            <inertia ixx="352.7E-06" ixy="0.0" ixz="0.0" 
-                    iyy="674E-06" iyz="0.0" izz="352.7E-06" />
+            <inertia ixx="352.7E-06" ixy="0.0E-06" ixz="0.0E-06" 
+                    iyy="674E-06" iyz="0.0E-06" izz="352.7E-06" />
         </inertial>
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -299,33 +247,9 @@
 
     <!-- ****************************************** Joint ******************************************************** -->
     
-    <joint name="hip_L_Joint" type="fixed">
-        <origin xyz="57.5927E-03 96.3302E-03 -99.20596E-03" rpy="0.034906585 0 0"/>
-        <parent link="base_Link"/>
-        <child link="hip_L_Link"/>
-        <!--
-        <axis xyz="-1 0 0"/>
-        <limit effort="4.5" lower="-1.7453" upper="1.0123" velocity="33.5"/>
-        <dynamics damping="0.0" stiffness ="0.0"/>
-        <dynamics friction="0.0" />
-        -->
-    </joint>
-    
-    <joint name="hip_R_Joint" type="fixed">
-        <origin xyz="57.5927E-03 -96.3302E-03 -99.20596E-03" rpy="-0.034906585 0 0"/>
-        <parent link="base_Link"/>
-        <child link="hip_R_Link"/>
-        <!--
-        <axis xyz="-1 0 0"/>
-        <limit effort="4.5" lower="-1.0123" upper="1.7453" velocity="33.5"/>
-        <dynamics damping="0.0" stiffness ="0.0"/>
-        <dynamics friction="0.0" />
-        -->
-    </joint>
-    
     <joint name="thigh_L_Joint" type="revolute">
-        <origin xyz="-54E-03 -17E-03 0" rpy="0 0 0"/>
-        <parent link="hip_L_Link"/>
+        <origin xyz="8.9E-03 79.358E-03 -104.734E-03" rpy="0.034907 0 0"/>
+        <parent link="base_Link"/>
         <child link="thigh_L_Link"/>
         <axis xyz="0 1 0"/>
         <limit effort="4.5" lower="-0.3840" upper="2.0071" velocity="33.5"/>
@@ -334,8 +258,8 @@
     </joint>
 
     <joint name="thigh_R_Joint" type="revolute">
-        <origin xyz="-54E-03 17E-03 0" rpy="0 0 0"/>
-        <parent link="hip_R_Link"/>
+        <origin xyz="8.9E-03 -79.314E-03 -104.734E-03" rpy="-0.034907 0 0"/>
+        <parent link="base_Link"/>
         <child link="thigh_R_Link"/>
         <axis xyz="0 -1 0"/>
         <limit effort="4.5" lower="-2.0071" upper="0.3840" velocity="33.5"/>
@@ -344,7 +268,7 @@
     </joint>
 
     <joint name="knee_L_Joint" type="revolute">
-        <origin xyz="0 23E-03 -205E-03" rpy="0 0 0"/>
+        <origin xyz="0 18E-03 -205E-03" rpy="0 0 0"/>
         <parent link="thigh_L_Link"/>
         <child link="calf_L_Link"/>
         <axis xyz="0 -1 0"/>
@@ -354,7 +278,7 @@
     </joint>
 
     <joint name="knee_R_Joint" type="revolute">
-        <origin xyz="0 -23E-03 -205E-03" rpy="0 0 0"/>
+        <origin xyz="0 -18E-03 -205E-03" rpy="0 0 0"/>
         <parent link="thigh_R_Link"/>
         <child link="calf_R_Link"/>
         <axis xyz="0 1 0"/>
@@ -364,22 +288,22 @@
     </joint>
 
     <joint name="wheel_L_Joint" type="revolute">
-        <origin xyz="0 20.7E-03 -200E-03" rpy="0 0 0"/>
-        <parent link="calf_L_Link" />
-        <child link="wheel_L_Link" />
-        <axis xyz="0 1 0" />
-        <limit effort="2.5" lower="-1000000" upper="1000000" velocity="33.5" />
-        <dynamics damping="0.0" stiffness="0.0"/>
+        <origin xyz="0 24.7E-03 -200E-03" rpy="0 0 0"/>
+        <parent link="calf_L_Link"/>
+        <child link="wheel_L_Link"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="2.5" lower="-1000000" upper="1000000" velocity="33.5"/>
+        <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
     </joint>
-    
+
     <joint name="wheel_R_Joint" type="revolute">
-        <origin xyz="0 -20.7E-03 -200E-03" rpy="0 0 0"/>
-        <parent link="calf_R_Link" />
-        <child link="wheel_R_Link" />
-        <axis xyz="0 -1 0" />
-        <limit effort="2.5" lower="-1000000" upper="1000000" velocity="33.5" />
-        <dynamics damping="0.0" stiffness="0.0"/>
+        <origin xyz="0 -24.7E-03 -200E-03" rpy="0 0 0"/>
+        <parent link="calf_R_Link"/>
+        <child link="wheel_R_Link"/>
+        <axis xyz="0 -1 0"/>
+        <limit effort="2.5" lower="-1000000" upper="1000000" velocity="33.5"/>
+        <dynamics damping="0.0" stiffness ="0.0"/>
         <dynamics friction="0.0" />
     </joint>
 
