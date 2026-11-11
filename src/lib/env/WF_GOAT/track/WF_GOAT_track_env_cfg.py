@@ -19,12 +19,12 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     state_space = 32                            # State space including privilege information
 
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 20.0
-    r_upright_weight = 3.0
+    r_height_weight = 15.0
+    r_upright_weight = 5.0
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
-    p_wheel_velocity_weight = 0.0
+    # p_wheel_velocity_weight = 0.0
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
