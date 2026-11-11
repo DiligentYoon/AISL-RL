@@ -7,12 +7,12 @@
         <!-- No Hip motor version -->
         <inertial>
             <origin rpy="0 0 0" xyz="6.437E-03 0.0 -23.804E-03"/>
-            <mass value="3.440478"/>
+            <mass value="3.447078"/>
             <inertia ixx="22030E-06" ixy="-11.169679E-06" ixz="4618E-06"
                     iyy="25560E-06" iyz="4.397211E-06" izz="19970E-06"/>
         </inertial>
         <visual>
-            <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/base_Link.stl"/>
             </geometry>
@@ -42,10 +42,10 @@
 
     <link name="thigh_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-0.002375 0.048343 -0.040231"/>
+            <origin rpy="0 0 0" xyz="-2.375E-03 48.343E-03 -40.231E-03"/>
             <mass value="0.520216"/>
-            <inertia ixx="0.002807353" ixy="-0.000027027" ixz="-0.000091132"
-                     iyy="0.002659312" iyz="-0.000472581" izz="0.000492681"/>
+            <inertia ixx="2807E-06" ixy="-27.029E-06" ixz="-91.143E-06"
+                     iyy="2659E-06" iyz="-472.6E-06" izz="492.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -66,10 +66,10 @@
 
     <link name="thigh_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="-0.002374 -0.048340 -0.040231"/>
+            <origin rpy="0 0 0" xyz="-2.375E-03 -48.343E-03 -40.231E-03"/>
             <mass value="0.520212"/>
-            <inertia ixx="0.002807332" ixy="0.000027036" ixz="-0.000092607"
-                     iyy="0.002659298" iyz="0.000472565" izz="0.000492664"/>
+            <inertia ixx="2807E-06" ixy="-27.037E-06" ixz="-92.629E-06"
+                     iyy="2659E-06" iyz="-472.6E-06" izz="492.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -90,13 +90,13 @@
         
     <link name="calf_L_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="0.002087 0.005472 -0.153929"/>
+            <origin rpy="0 0 0" xyz="2.088E-03 5.472E-03 -153.929E-03"/>
             <mass value="0.325665"/>
-            <inertia ixx="0.001933784" ixy="0.000000351" ixz="-0.000035200"
-                     iyy="0.001976708" iyz="0.000010247" izz="0.000105022"/>
+            <inertia ixx="1934E-06" ixy="0.351E-06" ixz="-35.208E-06"
+                     iyy="1977E-06" iyz="10.246E-06" izz="105E-06"/>
         </inertial>
         <visual>
-            <origin xyz="0 0.0048 0" rpy="0 0 0"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/calf_L_Link.stl"/>
             </geometry>
@@ -114,13 +114,13 @@
 
     <link name="calf_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="0.002089 -0.005469 -0.153926"/>
-            <mass value="0.325670"/>
-            <inertia ixx="0.001933867" ixy="-0.000000349" ixz="-0.000035246"
-                     iyy="0.001976801" iyz="-0.000010228" izz="0.000105037"/>
+            <origin rpy="0 0 0" xyz="2.088E-03 5.472E-03 -153.929E-03"/>
+            <mass value="0.325671"/>
+            <inertia ixx="1934E-06" ixy="-0.349E-06" ixz="-35.250E-06"
+                     iyy="1977E-06" iyz="-10.228E-06" izz="105E-06"/>
         </inertial>
         <visual>
-            <origin xyz="0 -0.0048 0" rpy="0 0 0"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/calf_R_Link.stl"/>
             </geometry>
@@ -166,8 +166,8 @@
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 8.265E-03 0.0" />
             <mass value="0.220" />
-            <inertia ixx="352.7E-06" ixy="0.0" ixz="0.0" 
-                    iyy="674E-06" iyz="0.0" izz="352.7E-06" />
+            <inertia ixx="352.7E-06" ixy="0.0E-06" ixz="0.0E-06" 
+                    iyy="674E-06" iyz="0.0E-06" izz="352.7E-06" />
         </inertial>
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -215,8 +215,8 @@
         <inertial>
             <origin rpy="0 0 0" xyz="0.0 -8.265E-03 0.0" />
             <mass value="0.220" />
-            <inertia ixx="352.7E-06" ixy="0.0" ixz="0.0" 
-                    iyy="674E-06" iyz="0.0" izz="352.7E-06" />
+            <inertia ixx="352.7E-06" ixy="0.0E-06" ixz="0.0E-06" 
+                    iyy="674E-06" iyz="0.0E-06" izz="352.7E-06" />
         </inertial>
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
