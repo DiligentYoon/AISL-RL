@@ -22,7 +22,7 @@ class CooperativeMAPPO(MAPPO):
                  action_space: gym.Space,
                  possible_agents: Sequence[str],
                  model: Dict[str, Union[nn.Module, Dict[str, nn.Module]]],
-                 buffer: Dict[str, RolloutBuffer],
+                 buffer: Dict[str, RolloutBuffer] | None,
                  device: Union[str, torch.device],
                  cfg: Dict) -> None:
         """Cooperative Multi Agent Proximal Policy Optimization with parameter-shared backbone
@@ -131,7 +131,8 @@ class CooperativeMAPPO(MAPPO):
             self.tensors_names.append("shared_infos")
             self.tensors_name_for_update.append("shared_infos")
             for uid in self.possible_agents:
-                self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
+                if self.buffer is not None:
+                    self.buffer[uid].create_tensor("shared_infos", self.shared_actor.num_shared)
 
 
     def save(self, path: str, path_onnx: str | None = None):

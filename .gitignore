@@ -34,7 +34,6 @@ docker/.container.cfg
 # IDE
 **/.idea/
 **/.vscode/
-!/.vscode/
 !/.vscode/settings_sample.json
 
 

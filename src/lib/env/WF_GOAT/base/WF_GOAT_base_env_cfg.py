@@ -30,7 +30,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg":SceneEntityCfg("robot", body_names="base_Link"),
-            "mass_distribution_params": (0.9, 1.1),
+            "mass_distribution_params": (0.95, 1.05),
             "operation": "scale",
         }
     )
@@ -39,7 +39,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_[LR]_Link"),
-            "mass_distribution_params": (0.9, 1.1),
+            "mass_distribution_params": (0.95, 1.05),
             "operation": "scale",
         },
     )

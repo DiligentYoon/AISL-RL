@@ -1050,7 +1050,7 @@
       </geometry>
     </collision>
   </link>
-  <joint name="head_pitch_joint" type="revolute">
+  <joint name="head_pitch_joint" type="fixed">
     <origin xyz="-0.006 0.03155 0.255" rpy="0 0 0"/>
     <parent link="waist_yaw_link"/>
     <child link="head_pitch_link"/>
@@ -1077,7 +1077,7 @@
       </geometry>
     </collision>
   </link>
-  <joint name="head_yaw_joint" type="revolute">
+  <joint name="head_yaw_joint" type="fixed">
     <origin xyz="0.0010126 -0.03155 0.1165" rpy="0 0 0"/>
     <parent link="head_pitch_link"/>
     <child link="head_yaw_link"/>

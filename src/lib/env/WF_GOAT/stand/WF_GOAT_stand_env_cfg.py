@@ -36,7 +36,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     soft_torque_limit = 0.7
     joint_vel_limit = 2.0 # rad/s
 
-    terminated_tilt = 0.7
+    terminated_tilt = 0.5
     terminated_joint_vel_limit = 5.0
     terminated_lin_vel_limit_z = 0.25
     height_reset_condition = 0.2 # meter (m)
@@ -51,7 +51,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
-    p_all_torque_weight = 0.01
+    p_all_torque_weight = 0.005
     p_joint_vel_limit_weight = 2.0
     p_joint_velocity_weight = 0.005
     p_wheel_velocity_weight = 1.0e-4
@@ -60,7 +60,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_terminated_weight = 200.0
 
     # Jig Delete Logic
-    jig_release_height = 0.395
+    jig_release_height = 0.405
     jig_release_hold_step = 30
     jig_release_depth = -5.0  
 
@@ -110,7 +110,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.39, 0.56)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
         ),
     )
 
@@ -124,18 +124,22 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.389)
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4)
         self.GOAT_cfg.init_state.joint_pos = {
             "thigh_L_Joint": 0.9756,
             "thigh_R_Joint": -0.9756,
-            "knee_L_Joint": 2.0944,
-            "knee_R_Joint": -2.0944,
+            "knee_L_Joint": 2.0071,
+            "knee_R_Joint": -2.0071,
+            # "knee_L_Joint": 2.0944,
+            # "knee_R_Joint": -2.0944,
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
         }
         
         self.events.robot_hip_actuator_gain = None
         self.events.robot_hip_joint_friction = None
+        # self.events.robot_thigh_joint_friction = None
+        # self.events.robot_wheel_joint_friction = None
 
         # Renew randomization     
         self.events.robot_thigh_joint_friction = EventTerm(
@@ -156,13 +160,13 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.2, 0.35),
-                "coulomb_distribution_params": (0.2, 0.3),
-                "viscous_distribution_params": (0.08, 0.2),
+                "friction_distribution_params": (0.05, 0.3),
+                "coulomb_distribution_params": (0.05, 0.3),
+                "viscous_distribution_params": (0.05, 0.1),
                 "operation": "abs",
                 "distribution": "uniform",
             }
-        )     
+        )      
 
         self.events.robot_wheel_joint_friction = EventTerm(
             func=randomize_joint_parameters,
@@ -215,36 +219,29 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
         # self.events.robot_link_center_of_mass = None 
         # self.events.robot_leg_physics_material = None
         # self.events.robot_wheel_physics_material = None
-        # self.events.robot_hip_actuator_gain = None
         # self.events.robot_thigh_actuator_gain = None
         # self.events.robot_knee_actuator_gain = None
         # self.events.robot_wheel_actuator_gain = None
         # self.events.reset_body.params["pose_range"]["yaw"] = (-0.0, 0.0)
 
         # disable noise
-        # self.observation_noise_type = None
-        # self.observation_noise_params = None
+        self.observation_noise_type = None
+        self.observation_noise_params = None
 
         ## ==================== Plot variables ==================== ##
         self.viz_data: dict = {
-            "left_hip_torque (Nm)": 0.0,
-            "right_hip_torque (Nm)": 0.0,
             "left_thigh_torque (Nm)": 0.0,
             "right_thigh_torque (Nm)": 0.0,
             "left_knee_torque (Nm)": 0.0,
             "right_knee_torque (Nm)": 0.0,
             "left_wheel_torque (Nm)": 0.0,
             "right_wheel_torque (Nm)": 0.0,
-            "left_hip_velocity (deg/s)": 0.0,
-            "right_hip_velocity (deg/s)": 0.0,
             "left_thigh_velocity (deg/s)": 0.0,
             "right_thigh_velocity (deg/s)": 0.0,
             "left_knee_velocity (deg/s)": 0.0,
             "right_knee_velocity (deg/s)": 0.0,
             "left_wheel_velocity (deg/s)": 0.0,
             "right_wheel_velocity (deg/s)": 0.0,
-            "left_hip_action": 0.0,
-            "right_hip_action": 0.0,
             "left_thigh_action": 0.0,
             "right_thigh_action": 0.0,
             "left_knee_action": 0.0,
@@ -257,6 +254,9 @@ class WFGOATStandPlayEnvCfg(WFGOATStandEnvCfg):
             "base_ang_roll_velocity (deg/s)": 0.0,
             "base_ang_pitch_velocity (deg/s)": 0.0,
             "base_ang_yaw_velocity (deg/s)": 0.0,
+            "base_proj_grav_x (-)": 0.0, 
+            "base_proj_grav_y (-)": 0.0, 
+            "base_proj_grav_z (-)": 0.0, 
             "effective_contact_force (N)": 0.0
             }
 

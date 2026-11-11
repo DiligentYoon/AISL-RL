@@ -5,6 +5,17 @@ from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 
 
+# =========================================
+# =============== Joint =================== 
+# =========================================
+
+# left_hip_pitch_joint, left_hip_roll_link, left_hip_yaw_joint, left_knee_joint, left_ankle_pitch_joint, left_ankle_roll_joint
+# right_hip_pitch_joint, right_hip_roll_link, right_hip_yaw_joint, right_knee_joint, right_ankle_pitch_joint, right_ankle_roll_joint
+# waist_roll_joint, waist_yaw_joint
+# left_shoulder_pitch_joint, left_shoulder_roll_joint, left_shoulder_yaw_joint, left_elbow_joint, left_wrist_roll_joint
+# right_shoulder_pitch_joint, right_shoulder_roll_joint, right_shoulder_yaw_joint, right_elbow_joint, right_wrist_roll_joint
+
+
 # -----------------------------------------------------------------------------
 # Asset paths
 # -----------------------------------------------------------------------------
@@ -132,10 +143,6 @@ R1_CFG: ArticulationCfg = ArticulationCfg(
             ".*_shoulder_yaw_joint": 0.0,
             ".*_elbow_joint": 1.5010,
             ".*_wrist_roll_joint": 0.0,
-            # -----------------------------------------------------------------
-            # Head
-            # -----------------------------------------------------------------
-            "head_.*_joint": 0.0,
         },
 
         joint_vel={
@@ -240,26 +247,6 @@ R1_CFG: ArticulationCfg = ArticulationCfg(
                 ".*_shoulder_yaw_joint": 3.0,
                 ".*_elbow_joint": 3.0,
                 ".*_wrist_roll_joint": 2.0,
-            },
-        ),
-
-        # ---------------------------------------------------------------------
-        # Head
-        # ---------------------------------------------------------------------
-        "head": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "head_pitch_joint",
-                "head_yaw_joint",
-            ],
-
-            stiffness={
-                "head_pitch_joint": 20.0,
-                "head_yaw_joint": 20.0,
-            },
-
-            damping={
-                "head_pitch_joint": 2.0,
-                "head_yaw_joint": 2.0,
             },
         ),
     },

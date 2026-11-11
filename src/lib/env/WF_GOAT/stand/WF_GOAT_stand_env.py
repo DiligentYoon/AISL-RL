@@ -330,8 +330,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         joint_velocity = torch.rad2deg(self._robot.data.joint_vel)
         
         extras = copy.deepcopy(self.extras)
-        # extras["viz_data"]["left_hip_torque (Nm)"]    = applied_torque[:, 0]
-        # extras["viz_data"]["right_hip_torque (Nm)"]   = applied_torque[:, 1]
         extras["viz_data"]["left_thigh_torque (Nm)"]  = applied_torque[:, 0]
         extras["viz_data"]["right_thigh_torque (Nm)"] = applied_torque[:, 1]
         extras["viz_data"]["left_knee_torque (Nm)"]   = applied_torque[:, 2]
@@ -339,8 +337,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["left_wheel_torque (Nm)"]  = applied_torque[:, 4]
         extras["viz_data"]["right_wheel_torque (Nm)"] = applied_torque[:, 5]
 
-        # extras["viz_data"]["left_hip_velocity (deg/s)"]    = joint_velocity[:, 0]
-        # extras["viz_data"]["right_hip_velocity (deg/s)"]   = joint_velocity[:, 1]
         extras["viz_data"]["left_thigh_velocity (deg/s)"]  = joint_velocity[:, 0]
         extras["viz_data"]["right_thigh_velocity (deg/s)"] = joint_velocity[:, 1]
         extras["viz_data"]["left_knee_velocity (deg/s)"]   = joint_velocity[:, 2]
@@ -348,8 +344,6 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["left_wheel_velocity (deg/s)"]  = joint_velocity[:, 4]
         extras["viz_data"]["right_wheel_velocity (deg/s)"] = joint_velocity[:, 5]
 
-        # extras["viz_data"]["left_hip_action"]      = self.actions[:, 0]
-        # extras["viz_data"]["right_hip_action"]     = self.actions[:, 1]
         extras["viz_data"]["left_thigh_action"]    = self.actions[:, 0]
         extras["viz_data"]["right_thigh_action"]   = self.actions[:, 1]
         extras["viz_data"]["left_knee_action"]     = self.actions[:, 2]
@@ -361,6 +355,9 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         extras["viz_data"]["base_lin_x_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 0])
         extras["viz_data"]["base_lin_y_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 1])
         extras["viz_data"]["base_lin_z_velocity (m/s)"] = torch.abs(self.base_lin_vel[:, 2])
+        extras["viz_data"]["base_proj_grav_x (-)"] = self.gravity_vector[:, 0]
+        extras["viz_data"]["base_proj_grav_y (-)"] = self.gravity_vector[:, 1]
+        extras["viz_data"]["base_proj_grav_z (-)"] = self.gravity_vector[:, 2]
         extras["viz_data"]["base_ang_roll_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 0])
         extras["viz_data"]["base_ang_pitch_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 1])
         extras["viz_data"]["base_ang_yaw_velocity (deg/s)"] = torch.rad2deg(self.base_ang_vel[:, 2])
