@@ -60,7 +60,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     p_terminated_weight = 200.0
 
     # Jig Delete Logic
-    jig_release_height = 0.405
+    jig_release_height = 0.415
     jig_release_hold_step = 30
     jig_release_depth = -5.0  
 
@@ -110,7 +110,7 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
         heading_command=False,
         heading_control_stiffness=0.0,
         ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
+            lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(0.0, 0.0), heading=(0.0, 0.0), height=(0.42, 0.56)
         ),
     )
 
@@ -124,12 +124,12 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
-        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.4)
+        self.GOAT_cfg.init_state.pos = (0.0, 0.0, 0.41)
         self.GOAT_cfg.init_state.joint_pos = {
-            "thigh_L_Joint": 0.9756,
-            "thigh_R_Joint": -0.9756,
-            "knee_L_Joint": 2.0071,
-            "knee_R_Joint": -2.0071,
+            "thigh_L_Joint": 1.0386,
+            "thigh_R_Joint": -1.0386,
+            "knee_L_Joint": 2.0384,
+            "knee_R_Joint": -2.0384,
             # "knee_L_Joint": 2.0944,
             # "knee_R_Joint": -2.0944,
             "wheel_L_Joint": 0.0,
@@ -160,9 +160,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             mode="reset",
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names="knee_.*"),
-                "friction_distribution_params": (0.05, 0.3),
-                "coulomb_distribution_params": (0.05, 0.3),
-                "viscous_distribution_params": (0.05, 0.1),
+                "friction_distribution_params": (0.2, 0.6),
+                "coulomb_distribution_params": (0.2, 0.6),
+                "viscous_distribution_params": (0.05, 0.2),
                 "operation": "abs",
                 "distribution": "uniform",
             }

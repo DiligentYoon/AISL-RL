@@ -68,8 +68,8 @@
         <inertial>
             <origin rpy="0 0 0" xyz="-2.375E-03 -48.343E-03 -40.231E-03"/>
             <mass value="0.520212"/>
-            <inertia ixx="2807E-06" ixy="-27.037E-06" ixz="-92.629E-06"
-                     iyy="2659E-06" iyz="-472.6E-06" izz="492.7E-06"/>
+            <inertia ixx="2807E-06" ixy="27.037E-06" ixz="-92.629E-06"
+                     iyy="2659E-06" iyz="472.6E-06" izz="492.7E-06"/>
         </inertial>
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -114,7 +114,7 @@
 
     <link name="calf_R_Link">
         <inertial>
-            <origin rpy="0 0 0" xyz="2.088E-03 5.472E-03 -153.929E-03"/>
+            <origin rpy="0 0 0" xyz="2.088E-03 -5.472E-03 -153.929E-03"/>
             <mass value="0.325671"/>
             <inertia ixx="1934E-06" ixy="-0.349E-06" ixz="-35.250E-06"
                      iyy="1977E-06" iyz="-10.228E-06" izz="105E-06"/>

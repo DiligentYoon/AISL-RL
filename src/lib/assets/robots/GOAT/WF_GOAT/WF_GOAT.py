@@ -29,10 +29,11 @@ urdf_cfg: sim_utils.UrdfConverterCfg = sim_utils.UrdfConverterCfg(
 urdf_converter = sim_utils.UrdfConverter(cfg = urdf_cfg)
 
 # URDF conversion check
+print(f"[Robot] urdf path : {WF_GOAT_ASSET['urdf_path']}")
 if urdf_converter.usd_path == WF_GOAT_ASSET["usd_path"]:
-    print("urdf conversion success!")
+    print("[Robot]urdf conversion success!")
 else:
-    print("urdf conversion failed!")
+    print("[Robot]urdf conversion failed!")
 
 # GOAT Cfg
 GOAT_CFG: ArticulationCfg = ArticulationCfg(           

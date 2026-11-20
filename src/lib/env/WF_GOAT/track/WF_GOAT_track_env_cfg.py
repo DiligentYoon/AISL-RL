@@ -24,7 +24,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
     r_lin_vel_tracking_weight = 6.0
     r_ang_vel_tracking_weight = 6.0
 
-    # p_wheel_velocity_weight = 0.0
+    p_wheel_velocity_weight = 0.0
     p_hip_deviation_weight = 2.0
     p_illegal_contact_weight = 2.0
     p_joint_deviation_lr_weight = 6.0
@@ -48,24 +48,14 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
         "operation": "add",
     }
 
-    # Command
-    commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(3.0, 5.0),
-        height_resampling_time_range=(3.0, 4.0),
-        prob_standing_envs=0.0,
-        prob_heading_envs=0.0,
-        heading_command=False,
-        heading_control_stiffness=0.0,
-        ranges=UniformVelocityHeightCommandCfg.Ranges(
-            lin_vel_x=(-0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.0, 0.0), heading=(0.0, 0.0), height=(0.41, 0.56)
-        ),
-    )
-
     def __post_init__(self):
         super().__post_init__()
         self.sim.dt = self.sim_dt
         self.sim.render_interval = self.decimation_apply
+
+        self.commands.prob_standing_envs = 0.2
+        self.commands.ranges.lin_vel_x=(-1.0, 1.0)
+        self.commands.ranges.ang_vel_z=(-0.5, 0.5)
 
         # only for TorqueDelayedPDActuator class
         # self.is_torque_delayed = False 
