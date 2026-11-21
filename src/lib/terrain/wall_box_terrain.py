@@ -17,9 +17,11 @@ class WallBoxTerrainCfg(MeshPlaneTerrainCfg):
     # Set mesh size
     wall_size: tuple[float, float, float] = (0.1, 3.0, 2.0)
     box_size_range: tuple[float, float] = (0.5, 0.8)
-    
+    box_size: tuple[float, float, float] = (0.6, 0.6, 0.6)                 # Final box extents
+
     # Keep space between the spawn origin, table, and wall.
     wall_distance: float = 2.5
+    wall_position: tuple[float, float, float] | None = None               # Final wall center, None uses wall_distance
     box_position: tuple[float, float, float] = (0.6, 0.6, 0.6)
 
 class WallBoxTerrain:
@@ -39,8 +41,9 @@ class WallBoxTerrain:
 
         # Wall
         wall = trimesh.creation.box(extents=cfg.wall_size)
-        wall.apply_translation(origin + np.array([cfg.wall_distance, 0.0, cfg.wall_size[2] / 2.0]))
-        
+        wall_position = cfg.wall_position if cfg.wall_position is not None else (cfg.wall_distance, 0.0, cfg.wall_size[2] / 2.0)
+        wall.apply_translation(origin + np.asarray(wall_position))
+
         meshes.append(wall)
         return meshes, origin
 
@@ -50,11 +53,12 @@ class WallBoxTerrain:
 
         # Wall
         wall = trimesh.creation.box(extents=cfg.wall_size)
-        wall.apply_translation(origin + np.array([cfg.wall_distance, 0.0, cfg.wall_size[2] / 2.0]))
+        wall_position = cfg.wall_position if cfg.wall_position is not None else (cfg.wall_distance, 0.0, cfg.wall_size[2] / 2.0)
+        wall.apply_translation(origin + np.asarray(wall_position))
 
         # Box
         box = trimesh.creation.box(extents=cfg.box_size)
-        box.apply_translation(origin + np.array([cfg.box_position]))
+        box.apply_translation(origin + np.asarray(cfg.box_position))
         
         meshes.append(wall)
         meshes.append(box)
