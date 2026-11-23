@@ -111,6 +111,8 @@ class EnvCfg:
     num_observations: int | None = None
     """The dimension of the observation space from each environment instance."""
 
+    history_length: int = 0
+
     state_space: SpaceType | None = None
     """State space definition.
 

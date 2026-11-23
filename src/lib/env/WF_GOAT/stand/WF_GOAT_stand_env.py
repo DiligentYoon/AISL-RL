@@ -146,13 +146,17 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         Returns:
             Observation space
         """
-        observation = torch.cat((self.base_ang_vel,                                                              # [E, 3]
-                                 self.gravity_vector,                                                            # [E, 3]
-                                 self.command_inputs_b[:, 3:],                                                   # [E, 1]
-                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
-                                 self.joint_vel,                                                                 # [E, 6]
-                                 self.previous_actions,                                                          # [E, 6]
+        observation = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
+                                 self._robot.data.projected_gravity_b,                                                       # [E, 3]
+                                 self.commands.command_b,                                                                    # [E, 4]
+                                 self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
+                                 self._robot.data.joint_vel,                                                                 # [E, 6]
+                                 self.previous_actions,                                                                      # [E, 6]
                                 ), dim=1) 
+
+        if self.cfg.history_length > 0:
+            observation = torch.cat([observation, self.obs_history_buf.buffer.reshape(self.num_envs, -1)], dim=-1)
+
 
         return observation
     
@@ -163,19 +167,19 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         Returns
             State space
         """
-        observation = torch.cat((self.base_ang_vel,                                                               # [E, 3]
-                                 self.gravity_vector,                                                             # [E, 3]
-                                 self.command_inputs_b[:, 3:],                                                    # [E, 1]
-                                 self.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],   # [E, 4]
-                                 self.joint_vel,                                                                  # [E, 6]
-                                 self.previous_actions,                                                           # [E, 6]
-                                 ), dim=1)                             
-        
-        privileged_info = torch.cat((self.base_lin_vel,                                      # [E, 3]
-                                     self.base_height,                                       # [E, 1]
-                                     self.friction_coefficient), dim=1)                      # [E, 2]
-        
-        state = torch.cat([observation, privileged_info], dim=-1)
+        state = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
+                           self._robot.data.projected_gravity_b,                                                       # [E, 3]
+                           self.commands.command_b,                                                                    # [E, 4]
+                           self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
+                           self._robot.data.joint_vel,                                                                 # [E, 6]
+                           self.previous_actions,                                                                      # [E, 6]
+                           self._robot.data.root_lin_vel_b,                                                            # [E, 3]
+                           self._robot.data.root_pos_w[:, 2:],                                                         # [E, 1] 
+                           self.friction_coefficient                                                                   # [E, 2]                                                                                                                           # [E, 6]
+                        ), dim=1)                       
+             
+        if self.cfg.history_length > 0:
+            state = torch.cat([state, self.state_history_buf.buffer.reshape(self.num_envs, -1)], dim=-1)
 
         return state
     
@@ -186,22 +190,30 @@ class WFGOATStandEnv(WFGOATBaseEnv):
 
         # Height tracking Reward
         height_error = torch.reshape(torch.abs(self.base_height - self.command_inputs_b[:, 3:]), (-1,))
-        r_height = torch.exp(-height_error / 0.05)
+        r_height = torch.exp(-height_error / 0.1)
+
+        # Lin vel Tracking Reward
+        lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.2)
+
+        # Ang vel Tracking Reward
+        ang_vel_error = torch.abs(self.base_ang_vel[:, 2] - self.command_inputs_b[:, 2])
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.2)
 
         # COM align Reward
         wheel_xy = torch.mean(self.wheel_pos[:, :, :2], dim=1)
         align_error = torch.sum(torch.square(self.base_pos_w[:, :2] - wheel_xy), dim=1)
-        r_com_align = torch.exp(-align_error / 0.05)
+        r_com_align = torch.exp(-align_error / 0.02)
 
         # Regularization Penalty
-        p_lin_vel            = -torch.norm(self.base_lin_vel[:, :3], dim=-1)
-        p_ang_vel            = -torch.norm(self.base_ang_vel[:, :3], dim=-1)        
+        p_ang_vel            = -torch.norm(self.base_ang_vel[:, :2], dim=-1)        
         p_illegal_contact    = -torch.sum(self.illegal_force, dim=1)
         
         p_velocity_limit     = -torch.sum(self.out_of_limits_velocity[:, self.joint_ids], dim=1)     # wheel is not included
         p_all_torque_limit   = -torch.sum(self.out_of_limits_torque, dim=1)
         p_all_torque         = -torch.sum(torch.square(self.applied_torque), dim=1)
         p_joint_velocity     = -torch.sum(torch.square(self.joint_vel[:, self.joint_ids]), dim=1)    # wheel is not included
+        p_wheel_velocity     = -torch.sum(torch.square(self.joint_vel[:, self.wheel_ids]), dim=1)
         p_joint_accel        = -torch.sum(torch.square(self.joint_acc), dim=1)                       # [NOTE] wheel is included
         p_joint_deviation_lr = -torch.sum(torch.abs(self.joint_deviation_lr), dim=-1)
         p_action_rate        = -torch.sum(torch.abs((self.actions - self.previous_actions)), dim=1)
@@ -211,14 +223,16 @@ class WFGOATStandEnv(WFGOATBaseEnv):
         total_reward = (
             self.cfg.r_upright_weight * r_upright                           +
             self.cfg.r_height_weight * r_height                             +
+            self.cfg.r_lin_vel_tracking_weight * r_lin_vel_tracking         +
+            self.cfg.r_ang_vel_tracking_weight * r_ang_vel_tracking         +
             self.cfg.r_com_align_weight * r_com_align                       +
             self.cfg.p_ang_vel_weight * p_ang_vel                           +
-            self.cfg.p_lin_vel_weight * p_lin_vel                           +
             self.cfg.p_illegal_contact_weight * p_illegal_contact           + 
             self.cfg.p_all_torque_limit_weight * p_all_torque_limit         +
             self.cfg.p_all_torque_weight * p_all_torque                     +
             self.cfg.p_joint_vel_limit_weight * p_velocity_limit            +
             self.cfg.p_joint_velocity_weight * p_joint_velocity             +
+            self.cfg.p_wheel_velocity_weight * p_wheel_velocity             +
             self.cfg.p_joint_accel_weight * p_joint_accel                   +
             self.cfg.p_joint_deviation_lr_weight * p_joint_deviation_lr     +
             self.cfg.p_action_rate_weight * p_action_rate                   +
@@ -231,17 +245,19 @@ class WFGOATStandEnv(WFGOATBaseEnv):
             # ==========================================
             "Task Reward / Upright"             : r_upright,
             "Task Reward / Height"              : r_height,
-            "Task Reward / COM_Align"           : r_com_align,
+            "Task Reward / Lin_Vel_Tracking"    : r_lin_vel_tracking,
+            "Task Reward / Ang_Vel_Tracking"    : r_ang_vel_tracking,
+            "Task Reward / COM_Align"           : r_com_align, 
             # ==========================================
             # Task Penalty (-)
             # ==========================================
-            "Task Penalty / Lin_Vel"            : p_lin_vel,
             "Task Penalty / Ang_Vel"            : p_ang_vel,
             "Task Penalty / Contact"            : p_illegal_contact,
             "Task Penalty / Torque_Limit"       : p_all_torque_limit,
             "Task Penalty / Torque"             : p_all_torque,
             "Task Penalty / Vel_Limit"          : p_velocity_limit, 
             "Task Penalty / Joint_Vel"          : p_joint_velocity,
+            "Task Penalty / Wheel_Vel"          : p_wheel_velocity,
             "Task Penalty / Joint_Acc"          : p_joint_accel,
             "Task Penalty / Joint_Deviation_LR" : p_joint_deviation_lr,
             "Task Penalty / Action_Rate"        : p_action_rate,

@@ -92,17 +92,6 @@ class EventCfg:
     )
     
     # reset
-    robot_hip_actuator_gain = EventTerm(
-        func=randomizer.randomize_actuator_gains,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "damping_distribution_params": (0.8, 1.2),
-            "operation": "scale",
-            "distribution": "uniform",
-        },
-    )
     robot_thigh_actuator_gain = EventTerm(
         func=randomizer.randomize_actuator_gains,
         mode="reset",
@@ -135,18 +124,6 @@ class EventCfg:
             "operation": "scale",
             "distribution": "uniform",
         },
-    )
-
-    robot_hip_joint_friction = EventTerm(
-        func=randomizer.randomize_joint_parameters,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names="hip_.*"),
-            "friction_distribution_params": (1.0, 1.0),
-            "armature_distribution_params": (1.0, 1.0),
-            "operation": "scale",
-            "distribution": "uniform",
-        }      
     )
     robot_thigh_joint_friction = EventTerm(
         func=randomizer.randomize_joint_parameters,

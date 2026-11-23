@@ -32,6 +32,7 @@ from isaaclab.utils.seed import configure_seed
 from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
 from isaaclab.envs.ui import ViewportCameraController
+from isaaclab.utils.buffers.circular_buffer import CircularBuffer
 
 from lib.domain_randomizer.noise_model import gaussian_noise, uniform_noise, constant_noise
 from lib.utils.space_utils import sample_space, spec_to_gym_space
@@ -191,6 +192,10 @@ class Env(gym.Env):
         self.reset_terminated = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.reset_time_outs = torch.zeros_like(self.reset_terminated)
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.sim.device)
+        # --- init history buffers
+        if self.cfg.history_length > 0:
+            self.state_history_buf = CircularBuffer(max_len=self.cfg.history_length, batch_size=self.num_envs, device=self.device)
+            self.obs_history_buf = CircularBuffer(max_len=self.cfg.history_length, batch_size=self.num_envs, device=self.device)
 
         # setup the action and observation spaces for Gym
         self._configure_gym_env_spaces()
@@ -316,6 +321,15 @@ class Env(gym.Env):
         if self.cfg.wait_for_textures and self.sim.has_rtx_sensors():
             while SimulationManager.assets_loading():
                 self.sim.render()
+
+        if self.cfg.history_length > 0:
+            self.obs_history_buf.reset()
+            self.state_history_buf.reset()
+
+            obs_hist_dim = int(self.cfg.observation_space / (1 + self.cfg.history_length))
+            state_hist_dim = int(self.cfg.state_space / (1 + self.cfg.history_length))
+            self.obs_history_buf.append(torch.zeros(self.num_envs, obs_hist_dim, dtype=torch.float32, device=self.device))
+            self.state_history_buf.append(torch.zeros(self.num_envs, state_hist_dim, dtype=torch.float32, device=self.device))
         
         # update observations
         self.obs_buf = self._get_observations()
@@ -375,6 +389,14 @@ class Env(gym.Env):
                 action = constant_noise(action, **self.cfg.action_noise_params)
             else:
                 raise RuntimeError(f"Unknown action noise type: {self.cfg.action_noise_type}")
+
+        # add data to history buffer
+        if self.cfg.history_length > 0:
+            obs_hist_dim = int(self.cfg.observation_space / (1+self.cfg.history_length))
+            state_hist_dim = int(self.cfg.state_space / (1+self.cfg.history_length))
+
+            self.obs_history_buf.append(self.obs_buf[:, :obs_hist_dim])
+            self.state_history_buf.append(self.state_buf[:, :state_hist_dim])
 
         # process actions
         self._pre_physics_step(action)
@@ -462,7 +484,7 @@ class Env(gym.Env):
                 self.obs_buf = constant_noise(self.obs_buf, **self.cfg.observation_noise_params)
             else:
                 raise RuntimeError(f"Unknown observation noise type: {self.cfg.observation_noise_type}")
-        
+
         # update viz data
         if (self.cfg.viz_data is not None):
             self.extras = self._update_viz_data()
@@ -648,11 +670,11 @@ class Env(gym.Env):
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space["policy"], self.num_envs)
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
 
-        # optional state space for asymmetric actor-critic architectures
-        self.state_space = None
-        if self.cfg.state_space:
-            self.single_observation_space["critic"] = spec_to_gym_space(self.cfg.state_space)
-            self.state_space = gym.vector.utils.batch_space(self.single_observation_space["critic"], self.num_envs)
+        # state space for asymmetric actor-critic architectures
+        if not self.cfg.state_space:
+            self.cfg.state_space = self.cfg.observation_space
+        self.single_observation_space["critic"] = spec_to_gym_space(self.cfg.state_space)
+        self.state_space = gym.vector.utils.batch_space(self.single_observation_space["critic"], self.num_envs)
 
         # instantiate actions (needed for tasks for which the observations computation is dependent on the actions)
         self.actions = sample_space(self.single_action_space, self.sim.device, batch_size=self.num_envs, fill_value=0)
@@ -678,6 +700,14 @@ class Env(gym.Env):
 
         # reset the episode length buffer
         self.episode_length_buf[env_ids] = 0
+
+        # reset history count
+        if self.cfg.history_length > 0:
+            self.state_history_buf.reset(env_ids)
+            self.obs_history_buf.reset(env_ids)
+
+            self.state_history_buf._num_pushes[env_ids] = 1
+            self.obs_history_buf._num_pushes[env_ids] = 1
 
     """
     Implementation-specific functions.
@@ -736,12 +766,7 @@ class Env(gym.Env):
             The states for the environment. If the environment does not have a state-space, the function
             returns a None.
         """
-        if self.state_space is not None:
-            raise NotImplementedError(
-                f"{self.__class__.__name__}: state_space is set ({self.state_space}), "
-                "so '_get_states' must be implemented to return privileged critic states.")
-        else:
-            return None  # noqa: R501
+        raise NotImplementedError(f"Please implement the '_get_states' method for {self.__class__.__name__}.")
 
     @abstractmethod
     def _get_rewards(self) -> torch.Tensor:

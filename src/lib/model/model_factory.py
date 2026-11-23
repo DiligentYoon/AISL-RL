@@ -57,17 +57,6 @@ class ModelFactory:
                                     squash=self.is_squashed,
                                     device=self.device)
             
-            elif self.model_type == "communet":
-                actor = CommunetActor(possible_agents=possible_agents,
-                                      num_observations=observation_size, 
-                                      num_actions=action_size,
-                                      hidden_dim=128,
-                                      communet_depth=4,
-                                      min_log_std=self.model_cfg["policy"]["min_log_std"], 
-                                      max_log_std=self.model_cfg["policy"]["max_log_std"],
-                                      squash=self.is_squashed, 
-                                      device=self.device)
-            
             # Critic initialization
             for uid in possible_agents:
                 # Multi Agent : Per-agent network

@@ -16,46 +16,6 @@ class WFGOATTrackEnv(WFGOATStandEnv):
         self.joint_pos_bias = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
         self.biased_joint_pos = torch.zeros((self.num_envs, self._robot.num_joints), dtype=torch.float32, device=self.device)
 
-    def _get_observations(self) -> torch.Tensor:
-        """
-        Get sensor data without curriculum Gaussian noise
-
-        Returns:
-            Observation space
-        """
-        observation = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
-                                 self._robot.data.projected_gravity_b,                                                       # [E, 3]
-                                 self.commands.command_b,                                                                    # [E, 4]
-                                 self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
-                                 self._robot.data.joint_vel,                                                                 # [E, 6]
-                                 self.previous_actions,                                                                      # [E, 6]
-                                ), dim=1) 
-
-        return observation
-    
-    def _get_states(self) -> torch.Tensor:
-        """"
-        Get State space using previleged information
-
-        Returns
-            State space
-        """
-        observation = torch.cat((self._robot.data.root_ang_vel_b,                                                            # [E, 3]
-                                 self._robot.data.projected_gravity_b,                                                       # [E, 3]
-                                 self.commands.command_b,                                                                    # [E, 4]
-                                 self._robot.data.joint_pos[:, self.joint_ids] - self.default_joint_pos[:, self.joint_ids],  # [E, 4]
-                                 self._robot.data.joint_vel,                                                                 # [E, 6]
-                                 self.previous_actions,                                                                      # [E, 6]
-                                ), dim=1)                       
-        
-        privileged_info = torch.cat((self._robot.data.root_lin_vel_b,                        # [E, 3]
-                                     self._robot.data.root_pos_w[:, 2:],                     # [E, 1]
-                                     self.friction_coefficient), dim=1)                      # [E, 2]        
-        
-        state = torch.cat([observation, privileged_info], dim=-1)
-
-        return state
-
     def _get_rewards(self) -> torch.Tensor:
         # Orientation Reward (Projected Gravity Alignment)
         upright_error = torch.sum(torch.square(self.gravity_vector[:, :2]), dim=1)
@@ -67,11 +27,11 @@ class WFGOATTrackEnv(WFGOATStandEnv):
 
         # Lin vel Tracking Reward
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, :2] - self.command_inputs_b[:, :2]), dim=1)
-        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.2)
+        r_lin_vel_tracking = torch.exp(-lin_vel_error / 0.5)
 
         # Ang vel Tracking Reward
         ang_vel_error = torch.abs(self.base_ang_vel[:, 2] - self.command_inputs_b[:, 2])
-        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.2)
+        r_ang_vel_tracking = torch.exp(-ang_vel_error / 0.5)
 
         # COM align Reward
         wheel_xy = torch.mean(self.wheel_pos[:, :, :2], dim=1)

@@ -20,11 +20,12 @@ from lib.env.WF_GOAT.stand.mdp.randomizer import reset_robot_and_object_root_sta
 class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ==================== Environment parameters ==================== ##
     episode_length_s = 10.0
-    sim_dt = 0.01                              # 200Hz torque controller
+    sim_dt = 0.01                               # 100Hz torque controller
     decimation = 2                              # 50Hz policy
     action_space = 6                            # [L + R, joint pos + wheel velocity]
-    observation_space = 23                      # Observation space
-    state_space = 29                            # State space including privilege information
+    observation_space = 130                      # Observation space
+    state_space = 160                            # State space including privilege information
+    history_length = 4                          # for implicit state estimation
 
     ## ======================== Controller gain ======================= ##
     action_scale_factor = {"joint" : [0.5, ()],
@@ -41,64 +42,29 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     terminated_lin_vel_limit_z = 0.25
     height_reset_condition = 0.2 # meter (m)
 
-    r_height_weight = 20.0
-    r_upright_weight = 9.0
+    r_height_weight = 15.0
+    r_upright_weight = 5.0
+    r_lin_vel_tracking_weight = 6.0
+    r_ang_vel_tracking_weight = 6.0
     r_com_align_weight = 2.0
 
     p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 4.0
-    p_lin_vel_weight = 4.0
+    p_joint_deviation_lr_weight = 6.0
     p_ang_vel_weight = 1.0
 
     p_all_torque_limit_weight = 0.0
     p_all_torque_weight = 0.005
     p_joint_vel_limit_weight = 2.0
-    p_joint_velocity_weight = 0.005
-    p_wheel_velocity_weight = 1.0e-4
-    p_joint_accel_weight = 5.0e-6
-    p_action_rate_weight = 0.05
+    p_joint_velocity_weight = 0.05
+    p_wheel_velocity_weight = 5.0e-4
+    p_joint_accel_weight = 5.0e-4
+    p_action_rate_weight = 0.1
     p_terminated_weight = 200.0
 
     # Jig Delete Logic
     jig_release_height = 0.415
     jig_release_hold_step = 30
     jig_release_depth = -5.0  
-
-    # Per-axis observation noise groups
-    obs_noise_groups = {
-        "base_ang_vel":      {"dim": 3,  "min": -0.1,  "max": 0.1},
-        "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
-        "command":           {"dim": 1,  "min": 0.0,   "max": 0.0},
-        "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
-        "joint_vel":         {"dim": 6,  "min": -1.5,  "max": 1.5},
-        "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
-    }
-    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups)    # list
-
-    # Noise Model
-    observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
-    observation_noise_params: dict = {
-        "min": obs_noise_min,
-        "max": obs_noise_max,
-        "operation": "add",
-    }
-    
-    ## ======================== Curriculum ======================= ##
-    # curriculum = CurriculumManagerCfg(
-    #     params=[
-    #         CurriculumParamCfg(
-    #             name="terminated_lin_vel_limit_z",
-    #             attr_path="cfg/terminated_lin_vel_limit_z",
-    #             start_value=0.3,
-    #             end_value=0.2,
-    #             schedule="linear",
-    #             schedule_kwargs={
-    #                 "warmup": 0.0,
-    #                 "endup": 0.3
-    #             }
-    #         )
-    #     ]
-    # )
 
     # Command
     commands: UniformVelocityHeightCommandCfg = UniformVelocityHeightCommandCfg(
@@ -117,10 +83,35 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
     ## ===================== Jig Object ======================= ##
     jig = JIGCFG.replace(prim_path="/World/envs/env_.*/Jig")
 
+    ## ================== Post Initialization ================== ##
     def __post_init__(self):
         super().__post_init__()
         self.sim.dt = self.sim_dt
         self.sim.render_interval = self.decimation
+
+        # Noise Model
+        obs_noise_groups = {
+            "base_ang_vel":      {"dim": 3,  "min": -0.2,  "max": 0.2},
+            "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
+            "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
+            "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
+            "joint_vel":         {"dim": 6,  "min": -0.1,  "max": 0.1},
+            "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},    
+        }        
+
+        if self.history_length > 0:
+            current_info_dim = self.observation_space / (1+self.history_length)
+            hist_dim = int(self.history_length * current_info_dim)
+            obs_noise_groups["hist_info"] = {"dim": hist_dim, "min": 0.0, "max": 0.0}
+
+        obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups)
+
+        self.observation_noise_type = "uniform"
+        self.observation_noise_params = {
+            "min": obs_noise_min,
+            "max": obs_noise_max,
+            "operation": "add",
+        }
 
         # Interactive Scene for DR : replicate_physics parameter shoule be 'False' for USD-level randomization
         self.scene.replicate_physics = False
@@ -130,16 +121,9 @@ class WFGOATStandEnvCfg(WFGOATBaseEnvCfg):
             "thigh_R_Joint": -1.0386,
             "knee_L_Joint": 2.0384,
             "knee_R_Joint": -2.0384,
-            # "knee_L_Joint": 2.0944,
-            # "knee_R_Joint": -2.0944,
             "wheel_L_Joint": 0.0,
             "wheel_R_Joint": 0.0,
         }
-        
-        self.events.robot_hip_actuator_gain = None
-        self.events.robot_hip_joint_friction = None
-        # self.events.robot_thigh_joint_friction = None
-        # self.events.robot_wheel_joint_friction = None
 
         # Renew randomization     
         self.events.robot_thigh_joint_friction = EventTerm(

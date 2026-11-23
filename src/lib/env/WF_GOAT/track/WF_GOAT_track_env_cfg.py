@@ -11,43 +11,10 @@ from lib.env.WF_GOAT.track.mdp.randomizer import reset_joint_offset_bias
 
 @configclass
 class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
-    ## ==================== Environment parameters ==================== ##
-    sim_dt = 0.01
-    decimation = 2
-    decimation_apply = 1
-    observation_space = 26                      # Observation space
-    state_space = 32                            # State space including privilege information
-
     ## ======================= Reward Shaping ====================== ##
-    r_height_weight = 15.0
-    r_upright_weight = 5.0
-    r_lin_vel_tracking_weight = 6.0
-    r_ang_vel_tracking_weight = 6.0
-
     p_wheel_velocity_weight = 0.0
-    p_hip_deviation_weight = 2.0
-    p_illegal_contact_weight = 2.0
-    p_joint_deviation_lr_weight = 6.0
 
-    # Per-axis observation noise groups
-    obs_noise_groups_end = {
-        "base_ang_vel":      {"dim": 3,  "min": -0.2,  "max": 0.2},
-        "gravity_vector":    {"dim": 3,  "min": -0.05, "max": 0.05},
-        "command":           {"dim": 4,  "min": 0.0,   "max": 0.0},
-        "joint_pos":         {"dim": 4,  "min": -0.01, "max": 0.01},
-        "joint_vel":         {"dim": 6,  "min": -0.1,  "max": 0.1},
-        "previous_actions":  {"dim": 6,  "min": 0.0,   "max": 0.0},
-    }
-    obs_noise_min, obs_noise_max = build_noise_uniform_vector(obs_noise_groups_end)    # list
-
-    # Noise Model
-    observation_noise_type: str = "uniform" # [gaussian, uniform, constant]
-    observation_noise_params: dict = {
-        "min": obs_noise_min,
-        "max": obs_noise_max,
-        "operation": "add",
-    }
-
+    ## ================== Post Initialization ================== ##
     def __post_init__(self):
         super().__post_init__()
         self.sim.dt = self.sim_dt
@@ -55,7 +22,7 @@ class WFGOATTrackEnvCfg(WFGOATStandEnvCfg):
 
         self.commands.prob_standing_envs = 0.2
         self.commands.ranges.lin_vel_x=(-1.0, 1.0)
-        self.commands.ranges.ang_vel_z=(-0.5, 0.5)
+        self.commands.ranges.ang_vel_z=(-1.0, 1.0)
 
         # only for TorqueDelayedPDActuator class
         # self.is_torque_delayed = False 
